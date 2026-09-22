@@ -1,14 +1,6 @@
-"""
-MARKET_DATA strategy — ECDF severity over per-symbol rolling |deviation|.
+"""Signed ECDF severity over retained market levels centered on their median.
 
-Per ADR-0002: severity = ecdf_rank(|deviation|) / N, where
-|deviation| = |current_value - rolling_median(history)| for vol indices.
-
-CLS-009 degraded-confidence fallback fires when:
-- The symbol is absent from the registry (UnknownSymbolError).
-- The history window is degenerate (ADR-0002: fewer than k_min distinct
-  values after rounding).
-- The history is too thin to rank against (< 2 entries).
+The level-distribution approximation and empirical limits are in LIMITATIONS.md.
 """
 from __future__ import annotations
 
@@ -16,8 +8,9 @@ from datetime import datetime
 from statistics import median
 from typing import Any
 
-from app.math.deviation import pct_change_deviation
-from app.math.ecdf import ecdf_rank, is_window_flat
+from app.config import settings
+from app.math.deviation import level_vs_median_deviation
+from app.math.ecdf import ecdf_rank, is_window_flat, signed_severity
 from app.math.temporal import compute_temporal_relevance
 from app.models.requests import ClassifyRequest, MarketDataPayload
 from app.models.responses import ClassifyResponse, ScoreType
@@ -42,7 +35,7 @@ class MarketDataStrategy(ClassificationStrategy):
                 computed_metrics={
                     "deviation": None,
                     "ecdf_rank": None,
-                    "unknown_symbol": True,
+                    "unknown_indicator": True,
                 },
             )
 
@@ -51,10 +44,11 @@ class MarketDataStrategy(ClassificationStrategy):
             signal_time, window.last_update, indicator_class.expected_frequency_seconds,
             cadence=indicator_class.cadence,
         )
-        history_sufficiency = round(min(1.0, len(window.values) / indicator_class.N), 4)
+        target_depth = indicator_class.N_L or indicator_class.N
+        history_sufficiency = round(min(1.0, len(window.values) / target_depth), 4)
         certainty = round(history_sufficiency * temporal_relevance, 4)
 
-        deviation = pct_change_deviation(current_value, window.values)
+        deviation = level_vs_median_deviation(current_value, window.values)
 
         # CLS-009 trip: too little history to rank against.
         if len(window.values) < _MIN_HISTORY_FOR_RANK:
@@ -79,29 +73,15 @@ class MarketDataStrategy(ClassificationStrategy):
         levels = list(window.values)
         m = median(levels)
         history_devs = [abs(v - m) for v in levels]
-        # Flat-window guard: zero-spread history is a guaranteed false
-        # positive (any non-zero deviation ranks at 1.0). See ADR-0002
-        # 2026-04-27 amendment 2.
-        if is_window_flat(history_devs):
-            window.append(current_value, signal_time)
-            return _degraded(
-                reason=(
-                    f"{symbol}={current_value} — history window flat "
-                    f"(zero spread; rank is undefined)"
-                ),
-                certainty=certainty,
-                history_sufficiency=history_sufficiency,
-                temporal_relevance=temporal_relevance,
-                computed_metrics={
-                    "deviation": round(deviation, 4),
-                    "ecdf_rank": None,
-                    "window_flat": True,
-                },
-            )
-        rank = ecdf_rank(deviation, history_devs)
+        # CLS-009 checks the recent N observations independently of N_L.
+        # Preserve the computed severity but reduce its certainty.
+        window_degenerate = is_window_flat(history_devs[-indicator_class.N:])
+        if window_degenerate:
+            certainty = round(certainty * settings.degraded_certainty_factor, 4)
+        rank = ecdf_rank(abs(deviation), history_devs)
         window.append(current_value, signal_time)
         return ClassifyResponse(
-            score=round(rank, 4),
+            score=signed_severity(deviation, rank),
             score_type=ScoreType.ANOMALY_DETECTION,
             certainty=certainty,
             history_sufficiency=history_sufficiency,
@@ -110,13 +90,15 @@ class MarketDataStrategy(ClassificationStrategy):
             classification_method="RULE_BASED",
             reasoning_trace=(
                 f"{symbol}={current_value} vs history median={m:.4f}; "
-                f"|deviation|={deviation:.4f}; ECDF rank={rank:.4f} "
-                f"(history_n={len(levels)})"
+                f"signed deviation={deviation:.4f}; ECDF percentile={rank:.4f} "
+                f"(history_n={len(levels)}, target_n={target_depth}); "
+                f"window_degenerate={window_degenerate}"
             ),
             computed_metrics={
-                "deviation": round(deviation, 4),
+                "deviation": round(abs(deviation), 4),
+                "deviation_signed": round(deviation, 4),
                 "ecdf_rank": round(rank, 4),
-                "window_flat": False,
+                "window_degenerate": window_degenerate,
             },
         )
 

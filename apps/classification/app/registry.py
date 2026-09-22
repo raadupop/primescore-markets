@@ -21,6 +21,7 @@ DeriveKind = Literal["pct_change_yoy", "none"]
 SourceCategory = Literal["MARKET_DATA", "MACROECONOMIC", "CROSS_ASSET_FLOW", "GEOPOLITICAL"]
 Cadence = Literal["business_day", "calendar_day"]
 SeverityFallbackFamily = Literal["gaussian", "log_gaussian", "none"]
+_MIN_LONG_HORIZON = 278
 
 
 class IndicatorClass(BaseModel):
@@ -44,7 +45,7 @@ class IndicatorClass(BaseModel):
     @model_validator(mode="after")
     def _validate_long_horizon(self) -> "IndicatorClass":
         if self.N_L is not None:
-            if self.N_L < 278:
+            if self.N_L < _MIN_LONG_HORIZON:
                 raise ValueError(
                     f"IndicatorClass {self.name!r}: N_L={self.N_L} below SRS v2.3.3 "
                     "floor of 278 (|severity|=1 resolution threshold)."
@@ -54,12 +55,11 @@ class IndicatorClass(BaseModel):
                     f"IndicatorClass {self.name!r}: severity_fallback_family must be "
                     "'none' when N_L is set (ECDF is the primary path)."
                 )
-        else:
-            if self.severity_fallback_family == "none":
-                raise ValueError(
-                    f"IndicatorClass {self.name!r}: severity_fallback_family must be "
-                    "'gaussian' or 'log_gaussian' when N_L is None."
-                )
+        elif self.severity_fallback_family == "none":
+            raise ValueError(
+                f"IndicatorClass {self.name!r}: severity_fallback_family must be "
+                "'gaussian' or 'log_gaussian' when N_L is None."
+            )
         return self
 
 

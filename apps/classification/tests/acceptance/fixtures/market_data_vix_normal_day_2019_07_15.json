@@ -14,10 +14,6 @@
   },
   "symbol": "VIX",
   "last_update": "2019-07-12T00:00:00+00:00",
-  "xfail": {
-    "strict": true,
-    "reason": "Deliberately red — see ANCHORS.md row #9. Same noise-zone pathology as anchor #11 (market_data_vix_low_vol_regime_2017_10_05): SRS ECDF emits 0.3159 vs trader-truth ~0, and signed-score sign-convention on downward deviation needs /trader + /statistician sign-off (impl emits +0.3159, fixture asserts -0.3159). Strict xfail flips green when either gap closes. Remove this marker as part of the SRS update that closes the gap."
-  },
   "window": [
     15.28,
     15.35,

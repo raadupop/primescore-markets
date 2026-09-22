@@ -14,10 +14,6 @@
   },
   "symbol": "VIX",
   "last_update": "2017-10-04T00:00:00+00:00",
-  "xfail": {
-    "strict": true,
-    "reason": "Deliberately red — see ANCHORS.md row #11. Two tangled gaps: (1) noise-zone gate not yet in SRS CLS-001 (ECDF emits 0.8849 vs trader-truth ~0.20); (2) signed-score sign-convention on downward deviations needs /trader + /statistician sign-off (impl emits +0.8849, fixture asserts -0.8849). Strict xfail forces a green-up event when either gap closes, so the deferred decisions surface rather than rotting silently. Remove this marker as part of the SRS update that closes the gap."
-  },
   "window": [
     11.55,
     12.12,

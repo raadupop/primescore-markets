@@ -6,6 +6,9 @@ valid v2.3.3 calibration regardless of formula details.
 """
 from __future__ import annotations
 
+from math import exp
+
+import pytest
 from fastapi.testclient import TestClient
 
 from .conftest import seed_macro_window, seed_market_data_window
@@ -63,7 +66,7 @@ def test_symmetric_deviations_have_opposite_signs(client: TestClient) -> None:
     up = client.post("/classify", json=_vix_request(30.0)).json()["score"]
     seed_market_data_window("VIX", history, "2026-04-14T00:00:00+00:00")
     down = client.post("/classify", json=_vix_request(10.0)).json()["score"]
-    assert up * down <= 0, f"symmetric deviations must have non-same signs (up={up}, down={down})"
+    assert up * down < 0, f"symmetric nonzero deviations must have opposite signs (up={up}, down={down})"
 
 
 def test_parametric_path_engages_for_low_cadence_class(client: TestClient) -> None:
@@ -92,6 +95,8 @@ def test_parametric_gate_failure_returns_degraded_certainty(client: TestClient) 
     assert body["certainty"] <= 0.5, (
         f"gate failure must halve certainty, got {body['certainty']}"
     )
+    assert body["history_sufficiency"] == 1.0
+    assert body["certainty"] == pytest.approx(body["temporal_relevance"] * 0.5, abs=0.0001)
 
 
 def test_zero_deviation_returns_near_zero_score(client: TestClient) -> None:
@@ -99,4 +104,54 @@ def test_zero_deviation_returns_near_zero_score(client: TestClient) -> None:
     seed_market_data_window("VIX", history, "2026-04-14T00:00:00+00:00")
     median_value = 20.8
     body = client.post("/classify", json=_vix_request(median_value)).json()
-    assert abs(body["score"]) < 0.2, f"near-median value must score near zero, got {body['score']}"
+    assert body["score"] == 0.0, f"zero signed deviation must score zero, got {body['score']}"
+
+
+def test_history_sufficiency_uses_long_horizon(client: TestClient) -> None:
+    for depth, expected in ((126, 0.1), (252, 0.2)):
+        history = [15.0 + (i % 7) for i in range(depth)]
+        seed_market_data_window("VIX", history, "2026-04-14T00:00:00+00:00")
+        body = client.post("/classify", json=_vix_request(40.0)).json()
+        assert body["history_sufficiency"] == expected
+        assert body["certainty"] == expected
+
+
+def test_recent_degenerate_window_reduces_certainty(client: TestClient) -> None:
+    history = [15.0 + (i % 7) for i in range(756)] + [20.0] * 504
+    seed_market_data_window("VIX", history, "2026-04-14T00:00:00+00:00")
+    body = client.post("/classify", json=_vix_request(40.0)).json()
+    assert body["history_sufficiency"] == 1.0
+    assert body["score"] == 1.0
+    assert body["certainty"] == 0.5
+
+
+def test_fitted_percentile_has_analytic_value_and_raw_surprise_sign(client: TestClient) -> None:
+    # log(history) has mean -2 and population variance 1 exactly:
+    # the symmetric integers -3..3 have mean 0 and variance 4.
+    # At exp(-1), the fitted Gaussian CDF is Phi(1) = 0.841344746.
+    # This external mathematical reference does not import classifier math.
+    history = [exp(-2.0 + i / 2.0) for i in range(-3, 4)]
+    for actual, expected, score in ((exp(-1.0), 0.0, 0.8413), (0.0, exp(-1.0), -0.8413)):
+        seed_macro_window("CPI_YOY", history, "2026-03-15T12:30:00+00:00")
+        body = client.post("/classify", json=_cpi_request(actual, expected)).json()
+        assert body["score"] == pytest.approx(score, abs=0.0001)
+        assert body["certainty"] == pytest.approx(
+            body["history_sufficiency"] * body["temporal_relevance"], abs=0.0001,
+        )
+
+
+def test_zero_surprise_is_zero_on_parametric_path(client: TestClient) -> None:
+    history = [exp(-2.0 + i / 2.0) for i in range(-3, 4)]
+    seed_macro_window("CPI_YOY", history, "2026-03-15T12:30:00+00:00")
+    body = client.post("/classify", json=_cpi_request(3.0, 3.0)).json()
+    assert body["score"] == 0.0
+
+
+def test_log_gaussian_zero_history_is_degraded_without_dropping_observations(client: TestClient) -> None:
+    history = [0.0] + [exp(-2.0 + i / 2.0) for i in range(-3, 4)]
+    seed_macro_window("CPI_YOY", history, "2026-03-15T12:30:00+00:00")
+    body = client.post("/classify", json=_cpi_request(0.5, 0.0)).json()
+    assert body["history_sufficiency"] == round(8 / 60, 4)
+    assert body["certainty"] == pytest.approx(
+        body["history_sufficiency"] * body["temporal_relevance"] * 0.5, abs=0.0001,
+    )

@@ -1,25 +1,20 @@
-"""
-MACROECONOMIC strategy — ECDF severity over per-indicator |actual - expected|.
+"""Signed surprise severity using the registry's ECDF or fitted percentile.
 
-Per ADR-0002: severity = ecdf_rank(|deviation|) / N, where
-|deviation| = |actual - expected| for surprise-based indicators.
-
-CLS-009 degraded-confidence fallback fires when:
-- The indicator is absent from the registry (UnknownSymbolError).
-- The history window is degenerate (ADR-0002: fewer than k_min distinct
-  values after rounding).
-- The history is too thin to rank against (< 2 entries).
+Rejected fits retain an explicitly degraded diagnostic ECDF (ADR-0004).
 """
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
 
-from app.math.deviation import surprise_yoy_deviation
-from app.math.ecdf import ecdf_rank, is_window_flat
+from app.config import settings
+from app.math.deviation import surprise_deviation
+from app.math.ecdf import ecdf_rank, is_window_flat, signed_severity
+from app.math.parametric_estimate import ParametricEstimate, parametric_estimate
 from app.math.temporal import compute_temporal_relevance
 from app.models.requests import ClassifyRequest, MacroeconomicPayload
 from app.models.responses import ClassifyResponse, ScoreType
+from app.registry import IndicatorClass
 from app.state import UnknownSymbolError, state
 from app.strategies.base import ClassificationStrategy
 
@@ -42,7 +37,7 @@ class MacroeconomicStrategy(ClassificationStrategy):
                 computed_metrics={
                     "deviation": None,
                     "ecdf_rank": None,
-                    "unknown_symbol": True,
+                    "unknown_indicator": True,
                 },
             )
 
@@ -51,13 +46,14 @@ class MacroeconomicStrategy(ClassificationStrategy):
             signal_time, window.last_update, indicator_class.expected_frequency_seconds,
             cadence=indicator_class.cadence,
         )
-        history_sufficiency = round(min(1.0, len(window.values) / indicator_class.N), 4)
+        target_depth = indicator_class.N_L or indicator_class.N
+        history_sufficiency = round(min(1.0, len(window.values) / target_depth), 4)
         certainty = round(history_sufficiency * temporal_relevance, 4)
 
-        deviation = surprise_yoy_deviation(actual, expected)
+        deviation = surprise_deviation(actual, expected)
 
         if len(window.values) < _MIN_HISTORY_FOR_RANK:
-            window.append(deviation, signal_time)
+            window.append(abs(deviation), signal_time)
             return _degraded(
                 reason=(
                     f"{symbol} actual={actual} expected={expected} "
@@ -73,33 +69,20 @@ class MacroeconomicStrategy(ClassificationStrategy):
             )
 
         # Rank current |deviation| against the stored |deviation| history.
-        # For surprise_yoy, the window already contains |deviation| values
-        # (we append `deviation`, not `actual`), so the rank is direct.
+        # Stored history contains surprise magnitudes, not indicator levels.
         # Rank BEFORE appending so the current observation doesn't bias its rank.
-        # Flat-window guard: zero-spread history is a guaranteed false positive
-        # (any non-zero |deviation| ranks at 1.0). See ADR-0002 2026-04-27
-        # amendment 2.
-        if is_window_flat(window.values):
-            window.append(deviation, signal_time)
-            return _degraded(
-                reason=(
-                    f"{symbol} |deviation|={deviation:.4f} — history window flat "
-                    f"(zero spread; rank is undefined)"
-                ),
-                certainty=certainty,
-                history_sufficiency=history_sufficiency,
-                temporal_relevance=temporal_relevance,
-                computed_metrics={
-                    "deviation": round(deviation, 4),
-                    "ecdf_rank": None,
-                    "window_flat": True,
-                },
-            )
-        rank = ecdf_rank(deviation, window.values)
-        window.append(deviation, signal_time)
+        # Recent degeneracy and fit rejection reduce certainty once.
+        history = [abs(value) for value in window.values]
+        window_degenerate = is_window_flat(history[-indicator_class.N:])
+        estimate = _magnitude_estimate(abs(deviation), history, indicator_class)
+        rank = estimate.percentile
+        fit_rejected = estimate.rejection_reason is not None
+        if window_degenerate or fit_rejected:
+            certainty = round(certainty * settings.degraded_certainty_factor, 4)
+        window.append(abs(deviation), signal_time)
 
         return ClassifyResponse(
-            score=round(rank, 4),
+            score=signed_severity(deviation, rank),
             score_type=ScoreType.ANOMALY_DETECTION,
             certainty=certainty,
             history_sufficiency=history_sufficiency,
@@ -108,15 +91,32 @@ class MacroeconomicStrategy(ClassificationStrategy):
             classification_method="RULE_BASED",
             reasoning_trace=(
                 f"{symbol} actual={actual} expected={expected} "
-                f"|deviation|={deviation:.4f}; ECDF rank={rank:.4f} "
-                f"(history_n={len(window.values) - 1})"
+                f"signed deviation={deviation:.4f}; percentile={rank:.4f} "
+                f"(history_n={len(history)}, target_n={target_depth}); "
+                f"window_degenerate={window_degenerate}; "
+                f"fit_rejection={estimate.rejection_reason}"
             ),
             computed_metrics={
-                "deviation": round(deviation, 4),
-                "ecdf_rank": round(rank, 4),
-                "window_flat": False,
+                "deviation": round(abs(deviation), 4),
+                "deviation_signed": round(deviation, 4),
+                "percentile": round(rank, 4),
+                "window_degenerate": window_degenerate,
+                "parametric_fit_used": indicator_class.N_L is None and not fit_rejected,
+                "fit_pvalue": estimate.pvalue,
+                "fit_rejected": fit_rejected,
             },
         )
+
+
+def _magnitude_estimate(
+    magnitude: float, history: list[float], indicator_class: IndicatorClass,
+) -> ParametricEstimate:
+    if indicator_class.N_L is None:
+        return parametric_estimate(
+            magnitude, history, indicator_class.severity_fallback_family,
+            settings.goodness_of_fit_alpha,
+        )
+    return ParametricEstimate(ecdf_rank(magnitude, history))
 
 
 def _degraded(

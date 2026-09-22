@@ -1,9 +1,10 @@
 """
 Integration test — verifies bootstrap against the real FRED API.
 
-Skipped automatically when FRED_API_KEY is not configured.
-Run explicitly with:  python -m pytest tests/integration/test_bootstrap.py -v
+Requires RUN_LIVE_BOOTSTRAP=1 and FRED_API_KEY; skipped by default.
 """
+import os
+
 import pytest
 
 from app.bootstrap import populate_windows
@@ -11,8 +12,8 @@ from app.config import settings
 from app.state import state
 
 needs_api_key = pytest.mark.skipif(
-    not settings.fred_api_key,
-    reason="FRED_API_KEY not set",
+    os.environ.get("RUN_LIVE_BOOTSTRAP") != "1" or not settings.fred_api_key,
+    reason="Live bootstrap requires RUN_LIVE_BOOTSTRAP=1 and FRED_API_KEY",
 )
 
 
@@ -27,14 +28,15 @@ def clean_state():
 
 @needs_api_key
 @pytest.mark.asyncio
-async def test_bootstrap_populates_vix_and_ovx():
-    """Bootstrap should populate both VIX and OVX with up to N daily closes from FRED."""
+async def test_bootstrap_populates_vix_and_ovx(monkeypatch):
+    """Bootstrap should populate VIX and OVX at their long-horizon depth."""
+    monkeypatch.setattr(settings, "bootstrap_mode", "live")
     await populate_windows()
 
     for symbol in ("VIX", "OVX"):
         assert symbol in state.windows, f"{symbol} window missing after bootstrap"
         rw = state.windows[symbol]
-        n = rw.indicator_class.N
+        n = rw.indicator_class.N_L or rw.indicator_class.N
         # Allow some slack for weekends/holidays vs. the calendar-day fetch range.
         assert len(rw.values) >= int(n * 0.6), (
             f"{symbol} window has {len(rw.values)} values, expected >= {int(n * 0.6)} (N={n})"

@@ -2,7 +2,9 @@
 Typed settings loaded from environment variables / .env file.
 """
 from pathlib import Path
+from typing import Literal
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.registry import Registry, load_registry
@@ -23,9 +25,15 @@ class Settings(BaseSettings):
     fred_api_key: str = ""
     finnhub_api_key: str = ""
     log_level: str = "INFO"
+    bootstrap_mode: Literal["live", "disabled"] = "live"
+    goodness_of_fit_alpha: float = Field(default=0.05, gt=0.0, lt=1.0)
+    degraded_certainty_factor: float = Field(default=0.5, gt=0.0, lt=1.0)
 
     # Path to the indicator registry. Override via PRIMESCORE_REGISTRY_PATH.
-    registry_path: Path = _DEFAULT_REGISTRY_PATH
+    registry_path: Path = Field(
+        default=_DEFAULT_REGISTRY_PATH,
+        validation_alias=AliasChoices("PRIMESCORE_REGISTRY_PATH", "REGISTRY_PATH"),
+    )
 
 
 # Singleton — import `settings` from anywhere in the app.

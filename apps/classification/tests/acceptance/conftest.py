@@ -12,12 +12,13 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
+from unittest.mock import patch
 
 import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from app.config import registry
+from app.config import registry, settings
 from app.state import RollingWindow, state
 from main import app
 
@@ -34,7 +35,7 @@ def openapi_spec() -> dict[str, Any]:
 
 @pytest.fixture(scope="module")
 def client() -> Iterator[TestClient]:
-    with TestClient(app) as c:
+    with patch.object(settings, "bootstrap_mode", "disabled"), TestClient(app) as c:
         yield c
 
 

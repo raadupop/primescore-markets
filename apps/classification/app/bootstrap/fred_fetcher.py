@@ -45,7 +45,7 @@ class FredFetcher:
 
     def _fetch_level_series(self, entry: SymbolEntry) -> WindowSeed | None:
         assert entry.bootstrap is not None  # noqa: S101 — narrowed at call site
-        n = entry.indicator_class.N
+        n = entry.indicator_class.N_L or entry.indicator_class.N
         end = datetime.now()
         start = end - timedelta(days=max(45, n * 2))
         decoded = self._download_series(entry.bootstrap.series_id, start, end)
@@ -83,7 +83,7 @@ class FredFetcher:
             )
             return None
 
-        n = entry.indicator_class.N
+        n = entry.indicator_class.N_L or entry.indicator_class.N
         lookback_years = 5
         end = datetime.now()
         start = end - timedelta(days=365 * lookback_years)
