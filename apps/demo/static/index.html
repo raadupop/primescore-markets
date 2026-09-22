@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Local historical market replay through the PrimeScore AI classifier and an experimental volatility scenario.">
+  <title>Market replay · PrimeScore AI</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="/assets/dashboard.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#dashboard">Skip to dashboard</a>
+  <header class="wrap header">
+    <a class="brand" href="/" aria-label="PrimeScore AI market replay"><span class="mark" aria-hidden="true">P</span> PrimeScore AI</a>
+    <nav aria-label="Main"><span class="tag">Local replay</span><a href="https://github.com/raadupop/primescore-ai">Repository ↗</a></nav>
+  </header>
+  <main class="wrap" id="dashboard">
+    <section class="intro" aria-labelledby="title">
+      <div><span class="eyebrow">Markets / working demonstration</span><h1>Follow an observation<br>through the pipeline.</h1></div>
+      <p>Replay a historical VIX or OVX close through the HTTP classifier. Inspect its score, then explore a transparent volatility scenario.</p>
+    </section>
+    <div class="pipeline" aria-label="Demonstrated pipeline"><span>01 &nbsp; Historical snapshot</span><span aria-hidden="true">→</span><span>02 &nbsp; HTTP classification</span><span aria-hidden="true">→</span><span>03 &nbsp; Experimental scenario</span></div>
+    <form id="controls" class="controls">
+      <label for="history-mode">Prior history<select id="history-mode"><option value="full">Full sourced window</option><option value="one_prior_close">One prior close · degraded example</option></select></label>
+      <div class="actions"><button id="replay" type="submit" disabled>Replay selected</button><button id="reset" class="secondary" type="button">Reset</button></div>
+      <p id="status" role="status" aria-live="polite">Loading historical snapshots…</p>
+    </form>
+    <noscript><p class="error">JavaScript is needed for replay controls. The HTTP endpoints are documented in docs/DEMO.md.</p></noscript>
+    <div class="dashboard-grid">
+      <section class="panel tape-panel" aria-labelledby="tape-title">
+        <div class="panel-heading"><span class="eyebrow">01 / Event tape</span><h2 id="tape-title">Historical observations</h2><p>Independent snapshots. Every replay resets prior history.</p></div>
+        <div id="event-tape" class="event-tape" aria-label="Select an observation"></div>
+        <p class="panel-note">Dates identify daily index observations, not classified news headlines. No live feed is connected.</p>
+      </section>
+      <section class="panel classification-panel" aria-labelledby="classification-title">
+        <div class="panel-heading"><span class="eyebrow">02 / Classification</span><h2 id="classification-title">A score with its context</h2><p id="selected-event">Select a snapshot and replay it.</p></div>
+        <div class="metrics"><div><span>Signed severity</span><strong id="severity">—</strong></div><div><span>Certainty</span><strong id="certainty">—</strong></div></div>
+        <p class="metric-note">Severity sign follows expansion or compression relative to prior history. Certainty is an engineering measure; it is not a probability of profit.</p>
+        <dl class="dimensions"><div><dt>History coverage</dt><dd id="history-coverage">—</dd></div><div><dt>Update recency</dt><dd id="recency">—</dd></div><div><dt>Classifier response</dt><dd id="http-status">—</dd></div></dl>
+        <figure><svg id="history-chart" viewBox="0 0 620 210" role="img" aria-label="History chart appears after replay"><text x="24" y="100" class="chart-label">Prior closes appear after replay.</text></svg><figcaption id="history-caption">Observation index, not an invented timeline. The selected event is shown separately.</figcaption></figure>
+        <h3>Reasoning trace</h3><p id="reasoning" class="trace">Awaiting an HTTP classification response.</p>
+        <details id="provenance"><summary>Source and snapshot limitations</summary><dl class="source-details" id="source-details"></dl><p>Individual prior closes have no timestamps in these fixtures. Source provenance is recorded; trader signoff remains pending.</p></details>
+      </section>
+      <section class="panel scenario-panel" aria-labelledby="scenario-title">
+        <div class="panel-heading"><span class="eyebrow">03 / Volatility scenario</span><h2 id="scenario-title">Make the assumption visible.</h2><span class="tag active">Experimental · uncalibrated</span></div>
+        <label class="sensitivity-label" for="sensitivity">Scenario multiplier <span>k = <output id="sensitivity-value" for="sensitivity">0.25</output></span></label>
+        <input id="sensitivity" type="range" min="0" max="1" step="0.05" value="0.25" aria-describedby="sensitivity-help">
+        <p id="sensitivity-help" class="metric-note">0 to 1. Changing k replays the same snapshot with the chosen assumption.</p>
+        <dl class="scenario-values"><div><dt>Observed index</dt><dd id="observed">—</dd></div><div><dt>Scenario index</dt><dd id="scenario">—</dd></div><div class="gap"><dt>Signed gap · index points</dt><dd id="gap">—</dd></div><div><dt>Single-event conviction</dt><dd id="conviction">—</dd></div></dl>
+        <p id="scenario-status" class="scenario-status">No scenario calculated.</p>
+        <div class="formula"><span>conviction = severity × certainty</span><span>scenario = observed × (1 + conviction × k)</span><span>gap = scenario − observed</span></div>
+        <p class="panel-note">The same observed index drives classification and the scenario's starting value. This does not estimate independent fair value, aggregate sources or implement a trading engine. Predictive performance is untested.</p>
+      </section>
+    </div>
+  </main>
+  <footer class="wrap footer"><span>PrimeScore AI · Markets in development</span><a href="https://github.com/raadupop/primescore-ai/blob/master/docs/DEMO.md">Demo method and limits ↗</a></footer>
+</body>
+</html>
