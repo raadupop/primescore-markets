@@ -41,7 +41,7 @@ gap = scenario_iv − observed_iv
 
 This is arithmetic under a chosen assumption. The same index observation supplies the classifier input and observed IV; no independent fair-value forecast, multi-source CLS-002 aggregation, options pricing, trading recommendation or outcome backtest is implemented. `k` is uncalibrated. The bound keeps scenario IV nonnegative, including zero at the compression boundary. Certainty measures history coverage and update cadence; it does not establish whether a market has absorbed an event.
 
-Data comes from the existing [acceptance fixtures](../apps/classification/tests/acceptance/fixtures/ANCHORS.md), recorded as FRED [VIXCLS](https://fred.stlouisfed.org/series/VIXCLS) and [OVXCLS](https://fred.stlouisfed.org/series/OVXCLS) observations. Each snapshot retains its source URL, retrieval dates and declared historical range; trader signoff remains pending. Charts use observation index because timestamps for individual prior closes are absent. Event names in fixture filenames are historical labels, not results of geopolitical/headline classification. Third-party data retains provider terms; see the [licence proposal](../README.md#licence).
+Data comes from the existing [acceptance fixtures](../apps/classification/tests/acceptance/fixtures/ANCHORS.md), recorded as FRED [VIXCLS](https://fred.stlouisfed.org/series/VIXCLS) and [OVXCLS](https://fred.stlouisfed.org/series/OVXCLS) observations. Each snapshot retains its source URL, retrieval dates and declared historical range; trader signoff remains pending. Charts use observation index because timestamps for individual prior closes are absent. Event names in fixture filenames are historical labels, not results of geopolitical/headline classification. Third-party data retains provider terms; see [licence](../README.md#licence).
 
 ## HTTP and checks
 
@@ -52,5 +52,3 @@ python -m pytest tests/demo -q
 ```
 
 These tests launch actual TCP servers and cover all snapshots, repeated/concurrent replay, reset, degraded history, unavailable classification, invalid inputs and independently calculated scenario boundaries. The shared [CI gate](../harness/check-suite.sh) also runs them.
-
-Incremental scope estimate: **13–16 engineer hours**, following classifier and CI repairs; the detailed breakdown lives in the [audit](STATUS.md#shortest-path-to-an-end-to-end-demonstration). This implementation is local; the two static websites can be hosted separately following [deployment instructions](DEPLOYMENT.md).

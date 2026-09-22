@@ -1,22 +1,22 @@
 # PrimeScore AI — repository status
 
-**Delivery, 22 September 2026:** the repository is now [`raadupop/primescore-ai`](https://github.com/raadupop/primescore-ai). The local replay works; both websites are ready to host. The .NET engine and independently validated volatility forecast remain unbuilt.
+**22 September 2026.** The repository contains a Python classifier, a local historical replay dashboard, an agent harness and static website assets. The .NET engine and independently validated volatility forecast remain unbuilt.
 
 | Component | Current state | Evidence / remaining work |
 | --- | --- | --- |
-| Python classifier | Partial product; two executable routes | Signed market/macro scores, explicit fit rejection, horizon-based confidence and honest readiness. Cross-asset and both geopolitical routes remain HTTP 501; [calibration and provider gaps](../apps/classification/LIMITATIONS.md). |
+| Python classifier | Partial product; two executable routes | Signed market/macro scores, explicit fit rejection, horizon-based confidence and readiness checks. Cross-asset and both geopolitical routes remain HTTP 501; [calibration and provider gaps](../apps/classification/LIMITATIONS.md). |
 | Replay dashboard | Built | Eight historical VIX/OVX snapshots through real HTTP classification and a labeled scenario; three views, repeat/reset and degraded/error handling. Run `python scripts/demo.py`; [setup](DEMO.md). |
-| Agent harness and CI | Built; finite scope | Both OpenAPI contracts, six dependency contracts, fitness tools and pytest share one gate. Local final result: **85 passed, 4 intentionally skipped**. [Hosted checks](https://github.com/raadupop/primescore-ai/actions/workflows/checks.yml); [remaining harness limits](../apps/classification/HARNESS.md). |
-| Brand and markets sites | Built; hosting pending | Static HTML/CSS checked at desktop and mobile widths. [Deploy and add DNS](DEPLOYMENT.md). |
+| Agent harness and CI | Built | Both OpenAPI contracts, six dependency contracts, fitness tools and pytest share one gate. Validation: **85 passed, 4 intentionally skipped**. [Hosted checks](https://github.com/raadupop/primescore-ai/actions/workflows/checks.yml); [remaining harness limits](../apps/classification/HARNESS.md). |
+| Brand and Markets pages | Built | Static HTML, CSS and JavaScript checked at desktop and mobile widths. [Brand source](../sites/brand/); [Markets source](../sites/markets/). |
 | Engine, live feeds, positions and risk | Designed | No .NET implementation, independent forecast, broker execution, persistence or live dashboard. [Design limits](../LIMITATIONS.md). |
 | Contract and credit optimisation | Direction only | No implementation or product specification. |
 
-The four skips are three macro anchors awaiting sourced history and one explicitly opt-in live FRED integration. Passing checks establish the tested software behavior, not predictive accuracy. The shared gate and Stop hook passed; the local prose-review pre-commit hook was bypassed after manual review of its terminology objections. MIT is proposed; no licence has been granted. The detailed audit below records the **starting state**, before these repairs.
+The four skips are three macro anchors awaiting sourced history and one explicitly opt-in live FRED integration. Passing checks establish the tested software behavior, not predictive accuracy. The detailed audit below records the **starting state**, before these repairs.
 
 <details>
 <summary>Initial audit: component inventory, failures and effort estimates</summary>
 
-Audited **22 September 2026**, at `4af489d` plus the existing working tree. This is the pre-rename baseline. **Built** means executable code or an authored artifact exists; **partial** means material behavior or validation is missing; **designed** means requirements, contracts or stubs only. Absent delivery assets are identified explicitly.
+Audited **22 September 2026**, at `4af489d` plus the existing working tree. This is the pre-rename baseline. **Built** means executable code or an authored artifact exists; **partial** means material behavior or validation is missing; **designed** means requirements, contracts or stubs only.
 
 **Verdict:** a partially implemented event classifier and agent engineering harness exist. An end-to-end volatility platform does not. Two of five classification routes execute; the current suite is red. The README overstates live ingestion, geopolitical AI and trading behavior.
 
@@ -68,8 +68,6 @@ The four skips are three macro anchors awaiting migration and one credential-dep
 
 Separate checks: **6/6 import contracts pass**; classifier OpenAPI passes; engine OpenAPI fails with `ExtraParametersError: Required list has not defined properties: ['baseline_value']` in `CrossAssetFlowPayload`. This contract failure is outside the current pytest gate.
 
-On this Windows checkout, use Git Bash explicitly; PATH's `bash.exe` resolves to WSL. The relocated virtual environment has stale console launchers; invoke its Python with `-m`. Merely setting an empty PowerShell environment variable did not disable `.env` loading: an earlier diagnostic run exercised the existing FRED integration and passed it. The reported baseline above was rerun with keys asserted absent in process; it makes no offline or full-provider readiness claim from that live pass.
-
 ## Design limits that affect the demo
 
 - **A severity score is not a forecast.** CLS-006 defines `scenario_iv = observed_iv × (1 + composite × sensitivity)`. Its gap therefore equals `observed_iv × composite × sensitivity`; there is no independently estimated fair value or demonstrated predictive edge. Show it as an **experimental scenario**, with multiplier and equation visible.
@@ -82,9 +80,9 @@ On this Windows checkout, use Git Bash explicitly; PATH's `bash.exe` resolves to
 
 Scope: **historical VIX/OVX snapshot → real HTTP classifier → experimental volatility scenario → local dashboard**. A small Python demo adapter remains separate from the six planned .NET iterations. It must identify any simplified aggregation explicitly; a single classified event must not masquerade as corroborated CLS-002 engine output.
 
-Estimates are engineer hours, not claims about agent elapsed time. Steps A/B belong to the requested CI work; C–G are the incremental dashboard work in deliverable 6.
+Estimated engineering effort from the audit baseline: A/B cover classifier and CI repairs; C–G cover the replay dashboard.
 
-| Step | Deliverable / completion evidence | Hours |
+| Step | Work and completion criteria | Hours |
 | --- | --- | ---: |
 | A | Repair signed/zero severity and parametric-gate failures, horizon/sufficiency handling and readiness; reconcile strict xfails against requirements; retain independent checks. | 5–9 |
 | B | Repair invalid engine schema; run both spec validators, all fitness tools and pytest from CI; prevent silent missing-tool passes; fix shell portability and report intentional skips. | 4–6 |
@@ -94,21 +92,10 @@ Estimates are engineer hours, not claims about agent elapsed time. Steps A/B bel
 | F | Hand-calculated boundary tests, HTTP/browser smoke checks and replay repeatability/error checks. | 2–3 |
 | G | One-command local startup, instructions and contingency. | 3 |
 | **Total from this checkout** | **Working local demonstration, including existing blockers** | **22–31** |
-| **Incremental dashboard after CI repairs** | **C–G; within the requested ~20-hour build threshold** | **13–16** |
+| **Incremental dashboard after CI repairs** | **C–G** | **13–16** |
 
 Three views: **event tape** (source, symbol, event time, replay status); **classification** (signed severity, certainty dimensions, history and reasoning); **volatility scenario** (observed index, scenario index, signed gap and parameters). The demo uses `conviction = severity × certainty` and `scenario_iv = observed_iv × (1 + conviction × k)`, with visible, uncalibrated `0 <= k <= 1`. Label conviction as single-event output: the same market observation drives classification and observed IV. Completion requires an actual HTTP classification response, repeatable replay results and explicit error/degraded handling. No fabricated headline classification, orders, returns or independent-forecast claims.
 
 Data source: existing FRED-sourced VIX/OVX fixtures for local replay; [Cboe's historical-data page](https://www.cboe.com/tradable-products/vix/vix-historical-data) provides daily index history for future refresh. [FRED identifies VIX data as copyrighted](https://fred.stlouisfed.org/series/VIXCLS); a source-code licence must not imply ownership or relicensing of provider data. Keep public site copy separate from downloadable raw datasets until reuse terms are established.
 
 </details>
-
-## Naming and deployment choices
-
-| Decision | Proposal | Reason |
-| --- | --- | --- |
-| Repository | **`primescore-ai`**, chosen by Radu | Represents the venture as its public home. The GitHub repository and local origin have been renamed; history is preserved. |
-| Product subdomain | **`markets.primescore.ai`** | Describes the domain of the product without suggesting a finished signal subscription. `signals` is narrower than the intended research platform. |
-| Licence | **[MIT](https://opensource.org/license/mit)** for original code | Short, familiar permissive licence; founder approval remains pending. Third-party data and archived source documents retain their own terms. |
-| Static websites | **Plain HTML/CSS, two Cloudflare Pages projects** | No application server or frontend toolchain required for two information pages; [Cloudflare supports static HTML directly](https://developers.cloudflare.com/pages/framework-guides/deploy-anything/). The local Python dashboard is a separate runtime. |
-
-No DNS change or website deployment has been performed. Earlier uncommitted operator edits remain outside the delivery commits.

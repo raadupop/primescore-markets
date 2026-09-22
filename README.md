@@ -30,7 +30,6 @@ Solid arrows describe the demonstration; dotted arrows describe the planned engi
 | Historical replay, signed severity, certainty dimensions and reasoning traces | Live ingestion, independent volatility forecasting and calibrated signals |
 | Local three-view demo dashboard | .NET engine, persistence, portfolio risk and position management |
 | Agent hooks, bounded steering, tests and architecture contracts | Independent market-outcome validation and six-architecture benchmark results |
-| Static brand and product pages | Public hosting and custom-domain activation |
 
 [Status and audit](docs/STATUS.md) · [Known limitations](apps/classification/LIMITATIONS.md) · [Requirements](doc/srs/PrimeScore-SRS.md) · [Engine API design](doc/PrimeScore-API-v1.yaml)
 
@@ -69,12 +68,12 @@ The suite includes pytest, fitness tools, dependency boundaries and both OpenAPI
 
 ## Websites
 
-Static HTML/CSS for the brand and product pages lives under `sites/`. [Deployment and DNS instructions](docs/DEPLOYMENT.md) cover two Cloudflare Pages projects; the Python demo runs separately.
+The [brand](sites/brand/) and [Markets](sites/markets/) pages use static HTML, CSS and JavaScript. The Python replay demo runs separately.
 
 ## Licence
 
-**MIT is proposed for original code; no open-source licence has been granted yet.** Provider datasets and archived third-party documents retain their own terms. [Proposed licence](https://opensource.org/license/mit)
+No open-source licence is currently provided. Provider datasets and archived third-party documents retain their own terms.
 
 ## Founder
 
-**Radu Pop — Founder & Engineer, November 2025–May 2026.** Self-funded; the venture paused ahead of a funding round, after which Radu joined an energy-tech startup as hands-on CTO. MVP completion is underway. [Contact Radu](https://github.com/raadupop)
+**Radu Pop — Founder & Engineer.** [Contact Radu](https://github.com/raadupop)
