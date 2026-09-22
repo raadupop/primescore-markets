@@ -1,137 +1,64 @@
-# Steering manager — contract
+# Steering manager contract
 
-The steering manager (`harness/steer.sh`) is one of three components of the
-in-turn agent harness, alongside the **oracle scripts** (`harness/check-*.sh`,
-see [ORACLE.md](ORACLE.md)) and the per-agent **adapters**
-(`.claude/hooks/*.sh` for Claude Code).
+[`steer.sh`](steer.sh) owns retry decisions and transient session state.
+The [oracle](ORACLE.md) owns validation; [Claude adapters](../.claude/hooks/)
+translate runtime payloads into this interface.
 
-The harness as a whole is the wired implementation of
-[ADR-0001](../doc/adr/0001-agent-harness-architecture.md) **Layer 4 (feedback
-oracles)** for the classification service. The steering manager is the
-agent-agnostic decision layer: it owns per-turn state, runs the oracle, and
-emits a block / allow decision based on a bounded self-correction loop with
-convergence detection.
-
-## CLI
-
-```
-harness/steer.sh stop --session=<id>
+```sh
+bash harness/steer.sh stop --session=<id>
 ```
 
-- `--session=<id>` — opaque string identifying the agent turn-group. Adapters
-  pass through whatever their runtime provides (Claude Code: `session_id`).
+`HARNESS_MAX_ATTEMPTS` defaults to `3` and must be a positive integer.
+Bash, Git and `jq` are required. The oracle selects Python as documented in
+[ORACLE.md](ORACLE.md).
 
-Exit codes:
+| Exit | Meaning |
+| --- | --- |
+| `0` | Allow stop: green, clean checkout, or escalation. Read advisory output before claiming completion. |
+| `2` | Block stop; stdout contains the failed validation report. |
+| `64` | Invalid invocation/configuration. |
+| Other nonzero | Internal failure; adapter reports the error and allows operator intervention. |
 
-- `0` — allow stop. Stdout may be empty or carry an advisory message.
-- `2` — block stop. Stdout is the report the adapter must surface to the
-  agent.
-- `64` — usage error.
-- `>2` — internal error; adapter should fail open (allow stop) and log.
+## State and decisions
 
-## State
-
-Per-session JSON file under `.harness-state/<session>.json`. Schema:
+A sanitized session ID names `.harness-state/<session>.json`:
 
 ```json
-{
-  "attempts": 1,
-  "prior_fingerprint": "<sha256-hex>"
-}
+{"attempts": 1, "prior_fingerprint": "<sha256>"}
 ```
 
-- `attempts` — count of times this session has been blocked on red.
-- `prior_fingerprint` — hash of the failing test set from the last block.
-  Used for convergence detection.
+`attempts` counts prior blocks. Terminal states remove this file. Append-only
+`.harness-state/decisions.log` records UTC time, original session ID, decision
+and attempt count as JSON Lines. These artifacts are ignored by Git.
 
-Created on first block, updated on subsequent blocks, deleted on terminal
-states (green, convergence, budget exhausted).
+| Oracle / prior state | Decision | Action |
+| --- | --- | --- |
+| Success with empty output | `skip:no_edits` | Clear state; allow. |
+| Success with output | `green` | Clear state; allow. |
+| First failure | `block:first_attempt` | Save attempt 1 and fingerprint; block. |
+| Same failure fingerprint | `escalate:stuck` | Clear state; allow with unresolved failure report. |
+| Changed failures, retry budget remains | `block:progress` | Increment attempts; block. |
+| Changed failures, retry budget exhausted | `escalate:budget_exhausted` | Clear state; allow with unresolved failure report. |
 
-## Decision log
+The oracle receives `--changed-only`; its scope is the entire checkout,
+including staged and untracked nonignored files. The Stop adapter validates
+re-entry after a prior block; it does not treat `stop_hook_active` as proof
+that the code passed. Across at most `HARNESS_MAX_ATTEMPTS + 1` consecutive
+Stop decisions, the manager allows or escalates.
 
-Append-only JSON Lines at `.harness-state/decisions.log`. One line per
-invocation that produces a decision. Schema:
+## Failure fingerprint
 
-```json
-{"ts": "<ISO-8601>", "session": "<id>", "decision": "<class>", "attempts": <n>}
-```
+SHA-256 of sorted unique identifiers from `FAILED` and `ERROR` output lines.
+Pytest IDs distinguish assertion and collection failures; named gate stages
+cover invalid contracts, missing tools and other check failures. Assertion
+text and line numbers do not turn the same failing test into progress.
+If no identifier is available, hash the full diagnostic so distinct setup
+errors do not all look like the same failure.
 
-Decision classes:
+Changing the assertion message while the same test fails still escalates.
+Fixing a failure and exposing another test permits another bounded retry.
+An escalation is an unresolved result, never a green suite.
 
-- `green` — suite passed. Allow stop.
-- `skip:no_edits` — `--changed-only` reported nothing to do. Allow stop.
-- `block:first_attempt` — first red of the turn. Block.
-- `block:progress` — red, but failures changed since last block. Block.
-- `escalate:stuck` — red, failures unchanged since last block. Allow stop;
-  surface to operator.
-- `escalate:budget_exhausted` — `attempts >= MAX_ATTEMPTS`. Allow stop;
-  surface to operator.
-- `error:<reason>` — internal error. Allow stop (fail open).
-
-## Loop policy
-
-```
-on stop --session=<id>:
-  state ← load(<id>) or {attempts: 0, prior_fingerprint: ""}
-  report ← oracle.check-suite --changed-only
-  if report empty AND exit 0:
-    log "skip:no_edits"; clear_state; exit 0
-
-  if exit 0:
-    log "green"; clear_state; exit 0
-
-  fp ← fingerprint(report)        # sha256 of sorted FAILED test ids
-
-  if state.attempts == 0:
-    save({attempts: 1, prior_fingerprint: fp})
-    log "block:first_attempt"
-    print(report); exit 2
-
-  if fp == state.prior_fingerprint:
-    log "escalate:stuck"; clear_state
-    print("Convergence: failing tests unchanged after one retry.\n" + report)
-    exit 0
-
-  if state.attempts + 1 > MAX_ATTEMPTS:
-    log "escalate:budget_exhausted"; clear_state
-    print("Budget exhausted (" + state.attempts + " attempts).\n" + report)
-    exit 0
-
-  save({attempts: state.attempts + 1, prior_fingerprint: fp})
-  log "block:progress"
-  print(report); exit 2
-```
-
-`MAX_ATTEMPTS` defaults to `3`. Override via `HARNESS_MAX_ATTEMPTS` env var.
-
-## Convergence fingerprint
-
-Defined as: sha256 of the sorted, newline-joined list of `FAILED <test_id>`
-lines from pytest's short-summary section. Test IDs are stable across edits
-that don't rename tests; line numbers and assertion text are intentionally
-excluded so that "same tests still failing" is treated as convergence even if
-error messages drift.
-
-If you fix one failure and a different test fails, the fingerprint changes →
-classified as progress, not convergence. If you fix the symptom but the same
-test still fails on a deeper issue, fingerprint is unchanged → classified as
-convergence after the next attempt.
-
-## Termination guarantees
-
-The loop always terminates. Across at most `MAX_ATTEMPTS + 1` Stop events in
-one session, exactly one of the following happens:
-
-1. Suite turns green (`green`).
-2. No edits made (`skip:no_edits`).
-3. Failures stop changing (`escalate:stuck`).
-4. Attempts cap reached (`escalate:budget_exhausted`).
-
-There is no path that produces an unbounded retry sequence.
-
-## What does NOT belong here
-
-- Agent protocol parsing (CC's `stop_hook_active`, JSON shapes). Owned by
-  the adapter.
-- The act of running pytest, lint, etc. Owned by the oracle scripts.
-- Per-app suite selection. Deferred until a second app exists.
+[Regression tests](../tests/harness/test_steering.py) run the real scripts
+against a fixed test oracle in temporary Git repositories. They never invoke
+the full pytest gate recursively.

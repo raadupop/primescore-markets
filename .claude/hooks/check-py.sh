@@ -19,7 +19,7 @@ esac
 
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 
-out=$("$repo_root/harness/check-py.sh" "$f" 2>&1); rc=$?
+out=$(bash "$repo_root/harness/check-py.sh" "$f" 2>&1); rc=$?
 [ "$rc" -eq 0 ] && exit 0
 
 printf '%s' "$out" \

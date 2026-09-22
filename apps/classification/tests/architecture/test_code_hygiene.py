@@ -27,6 +27,10 @@ def test_ruff_reports_zero_violations() -> None:
         "ruff",
         ["check", "--output-format=json", "app"],
     )
+    assert result.returncode == 0, (
+        f"ruff failed with exit code {result.returncode}.\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
     findings = json.loads(result.stdout) if result.stdout.strip() else []
     assert findings == [], "ruff violations:\n" + "\n".join(
         f"  {f['filename']}:{f['location']['row']} {f['code']} {f['message']}"

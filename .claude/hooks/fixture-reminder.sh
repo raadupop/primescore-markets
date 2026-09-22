@@ -20,7 +20,7 @@ esac
 
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 
-text=$("$repo_root/harness/fixture-reminder.sh" "$f" 2>&1) || exit 0
+text=$(bash "$repo_root/harness/fixture-reminder.sh" "$f" 2>&1) || exit 0
 
 jq -n --arg t "$text" '{
   hookSpecificOutput: {

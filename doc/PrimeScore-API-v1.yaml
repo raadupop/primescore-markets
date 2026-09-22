@@ -872,6 +872,10 @@ components:
         value:
           type: number
           format: double
+        baseline_value:
+          type: number
+          format: double
+          description: Reference value against which the observed cross-asset metric is compared.
         lookback_period:
           type: string
           description: "'90d', '1y'."
