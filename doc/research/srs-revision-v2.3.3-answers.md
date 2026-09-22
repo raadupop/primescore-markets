@@ -104,10 +104,10 @@ ECDF rank, default 0.999); confirm against false-positive anchor fixtures.
 - **Macro releases** (CPI, NFP, FOMC): 30–60 minutes.
 
 **Critical assessment:**
-- 100–300 ms is HFT territory. INVEX runs over HTTP between .NET and Python
+- 100–300 ms is HFT territory. PrimeScore AI runs over HTTP between .NET and Python
   classifier — round-trip alone is 5–50 ms before any logic. The 100–300 ms
   budget is operationally unreachable.
-- Realistic INVEX targets:
+- Realistic PrimeScore AI targets:
   - Intraday: **1–5 seconds**.
   - Macro: **30–60 minutes** (PDF figure, valid).
 - Expired-without-corroboration: PDF doesn't answer. Recommend: signal
@@ -250,7 +250,7 @@ TBD; regime-conditional override table.
 **Critical assessment (trader):**
 - This reframes EXT-001 entirely. Exit timing is **catalyst-relative**, not
   calendar-relative.
-- For event-driven INVEX strategies, the typical lifecycle is:
+- For event-driven PrimeScore AI strategies, the typical lifecycle is:
   - Open position 6–24h before known catalyst, IV expansion drives P&L.
   - Exit at T-30min before catalyst announcement.
   - Hold through only when classifier composite exceeds a high threshold AND
@@ -313,7 +313,7 @@ DEC-001 portfolio-heat check; per-position and aggregate caps.
     classifier without touching downstream consumers.
   - AH-HMM if/when meta-regime adaptation justifies the complexity.
 - The PDF's "strictly required" framing is correct *for production trading*,
-  but INVEX is also a measurement vehicle. Adopting AH-HMM in Iteration 1
+  but PrimeScore AI is also a measurement vehicle. Adopting AH-HMM in Iteration 1
   would make the classification service no longer constant infrastructure
   across iterations — violates ACX-001.
 
@@ -360,7 +360,7 @@ consumers (Iteration 1's .NET app) with an incoherent contract.
 - **4σ → 0.999 ECDF percentile** (Q3): Gaussian heuristic on fat-tailed data
   is unsound; use the empirical distribution we already maintain.
 - **100–300 ms intraday → 1–5 s** (Q4): HFT figure operationally unreachable
-  for INVEX's HTTP-coupled architecture.
+  for PrimeScore AI's HTTP-coupled architecture.
 - **Imputation bounded** (Q5): Bayesian imputation cannot produce
   high-conviction scores; cap and flag.
 - **AH-HMM phased** (Q11): full HMM is Iteration 3+ work; threshold classifier

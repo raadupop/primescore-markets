@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Invex Classification Service
+  title: PrimeScore AI Classification Service
   version: 0.1.0
   description: |
     Service-local API contract for the Python classification engine.
@@ -10,7 +10,7 @@ info:
     Those are implementation concerns governed by `HARNESS.md` and the
     fitness-function suite under `tests/architecture/`.
 
-    The repo-level `doc/INVEX-API-v1.yaml` describes the .NET-facing external
+    The repo-level `doc/PrimeScore-API-v1.yaml` describes the .NET-facing external
     API and is unrelated to this file. Per CLAUDE.md the Python service is
     constant infrastructure across all six .NET architecture iterations.
 servers:

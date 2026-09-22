@@ -21,7 +21,7 @@ locked architectural decision; HARNESS.md is the regenerable
 inventory.
 
 The classification service is constant infrastructure across all six
-INVEX .NET architecture iterations. It is not under measurement. The
+PrimeScore AI .NET architecture iterations. It is not under measurement. The
 oracle architecture exists so the service stays a stable dependency
 under the single-operator + AI-mediated-edits regime named in the
 project-wide ADR.
@@ -274,7 +274,7 @@ superseding ADR; updating the inventory does not.
   — wrong-level tuning postmortem
 - [Classification ADR-0002](0002-ecdf-severity-and-backtest-harness.md)
   — ECDF severity + registry postmortem and Layer A commitment
-- [SRS](../../../../doc/srs/INVEX-SRS.md) — requirements (CLS-001,
+- [SRS](../../../../doc/srs/PrimeScore-SRS.md) — requirements (CLS-001,
   CLS-002, CLS-006, CLS-009, EXT-004, §11 acceptance criteria)
 - [`apps/classification/doc/openapi.yaml`](../openapi.yaml) — contract
 - [`tests/acceptance/fixtures/ANCHORS.md`](../../tests/acceptance/fixtures/ANCHORS.md)

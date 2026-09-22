@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="Invex Classification Service",
+    title="PrimeScore AI Classification Service",
     version="0.1.0",
     description="HTTP classification engine for financial signal events.",
     lifespan=lifespan,

@@ -45,7 +45,7 @@ direction (spike → LONG_STRADDLE; crush → sell-vol or PUT_SPREAD).
 - Is the CLS-002 formula compatible with signed scores, or does it need an
   absolute-value step?
 
-**Answer feeds:** INVEX-API-v1.yaml schema change, SRS CLS-001 + CLS-002
+**Answer feeds:** PrimeScore-API-v1.yaml schema change, SRS CLS-001 + CLS-002
 amendment, OpenAPI `score` field range.
 
 ---

@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: Invex API
+  title: PrimeScore AI API
   description: |
-    External interface contract for the Invex volatility-exploitation system.
-    Companion to the Invex SRS (ISO/IEC/IEEE 29148:2018).
+    External interface contract for the PrimeScore AI volatility-exploitation system.
+    Companion to the PrimeScore AI SRS (ISO/IEC/IEEE 29148:2018).
 
     This specification defines the system's external boundary — the sole surface
     exercised by the API acceptance test suite (EVO-001). Every architecture
@@ -15,7 +15,7 @@ info:
     - Iteration-stable: identical across all six architecture iterations.
   version: "1.0.0"
   contact:
-    name: Invex Project
+    name: PrimeScore AI Project
 
 servers:
   - url: http://localhost:{port}/api

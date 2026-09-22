@@ -68,12 +68,12 @@ A YAML/JSON registry file buys you:
 
 #### Verdict
 
-INVEX has **one writer** (Radu), parameter changes that are **rare and
+PrimeScore AI has **one writer** (Radu), parameter changes that are **rare and
 reviewed** (each one is a `/trader` decision), and **two readers** (.NET
 ingestion, Python classifier) that benefit from reading the *same artifact*
 rather than two database client libraries.
 
-A database here is solving problems INVEX doesn't have while creating problems
+A database here is solving problems PrimeScore AI doesn't have while creating problems
 it doesn't need (DB lifecycle, connection management, schema migrations,
 two-language ORM friction).
 
@@ -113,7 +113,7 @@ Real costs you're paying:
 - HTTP serialization overhead per event (~ms-scale, irrelevant for this domain)
 - Two deploy targets, two test pipelines, two dependency surfaces
 - Two-language refactoring tax — schema changes touch both sides
-- Contract drift risk — `INVEX-API-v1.yaml` and `apps/classification/doc/openapi.yaml` must stay coherent
+- Contract drift risk — `PrimeScore-API-v1.yaml` and `apps/classification/doc/openapi.yaml` must stay coherent
 - A second AGENTS.md, a second set of conventions, a second mental context-switch
 
 These are non-trivial. For a single-operator project they're paid in
@@ -223,7 +223,7 @@ scaling*. Question to ask:
 > What is the request rate the classifier needs to sustain, and is one
 > process insufficient?
 
-For INVEX:
+For PrimeScore AI:
 - Macro releases: minutes to hours apart
 - Market-data ticks: even at every WebSocket update, single-process Python
   handles thousands per second
@@ -233,7 +233,7 @@ A single-process classifier is easily sufficient for the throughput. The
 scaling concern isn't load — it's **availability** (process crash = lost
 windows) and **deployability** (restart = bootstrap window).
 
-#### Recommendation — pragmatic, sized to INVEX
+#### Recommendation — pragmatic, sized to PrimeScore AI
 
 **Phase 1 (now): single instance, accept the limitation.** Document
 explicitly:
@@ -283,7 +283,7 @@ What you're sacrificing by accepting these positions:
 
 ## Dissenting view
 
-The strongest case against this recommendation: if INVEX's research goal
+The strongest case against this recommendation: if PrimeScore AI's research goal
 eventually requires running iteration-3 and iteration-5 against the *same*
 live classifier instance for comparative measurement, single-instance state
 becomes a single point of failure for the entire experiment. A 30-minute

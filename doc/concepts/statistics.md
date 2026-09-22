@@ -1,6 +1,6 @@
 # Math Concepts Reference
 
-Concepts used in INVEX classification service, explained from first principles.
+Concepts used in PrimeScore AI classification service, explained from first principles.
 
 **Update log.**
 - 2026-04-14 — initial file (§1–§7: exponential decay, normalization, clamping, multiplicative vs additive, discounting, z-score, tanh).
@@ -144,10 +144,10 @@ Reducing the value of something because of a condition (time, risk, quality).
 **Examples:**
 - **Time discount:** $100 next year is worth ~$95 today (at 5% rate). The further away, the less it's worth now. Formula: `PV = FV × e^(-rt)`
 - **Staleness discount:** A VIX reading from 3 hours ago is worth less than one from 3 seconds ago for trading decisions
-- **Source discount (INVEX d_c):** A composite score is discounted when expected data sources are missing — you have less information, so trust the result less
+- **Source discount (PrimeScore AI d_c):** A composite score is discounted when expected data sources are missing — you have less information, so trust the result less
 - **Risk discount:** A trade with higher risk is "discounted" — you need a bigger expected return to justify it
 
-**In INVEX:** Temporal relevance IS a discount factor. It takes the "base certainty" (history sufficiency) and discounts it for staleness:
+**In PrimeScore AI:** Temporal relevance IS a discount factor. It takes the "base certainty" (history sufficiency) and discounts it for staleness:
 ```
 certainty = history_sufficiency × temporal_relevance(discount)
 ```
@@ -156,7 +156,7 @@ certainty = history_sufficiency × temporal_relevance(discount)
 
 ## 6. Z-Score
 
-> **DEPRECATED (2026-04-19).** INVEX no longer uses z-score as an intermediate severity measure. Replaced by ECDF rank (§8) per [ADR-0002](../../apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md) and SRS CLS-001. Section retained as audit trail.
+> **DEPRECATED (2026-04-19).** PrimeScore AI no longer uses z-score as an intermediate severity measure. Replaced by ECDF rank (§8) per [ADR-0002](../../apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md) and SRS CLS-001. Section retained as audit trail.
 
 How many standard deviations a value is from the mean.
 
@@ -174,7 +174,7 @@ z = (value - mean) / standard_deviation
 | 3 | 3 std above mean | ~99.9% below — rare |
 | 6+ | Extreme | Shouldn't happen under normal conditions |
 
-**INVEX usage:** MARKET_DATA strategy computes z-score of current VIX value against 20-day rolling window. Volmageddon produced z=27.5 (VIX jumped from ~10 to 37 against a calm window).
+**PrimeScore AI usage:** MARKET_DATA strategy computes z-score of current VIX value against 20-day rolling window. Volmageddon produced z=27.5 (VIX jumped from ~10 to 37 against a calm window).
 
 **Why it's useful:** It's normalized (see concept #2). A VIX move from 10 to 15 and a move from 30 to 35 are both +5 points, but the first is far more unusual relative to its recent history. Z-score captures that.
 
@@ -182,9 +182,9 @@ z = (value - mean) / standard_deviation
 
 ## 7. tanh (Hyperbolic Tangent)
 
-> **DEPRECATED (2026-04-19).** INVEX no longer uses `tanh(|z|/scale)` for severity compression. The fitted `_TANH_SCALE` constant assumed a time-invariant distribution, which no vol indicator has across 2017–2024. Replaced by ECDF rank (§8) per [ADR-0002](../../apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md) and SRS CLS-001. Section retained as audit trail.
+> **DEPRECATED (2026-04-19).** PrimeScore AI no longer uses `tanh(|z|/scale)` for severity compression. The fitted `_TANH_SCALE` constant assumed a time-invariant distribution, which no vol indicator has across 2017–2024. Replaced by ECDF rank (§8) per [ADR-0002](../../apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md) and SRS CLS-001. Section retained as audit trail.
 
-A function that maps any number to the range (-1, 1). INVEX uses `tanh(|x|)` to map to [0, 1].
+A function that maps any number to the range (-1, 1). PrimeScore AI uses `tanh(|x|)` to map to [0, 1].
 
 ```
 tanh(0) = 0
@@ -196,7 +196,7 @@ tanh(∞) = 1.0
 
 **Shape:** S-curve. Starts flat near 0, rises steeply in the middle, flattens near 1.
 
-**Why INVEX uses it:** Raw z-scores are unbounded (can be 6, 27, 100+). Severity needs to be [0, 1]. `tanh` compresses large values toward 1.0 without hard-clipping them — a z-score of 27 maps to 0.88, not 1.0, preserving the information that "even more extreme" is possible.
+**Why PrimeScore AI uses it:** Raw z-scores are unbounded (can be 6, 27, 100+). Severity needs to be [0, 1]. `tanh` compresses large values toward 1.0 without hard-clipping them — a z-score of 27 maps to 0.88, not 1.0, preserving the information that "even more extreme" is possible.
 
 **The scale parameter:** `tanh(z / scale)` controls where the curve is steep vs flat. A larger scale (20 for MARKET_DATA) means higher z-scores are needed to reach high severity. A smaller scale (3 for MACROECONOMIC) means the curve is more sensitive.
 
@@ -217,9 +217,9 @@ ECDF rank = 6/7 = 0.857
 
 **What it tells you:** "86% of the last 7 values were at or below this one." Equivalent phrasing: "this is roughly at the 86th percentile of recent history."
 
-**Left-continuous convention for ties.** When the new value equals some history values, the convention matters. INVEX uses `≤` (left-continuous): ties count toward the rank. A value exactly equal to the previous 3 values gets rank `3/N`, not `0/N`. This keeps the rank monotone-non-decreasing as `x` grows.
+**Left-continuous convention for ties.** When the new value equals some history values, the convention matters. PrimeScore AI uses `≤` (left-continuous): ties count toward the rank. A value exactly equal to the previous 3 values gets rank `3/N`, not `0/N`. This keeps the rank monotone-non-decreasing as `x` grows.
 
-**Why INVEX uses it.**
+**Why PrimeScore AI uses it.**
 
 - **Distribution-free.** Works whether the history is Gaussian, fat-tailed, skewed, bimodal, or weird. No assumption about shape.
 - **Bounded output by construction.** Always in `[0, 1]`. No compression function (tanh) needed. No magic scale constant.
@@ -227,7 +227,7 @@ ECDF rank = 6/7 = 0.857
 
 **Contrast with z-score (§6, deprecated).** Z-score assumes standard deviation is a meaningful yardstick — true only for roughly symmetric, roughly Gaussian distributions. Vol indicators are neither. ECDF doesn't care.
 
-**Formula (INVEX CLS-001):** `severity = ecdf_rank(|deviation|) / N`.
+**Formula (PrimeScore AI CLS-001):** `severity = ecdf_rank(|deviation|) / N`.
 
 ---
 
@@ -279,14 +279,14 @@ ECDF rank = 0.99   ⟺  "99th percentile"  ⟺  "p99" (top 1%)
 
 **Careful with the phrasing.** "p95" does NOT mean "it has been this high 95% of the time." It means the opposite: it has been this high (or higher) only 5% of the time.
 
-**INVEX ranks deviation, not the raw level — and these differ.** On a typical trading desk "VIX at p95" refers to the *level* of VIX against its trailing history. INVEX ranks `|deviation from median|` (§9), not the raw level. They diverge in important cases:
+**PrimeScore AI ranks deviation, not the raw level — and these differ.** On a typical trading desk "VIX at p95" refers to the *level* of VIX against its trailing history. PrimeScore AI ranks `|deviation from median|` (§9), not the raw level. They diverge in important cases:
 
 - VIX grinds from 15 → 20 over a month. The median drifts up with it. Deviation stays small → low severity, even though the absolute level is elevated.
 - VIX spikes overnight from 15 → 28 while the 60-day median is still 14. Deviation = 14 points → high severity. Both approaches agree: this is extreme.
 
 **The rank is sufficient for signal strength, not for execution.** A consumer can act on `severity = 0.95` knowing the move is statistically extreme for this regime. But execution still requires the raw level — bid-ask spreads, term structure shape, and position sizing all depend on whether VIX is at 25 or 45, even if both have the same deviation rank.
 
-**In INVEX.** ECDF rank IS a percentile (just on a 0–1 scale). `severity = 0.95` means "this signal's `|deviation|` is in the top 5% of its own recent history."
+**In PrimeScore AI.** ECDF rank IS a percentile (just on a 0–1 scale). `severity = 0.95` means "this signal's `|deviation|` is in the top 5% of its own recent history."
 
 ---
 
@@ -312,12 +312,12 @@ IQR = 15 − 11 = 4
 
 **Why IQR, not standard deviation.** Standard deviation gets destroyed by outliers — one VIX spike from 10 to 50 makes std explode, making every other value look "normal" afterward. IQR ignores the top and bottom 25% by construction. A single spike doesn't move it.
 
-**Historical note on `D` in INVEX.** Earlier drafts of CLS-009 specified
+**Historical note on `D` in PrimeScore AI.** Earlier drafts of CLS-009 specified
 a minimum-informative-dispersion floor `D` measured in IQR, intended to
 catch flat-window pathologies. **`D` was removed from the current SRS**
 and replaced by the global window-degeneracy guard described in §17 —
 distinct-value count, not dispersion magnitude. IQR is retained in
-INVEX vocabulary because it remains the right tool for *describing*
+PrimeScore AI vocabulary because it remains the right tool for *describing*
 spread robustly; it is no longer the harness's flat-window check.
 
 ---
@@ -338,7 +338,7 @@ median = 12
 - **Mean** gets pulled toward outliers. A recent spike from 10 to 40 inflates the mean, making the spike "look less anomalous" in future readings because the reference moves toward it. **Spike-absorbing-into-mean pathology.**
 - **Median** doesn't move much from an outlier. A single 40 in `[10, 12, 11, 15, 13, 40]` gives median = 12.5, barely budged. The reference stays anchored to "normal."
 
-**In INVEX.** MARKET_DATA deviation is `|current_value − rolling_median(history)|`. The rolling median is the "normal level" against which deviation is measured.
+**In PrimeScore AI.** MARKET_DATA deviation is `|current_value − rolling_median(history)|`. The rolling median is the "normal level" against which deviation is measured.
 
 ---
 
@@ -361,7 +361,7 @@ How two return streams move together. Ranges from −1 (perfectly opposite) thro
 - `ρ = 0`: SPY and gold-miner stocks (some periods). Roughly independent.
 - `ρ = −0.6`: SPY and VIX. Inverse relationship — when stocks fall, vol rises.
 
-**In INVEX.** CROSS_ASSET_FLOW strategy doesn't care about the *level* of correlation. It cares about *changes* in correlation (see §13).
+**In PrimeScore AI.** CROSS_ASSET_FLOW strategy doesn't care about the *level* of correlation. It cares about *changes* in correlation (see §13).
 
 ---
 
@@ -379,7 +379,7 @@ deviation      = |current_ρ(t) − baseline_ρ(t)|
 
 **What trips the signal.** SPY and VIX normally have `ρ ≈ −0.7`. If that relationship breaks (suddenly drops to `ρ ≈ −0.2` or flips positive), something unusual is happening in the market — often a liquidity event or a regime change. The `deviation` is how much the current correlation has departed from its rolling baseline.
 
-**In INVEX.** CROSS_ASSET_FLOW deviation (CORR_DEVIATION kind) is `|current_ρ − rolling_baseline_ρ|`. The ECDF of that deviation over history produces severity.
+**In PrimeScore AI.** CROSS_ASSET_FLOW deviation (CORR_DEVIATION kind) is `|current_ρ − rolling_baseline_ρ|`. The ECDF of that deviation over history produces severity.
 
 ---
 
@@ -405,7 +405,7 @@ Two properties of ECDF that together explain why it replaced tanh.
 
 ## 16. Indicator-Class Pooling
 
-Why INVEX calibrates per *class* (group of symbols), not per symbol.
+Why PrimeScore AI calibrates per *class* (group of symbols), not per symbol.
 
 **Motivation.** Every symbol needs calibration parameters (`N`, `D`, `deviation_kind`). With 50+ symbols, per-symbol calibration means 50+ parameter rows to maintain and validate. Pooling symbols that behave the same statistically collapses those to a handful of classes.
 
@@ -421,7 +421,7 @@ Why INVEX calibrates per *class* (group of symbols), not per symbol.
 - **WTI vs Brent.** 95% of the time they move together and pool fine. But during pipeline events (Aramco attack, Druzhba contamination), one can gap 10% while the other moves 2%. **Pooling works most days, fails exactly when it matters most.**
 - **CPI vs PCE.** Different reference bases, different surprise distributions. Pool-validation is non-obvious.
 
-**Realistic INVEX universe size.** A naive asset-taxonomy pooling gives 15–30 classes. An empirically validated pooling (with KS rejection) probably gives **30–50 classes** across equity IV, rate vol, crude spot, gold, FX pairs, inflation prints, growth prints, employment prints, correlation pairs. The registry needs to absorb that, not be fixed-size.
+**Realistic PrimeScore AI universe size.** A naive asset-taxonomy pooling gives 15–30 classes. An empirically validated pooling (with KS rejection) probably gives **30–50 classes** across equity IV, rate vol, crude spot, gold, FX pairs, inflation prints, growth prints, employment prints, correlation pairs. The registry needs to absorb that, not be fixed-size.
 
 **Bottom line.** Classes are defined by distributional equivalence under deviation, proven by test — not by "they look similar to a human."
 
@@ -596,7 +596,7 @@ The same-category corroboration rule in earlier CLS-002 drafts
 required an additional signal in the *same* `source_category` within
 an unspecified time window. The current SRS replaces "same category"
 with **event-typology-dependent corroboration windows** matched to
-realistic INVEX latency:
+realistic PrimeScore AI latency:
 
 - **Intraday market-data events** (vol spike, correlation break) —
   corroboration window on the order of 1–5 seconds, acknowledging the

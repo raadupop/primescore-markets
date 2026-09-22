@@ -2,7 +2,7 @@
 
 **Format.** Chief-architect strategic recommendation (Situation / Complication / Recommendation / Trade-offs / Dissenting view / Next actions).
 
-**Audience.** Solo operator building INVEX (volatility-exploitation engine) inside DeltaFeed (6-iteration research programme measuring AI agent performance across architecture paradigms under a stable external contract).
+**Audience.** Solo operator building PrimeScore AI (volatility-exploitation engine) inside DeltaFeed (6-iteration research programme measuring AI agent performance across architecture paradigms under a stable external contract).
 
 **Trigger.** Operator observation after SRS v2.3.2 revision work: *"SRS is pretty heavy. When changing appears like this there is a lot of friction — SRS, api contracts, code, tests, claude.md, files, etc. — which is hard to follow (I have limited tokens in my brain as well) and maintain. I'm not a domain expert so every concept you introduce, please add it to session notes."*
 
@@ -10,12 +10,12 @@
 
 ## 1. Situation
 
-INVEX is a vol-trading product wrapped by DeltaFeed, a research instrument that holds a stable external contract across 6 iterations while varying the internal architecture. Requirements are **intentionally volatile**: SRS v2.3.1 Insight 7 names spec precision itself as an experimental variable. Changes don't signal design failure — they signal the experiment working as designed.
+PrimeScore AI is a vol-trading product wrapped by DeltaFeed, a research instrument that holds a stable external contract across 6 iterations while varying the internal architecture. Requirements are **intentionally volatile**: SRS v2.3.1 Insight 7 names spec precision itself as an experimental variable. Changes don't signal design failure — they signal the experiment working as designed.
 
 The artefact surface per requirement change touches, at minimum:
 
 1. SRS (Word docx + PDF export)
-2. OpenAPI contract (`INVEX-API-v1.yaml`)
+2. OpenAPI contract (`PrimeScore-API-v1.yaml`)
 3. ADRs (classifier layer, architecture layer)
 4. LIMITATIONS.md / HARNESS.md (operational notes)
 5. Code (Python classifier, .NET orchestrator)
@@ -57,9 +57,9 @@ Example applied to CLS-001:
 
 - **SRS §5.2 CLS-001** — authoritative formula. `severity = ecdf_rank(|deviation|) / N`.
 - **ADR-0002** — *cites* SRS CLS-001; does not repeat the formula.
-- **Code comment in [apps/classification/app/strategies/base.py](apps/classification/app/strategies/base.py)** — *cites* SRS CLS-001; does not repeat the formula.
+- **Code comment in [apps/classification/app/strategies/base.py](../../apps/classification/app/strategies/base.py)** — *cites* SRS CLS-001; does not repeat the formula.
 - **Test fixture names** — reference CLS-001 by number.
-- **[LIMITATIONS.md](apps/classification/LIMITATIONS.md) #5** — *cites* SRS CLS-001 and ADR-0002; does not repeat the formula.
+- **[LIMITATIONS.md](../../apps/classification/LIMITATIONS.md) #5** — *cites* SRS CLS-001 and ADR-0002; does not repeat the formula.
 
 Moving the formula is then a **one-file edit**. Cross-references stay valid because they are references, not copies.
 
@@ -69,7 +69,7 @@ Moving the formula is then a **one-file edit**. Cross-references stay valid beca
 
 ### 3.2. Fitness functions on cross-artefact drift
 
-The existing architecture-test layer ([apps/classification/tests/architecture/](apps/classification/tests/architecture/)) already enforces structural rules. Extend it with grep-based pytests that catch documentation drift.
+The existing architecture-test layer ([apps/classification/tests/architecture/](../../apps/classification/tests/architecture/)) already enforces structural rules. Extend it with grep-based pytests that catch documentation drift.
 
 Examples:
 
@@ -95,7 +95,7 @@ def test_no_tanh_scale_in_classifier_code_post_ecdf():
 
 ### 3.3. Concept-onboarding as a first-class deliverable
 
-The [doc/concepts/statistics.md](doc/concepts/statistics.md) pattern is already the right answer. Make it **mechanical rather than relied-upon**.
+The [doc/concepts/statistics.md](../../doc/concepts/statistics.md) pattern is already the right answer. Make it **mechanical rather than relied-upon**.
 
 Steps:
 
@@ -147,7 +147,7 @@ On **experimental** surface (where Insight 7 intentionally churns), those artefa
 
 **Rule.** Keep experimental parts in markdown + schema-free tests until they stabilise. Promote to heavy artefacts only when the volatility label moves to `Stable`.
 
-**Applied to INVEX.** SIG-001 (Locked) deserves a typed client and exhaustive contract tests. The ECDF formula — which was Experimental two weeks ago and is now Stable — is the right moment to generate typed fixtures. CLS-009 (Draft) is *not yet* — wait until it shakes out.
+**Applied to PrimeScore AI.** SIG-001 (Locked) deserves a typed client and exhaustive contract tests. The ECDF formula — which was Experimental two weeks ago and is now Stable — is the right moment to generate typed fixtures. CLS-009 (Draft) is *not yet* — wait until it shakes out.
 
 **Solo-operator cost.** Discipline only, no tooling. Avoids the anti-pattern of over-investing in tooling that has to be torn down on the next iteration.
 
@@ -195,7 +195,7 @@ Concrete. Assignable. Time-bound. Ordered by effort.
 
 - **[Zero-cost, do now.]** Add `Status:` markers to CLS-001 (`Stable`) and CLS-009 (`Draft`) in the next SRS v2.3.2 paste-into-Word pass.
 - **[Zero-cost, do now.]** Adopt SSoT discipline for the ongoing ECDF work: ADR-0002 cites SRS CLS-001 by number; no duplicate formulas.
-- **[~1 hour.]** Write a fitness test over [LIMITATIONS.md](apps/classification/LIMITATIONS.md), [HARNESS.md](apps/classification/HARNESS.md), and [ADR-0002](apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md) that fails on stale `CLS-004` references; generalise to a cross-artefact-ref assertion taking `(stale_term, exclusion_pattern)` pairs.
+- **[~1 hour.]** Write a fitness test over [LIMITATIONS.md](../../apps/classification/LIMITATIONS.md), [HARNESS.md](../../apps/classification/HARNESS.md), and [ADR-0002](../../apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md) that fails on stale `CLS-004` references; generalise to a cross-artefact-ref assertion taking `(stale_term, exclusion_pattern)` pairs.
 - **[~1 hour.]** Write a fitness test that fails if `_TANH_SCALE` or `tanh` appears in non-deprecated classifier code post-ECDF migration.
 - **[~2 hours.]** Create `doc/concepts/INDEX.md` cross-referencing SRS §3 Definitions to concepts-doc entries; make it a fitness-test target.
 - **[Deferred to post-iteration-1.]** Volatility labels across the full artefact set.
@@ -206,8 +206,8 @@ Concrete. Assignable. Time-bound. Ordered by effort.
 
 ## Links
 
-- [apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md](apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md) — ECDF decision
-- [apps/classification/LIMITATIONS.md](apps/classification/LIMITATIONS.md) — known weaknesses
-- [apps/classification/HARNESS.md](apps/classification/HARNESS.md) — three-layer test model
-- [doc/concepts/statistics.md](doc/concepts/statistics.md) — domain-concept reference (the pattern §3.3 generalises)
-- [doc/research/srs-revision-v2.3.2-cls-001-sig-001-1-cls-009.md](doc/research/srs-revision-v2.3.2-cls-001-sig-001-1-cls-009.md) — v2.3.2 delta deliverable (example of §3.5 delta-first in practice)
+- [apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md](../../apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md) — ECDF decision
+- [apps/classification/LIMITATIONS.md](../../apps/classification/LIMITATIONS.md) — known weaknesses
+- [apps/classification/HARNESS.md](../../apps/classification/HARNESS.md) — three-layer test model
+- [doc/concepts/statistics.md](../../doc/concepts/statistics.md) — domain-concept reference (the pattern §3.3 generalises)
+- [doc/research/srs-revision-v2.3.2-cls-001-sig-001-1-cls-009.md](../../doc/research/srs-revision-v2.3.2-cls-001-sig-001-1-cls-009.md) — v2.3.2 delta deliverable (example of §3.5 delta-first in practice)

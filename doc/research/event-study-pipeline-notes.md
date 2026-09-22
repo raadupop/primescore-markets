@@ -62,7 +62,7 @@ Latency budgets: wall-clock targets per stage (parse < 50ms, score < 10ms, order
 Invariants: properties that must always hold (e.g., "composite score is bounded in [−1, +1]", "no trade fires if forecast std dev is below threshold").
 
 This is standard quant practice. Citadel's, Two Sigma's, Millennium's internal specs read like applied math papers with acceptance criteria attached — because that's what they are.
-Given your INVEX work, you already know this intuitively: the CLS-002/CLS-006 formula corrections you walked through in the v2.3.0 update are exactly this layer. Formulas aren't implementation leakage in a quant SRS — they're the contract.
+Given your PrimeScore AI work, you already know this intuitively: the CLS-002/CLS-006 formula corrections you walked through in the v2.3.0 update are exactly this layer. Formulas aren't implementation leakage in a quant SRS — they're the contract.
 
 2. How do they manage the deterministic process in the age of AI?
 This is the sharper question, and the honest answer is: the pipeline stays deterministic, and AI gets walled off into roles where non-determinism is acceptable.
@@ -106,5 +106,5 @@ Claude Code running on your machine has the same memory system and conversation_
 > Search our past conversations for the event-study pipeline SRS discussion and summarize where we are.
 This works, but it's less reliable than Options 1 or 2 — memory is summarized, not verbatim, and recent turns may not have synced yet.
 My recommendation for your case:
-Option 2, because you're moving from a conceptual discussion into what sounds like it could become INVEX SRS work or a skill-building task. You want Claude Code to start with a sharp framing, not a raw transcript.
-Want me to draft the handoff prompt? If yes, tell me what you're planning to do in Claude Code — extend INVEX's SRS with a formal event-study section, build a prototype, write an article from this material, or something else. The handoff should point at the target, not just recap the past.
+Option 2, because you're moving from a conceptual discussion into what sounds like it could become PrimeScore AI SRS work or a skill-building task. You want Claude Code to start with a sharp framing, not a raw transcript.
+Want me to draft the handoff prompt? If yes, tell me what you're planning to do in Claude Code — extend PrimeScore AI's SRS with a formal event-study section, build a prototype, write an article from this material, or something else. The handoff should point at the target, not just recap the past.

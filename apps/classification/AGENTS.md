@@ -1,101 +1,26 @@
-# Invex.Classification — Python Classification Service
+# PrimeScore.Classification
 
-Stateless HTTP classification engine. Receives signal payloads from the
-.NET API over `POST /classify`, routes to the appropriate strategy by
-`source_category` + `payload_type`, returns a signed score, certainty,
-and reasoning trace.
+Python HTTP classifier. The standalone service owns `POST /classify` and `GET /health`; the planned .NET engine will call it over HTTP. This component is constant across the six planned architecture iterations.
 
-This service sits inside INVEX (the trading system) and is constant
-infrastructure across all six .NET architecture iterations DeltaFeed
-measures. It is not under measurement.
+## Sources
 
-This file is the agent-context onboarding doc for this component. It
-holds only what lives nowhere else. Everything else is a pointer.
+- [OpenAPI](doc/openapi.yaml): request/response contract.
+- [SRS](../../doc/srs/PrimeScore-SRS.md): CLS-001, CLS-003, CLS-009 and downstream requirements.
+- [Harness](HARNESS.md): executable checks, hooks and known coverage gaps.
+- [ADRs](doc/adr/) and [limitations](LIMITATIONS.md): decisions and statistical/operational limits.
+- [Registry](../../infra/registry.yaml): indicator classes and bootstrap providers.
+- [Naming](../../doc/conventions/python-naming.md): new names describe their output.
 
-## Pointers (canonical sources)
+## Boundaries
 
-| Concern | Canonical source |
-| --- | --- |
-| Contract (request/response shapes, score semantics) | [`doc/openapi.yaml`](doc/openapi.yaml) (normative) |
-| Requirements (severity formula, certainty, composite, dislocation, exits) | [SRS](../../doc/srs/INVEX-SRS.md) — see CLS-001, CLS-002, CLS-003, CLS-004, CLS-006, CLS-008, CLS-009, EXT-004 |
-| Project-wide agent harness architecture | [`../../doc/adr/0001-agent-harness-architecture.md`](../../doc/adr/0001-agent-harness-architecture.md) — the five harness layers, execution model, steering loop. Read first if new to the project. |
-| Per-component harness inventory (this service, all five layers) | [`HARNESS.md`](HARNESS.md) — regenerable runbook |
-| Test-oracle architecture for this service (Layer 4 of the project harness) | [`doc/adr/0003-test-oracle-architecture.md`](doc/adr/0003-test-oracle-architecture.md) — five oracles + `/health` gate |
-| Component architectural decisions and bug postmortems | [`doc/adr/`](doc/adr/) (Michael Nygard format) — ADR-0001 (per-indicator tuning), ADR-0002 (ECDF severity + registry), ADR-0003 (test-oracle architecture) |
-| Trader-curated reference scenarios + band-derivation rule | [`tests/acceptance/fixtures/ANCHORS.md`](tests/acceptance/fixtures/ANCHORS.md) |
-| Indicator registry (per-class `N_L`, `deviation_kind`, `expected_frequency_seconds`) | [`app/registry.py`](app/registry.py) and `data/registry/` (per ADR-0002) |
+`MARKET_DATA` and `MACROECONOMIC` structured routes execute. Cross-asset and both geopolitical routes are stubs returning HTTP 501. LLM calls and RAG retrieval are planned; installed dependencies do not constitute an integration.
 
-## Routing convention
+The classifier returns signed severity, certainty dimensions and reasoning. Aggregation, independent forecasts, dislocation detection, storage, portfolio decisions and positions belong to the planned engine. The local demo adapter computes an explicitly simplified scenario outside that engine.
 
-Five strategies, routed by `source_category` + `payload_type`:
+History lives in memory and the registry loads once at startup. FRED bootstrap is partial; replay uses explicitly seeded prior observations. Keep online provider access separate from deterministic acceptance tests. Readiness must reflect supplied data, not merely completion of startup.
 
-- **RULE_BASED** (`MARKET_DATA`, `MACROECONOMIC`, `CROSS_ASSET_FLOW`,
-  all `STRUCTURED`) — compute signed ECDF-rank severity per SRS
-  CLS-001. Sign encodes vol-expansion vs vol-compression per the
-  per-strategy sign convention in SRS §3.
-- **AI_MODEL** (`GEOPOLITICAL` `STRUCTURED` and `UNSTRUCTURED`) — emit
-  `score_type = EVENT_ASSESSMENT` per SRS CLS-003. LLM-judged severity;
-  not derived from a statistical distribution.
+## Validation
 
-The Python service owns routing — the .NET caller does not specify
-strategy. Unknown indicators trigger the CLS-009 degraded-confidence
-fallback rather than silent zeros.
+Run the repository gate (`bash harness/check-suite.sh`) with the intended Python environment active before claiming code complete. Acceptance assertions use public HTTP responses; fixture setup may inject state. Do not derive expected bands from implementation output or alter source observations to make tests pass.
 
-## Bootstrap
-
-On startup the classifier pulls historical data from public APIs to
-populate per-symbol long-horizon reference windows. Bootstrap depth is
-**registry-derived** (per-class `N_L`); see ADR-0002. `/health` returns
-"not ready" until all required windows populate; the .NET app gates on
-that. No persistent storage. Seed files exist only for tests under
-`tests/fixtures/`.
-
-## .NET integration boundary
-
-The Python service classifies individual signals. Aggregation, storage,
-and serving live on the .NET side.
-
-| .NET ingestion job | Python classifier |
-|---|---|
-| WebSocket subscription (Twelve Data) | Per-symbol long-horizon reference windows (in-memory, bootstrapped from public APIs) |
-| FRED / GDELT polling | ECDF rank of `\|deviation_signed\|` |
-| Raw data → SignalInput shaping | Surprise magnitude (MACROECONOMIC) |
-| Signal storage | Correlation deviation (CROSS_ASSET_FLOW) |
-| Composite scoring (CLS-002) | GEOPOLITICAL rule scoring + LLM calls |
-| IV dislocation (CLS-006) | RAG retrieval (GEOPOLITICAL unstructured) |
-| Response validation + fallback (CLS-004) | Severity + certainty mapping |
-| Monitoring alerts (CLS-008) | Reasoning-trace generation |
-
-This boundary is real and lives in no other doc.
-
-## LLM dependency
-
-Anthropic Claude API for the two `GEOPOLITICAL` strategies only. Every
-other strategy is pure computation.
-
-## RAG store
-
-Minimal ChromaDB corpus for the `GEOPOLITICAL` unstructured strategy.
-Contains event-type reference definitions, region risk profiles, and
-historical severity benchmarks. Seeded from files under `data/rag/`,
-read-only at runtime. LangChain orchestrates retrieval → prompt →
-structured extraction.
-
-## Tech stack
-
-- **Framework:** FastAPI
-- **Validation:** Pydantic v2
-- **Statistical:** numpy
-- **LLM:** anthropic SDK (Claude Sonnet)
-- **RAG:** LangChain + ChromaDB
-- **Tests:** pytest + pytest-asyncio
-- **Bootstrap data:** Twelve Data REST + FRED API (fredapi) + Finnhub
-
-## Conventions
-
-Naming: see [doc/conventions/python-naming.md](../../doc/conventions/python-naming.md).
-Functions and modules describe their *output*, not the discriminator
-that dispatched to them. Run the pre-edit self-check before introducing
-any new name.
-
-Change history lives in [`doc/adr/`](doc/adr/).
+When the fixture hook requests `/trader` and `/statistician`, surface that reminder to the operator. Follow the root [agent runtime rules](../../AGENTS.md) for Case A failures and Case B oracle escapes.

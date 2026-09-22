@@ -1,6 +1,6 @@
 # Trading Concepts Reference
 
-Concepts used in INVEX position construction and decision logic, explained from first principles.
+Concepts used in PrimeScore AI position construction and decision logic, explained from first principles.
 
 **Update log.**
 - 2026-04-23 — initial file (§1: Long Straddle).
@@ -65,22 +65,22 @@ Daily theta decay ≈ −(C_theta + P_theta)
 
 The trade is only profitable if the move happens *faster* than theta erodes the position.
 
-**The friend: vega (implied volatility).** If implied volatility rises after you buy the straddle, both options become worth more — even if the underlying hasn't moved yet. This is the core INVEX edge: if the system detects that market IV is underpriced relative to signal-implied IV (CLS-006 IV dislocation), buying a straddle before the IV repricing captures the vega gain regardless of direction.
+**The friend: vega (implied volatility).** If implied volatility rises after you buy the straddle, both options become worth more — even if the underlying hasn't moved yet. This is the core PrimeScore AI edge: if the system detects that market IV is underpriced relative to signal-implied IV (CLS-006 IV dislocation), buying a straddle before the IV repricing captures the vega gain regardless of direction.
 
 ```
 Vega P&L ≈ (IV_new − IV_entry) × (call_vega + put_vega)
 ```
 
-**When INVEX opens a long straddle.** The position constructor (POS-001) selects LONG_STRADDLE when:
+**When PrimeScore AI opens a long straddle.** The position constructor (POS-001) selects LONG_STRADDLE when:
 - IV dislocation is positive (signal-implied IV > market observed IV) — market is underpricing risk.
 - The event has directional uncertainty — the underlying could spike in either direction (geopolitical shocks, surprise economic prints, central bank pivots).
 - The exploitability window is wide enough that theta decay does not consume expected vega gain before the move occurs.
 
 **The Iran war example (Feb 27, 2026).** OVX = 64.68, ECDF severity = 0.85. Signal suggests crude-oil vol is being underpriced ahead of the weekend military strike. The direction is uncertain — crude could gap up (supply disruption, Hormuz closed) or gap down (demand destruction, recession pricing). LONG_STRADDLE on USO/OVX options captures either outcome. The risk: if the market has already priced in the strike by Friday close and OVX opens Monday unchanged or lower (geopolitical risk premium evaporates), both options expire worthless or near-worthless — the full premium is lost.
 
-**Contrast with directional spreads (CALL_SPREAD, PUT_SPREAD).** A call spread profits only if the underlying rises past the lower strike. A put spread profits only if it falls past the upper strike. Both cost less than a straddle (you sell one option to partially fund the other), but you must have a directional view. A straddle is more expensive and profits from size of move regardless of direction. INVEX picks between them based on whether the triggering signal is directionally ambiguous or directionally biased.
+**Contrast with directional spreads (CALL_SPREAD, PUT_SPREAD).** A call spread profits only if the underlying rises past the lower strike. A put spread profits only if it falls past the upper strike. Both cost less than a straddle (you sell one option to partially fund the other), but you must have a directional view. A straddle is more expensive and profits from size of move regardless of direction. PrimeScore AI picks between them based on whether the triggering signal is directionally ambiguous or directionally biased.
 
-**Liquidity note.** Not all option markets have the depth a straddle requires. VIX options are liquid enough. OVX options are substantially thinner — bid-ask spreads widen exactly during the high-vol events INVEX wants to trade. The theoretical edge from a 0.85 severity score shrinks or disappears if the fill is 2 points wide. POS-001 must account for available liquidity when sizing legs.
+**Liquidity note.** Not all option markets have the depth a straddle requires. VIX options are liquid enough. OVX options are substantially thinner — bid-ask spreads widen exactly during the high-vol events PrimeScore AI wants to trade. The theoretical edge from a 0.85 severity score shrinks or disappears if the fill is 2 points wide. POS-001 must account for available liquidity when sizing legs.
 
 ---
 
@@ -95,7 +95,7 @@ days before an FOMC meeting and exited "after 5 trading days" prices the
 exit on a calendar that ignores why the position exists. Two failure
 modes:
 
-- *Exiting before the catalyst.* The vega gain INVEX targets is
+- *Exiting before the catalyst.* The vega gain PrimeScore AI targets is
   precisely the IV repricing the catalyst forces. Closing before the
   meeting throws away the trade's reason to exist.
 - *Holding past the catalyst.* Once the catalyst prints, IV typically
@@ -127,7 +127,7 @@ EXT-004 handles them via a separate non-catalyst exit pathway.
 
 ## 3. Vega-Crush Gate
 
-A pre-trade check that prevents INVEX from holding a long-vega position
+A pre-trade check that prevents PrimeScore AI from holding a long-vega position
 across a scheduled catalyst whose realised IV-repricing is expected to
 be **negative**.
 
@@ -139,7 +139,7 @@ collapses, and IV mechanically reprices down. This is *vega crush*: the
 P&L any long-options holder eats simply because the calendar passed
 through the print.
 
-**Why it matters for INVEX.** A long straddle is long vega. If POS-001
+**Why it matters for PrimeScore AI.** A long straddle is long vega. If POS-001
 opens a straddle on Tuesday and the position is still open on Wednesday
 afternoon when CPI prints, the straddle's value drops by the *vega ×
 ΔIV_crush* amount on the print, before the underlying has had time to
@@ -155,7 +155,7 @@ position's expected holding period against the catalyst calendar:
   the gate **blocks** the position.
 - If the position is structured to *capture* the IV repricing (entry
   before catalyst, catalyst-relative exit per §2), the gate permits it
-  — that's the vega-positive trade INVEX wants.
+  — that's the vega-positive trade PrimeScore AI wants.
 
 **Gate parameters.** Expected post-event IV crush is sourced from
 historical realised crush distributions for the same indicator class
@@ -182,7 +182,7 @@ moves through its holding period.
 
 - *Vega.* Sensitivity of the position's value to a 1-vol-point change
   in implied volatility. Long straddles are long vega; the trade thesis
-  for INVEX is "vega gain on IV repricing dominates theta loss." The
+  for PrimeScore AI is "vega gain on IV repricing dominates theta loss." The
   ledger tracks how much vega the position actually carries each day,
   given that gamma exposure decays as the underlying moves.
 - *Gamma.* Sensitivity of *delta* to changes in the underlying. A
@@ -213,7 +213,7 @@ disconnected from what the trade was actually sized for.
   vega-crush gate evaluation).
 
 **Why this is a *ledger* and not just a check.** Aggregated over many
-trades, the divergence series is the empirical answer to *"is INVEX
+trades, the divergence series is the empirical answer to *"is PrimeScore AI
 sizing positions for the Greek exposure it actually realises?"* If
 realised vega is systematically below expected, the IV repricing
 thesis is not surviving contact with execution — and POS-001's sizing
@@ -222,5 +222,5 @@ This is a feedback signal into the harness's Backtest Layer A, not
 just per-position bookkeeping.
 
 **Out of scope for the ledger.** Theta and rho. Theta is deterministic
-and already priced into the entry decision; rho is negligible at INVEX
+and already priced into the entry decision; rho is negligible at PrimeScore AI
 holding horizons.

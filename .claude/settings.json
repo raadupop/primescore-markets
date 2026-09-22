@@ -3,29 +3,24 @@
     "allow": [
       "Bash(python -m pytest -v)",
       "Bash(python -m pytest apps/classification/tests/test_macroeconomic_data.py -v)",
-      "Bash(find /c/Dev/invex/doc -type f \\\\\\(-name *.md -o -name *.txt \\\\\\))",
-      "Bash(find /c/Dev/invex -name *SRS* -o -name *srs*)",
+      "Bash(find ./doc -type f \\\\\\(-name *.md -o -name *.txt \\\\\\))",
+      "Bash(find . -name *SRS* -o -name *srs*)",
       "Edit(/.claude/skills/trader/**)",
-      "Bash(grep -r \"GeopoliticalPayload\\\\|UnstructuredPayload\" /c/Dev/invex --include=*.py --include=*.yaml --include=*.md)",
+      "Bash(grep -r \"GeopoliticalPayload\\\\|UnstructuredPayload\" . --include=*.py --include=*.yaml --include=*.md)",
       "Bash(python -m pytest tests/ -v)",
-      "Bash(find /c/Dev/invex -type f \\\\\\(-name *.pyc -o -name *.pyo -o -name *.egg-info -o -name *.dist-info \\\\\\))",
-      "Bash(find /c/Dev/invex -maxdepth 4 -type f ! -path */.venv/* ! -path */__pycache__/* ! -path */.pytest_cache/* ! -path */.claude/*)",
+      "Bash(find . -type f \\\\\\(-name *.pyc -o -name *.pyo -o -name *.egg-info -o -name *.dist-info \\\\\\))",
+      "Bash(find . -maxdepth 4 -type f ! -path */.venv/* ! -path */__pycache__/* ! -path */.pytest_cache/* ! -path */.claude/*)",
       "Bash(git init:*)",
       "Read(//temp/readonly/**)",
       "Bash(unzip -o chief-architect.skill -d .claude/skills/)",
       "Edit(/.claude/skills/architect/**)",
       "Edit(/.claude/skills/risk-officer/**)",
       "Read(//c/Users/Radu/.claude/**)",
-      "Bash(ls -lt ~/.claude/projects/c--Dev-invex/*.jsonl)",
       "Bash(python3 -c ':*)",
       "Bash(python3 --version)",
       "Bash(python --version)",
-
       "WebFetch(domain:github.com)",
       "Bash(python -c ':*)"
-    ],
-    "additionalDirectories": [
-      "C:\\Dev\\invex"
     ],
     "allowedTools": [
       "Read",

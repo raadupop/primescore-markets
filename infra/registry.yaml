@@ -1,4 +1,4 @@
-# INVEX indicator registry
+# PrimeScore AI indicator registry
 #
 # Single source of truth for:
 #   - Python classifier (apps/classification/) — calibration parameters per

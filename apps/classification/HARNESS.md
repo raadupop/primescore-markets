@@ -1,7 +1,7 @@
 # HARNESS — Classification Service
 
 **Per-component harness inventory** for the Python classification
-service. This service sits inside INVEX (the trading system) and is
+service. This service sits inside PrimeScore AI (the trading system) and is
 constant infrastructure across all six .NET architecture iterations
 that DeltaFeed measures. It is not under measurement.
 
@@ -35,7 +35,7 @@ ADR's glossary; not repeated here.
 | [`AGENTS.md`](AGENTS.md) | Component onboarding doc: contract pointer, strategy routing, bootstrap, .NET integration boundary, LLM dependency |
 | [`CLAUDE.md`](CLAUDE.md) | Auto-discovery pointer stub → `AGENTS.md` |
 | [`doc/openapi.yaml`](doc/openapi.yaml) | Normative contract (request/response shapes, score semantics) |
-| [`../../doc/srs/INVEX-SRS.md`](../../doc/srs/INVEX-SRS.md) | Project SRS — CLS-001, CLS-002, CLS-003, CLS-004, CLS-006, CLS-008, CLS-009, EXT-004 |
+| [`../../doc/srs/PrimeScore-SRS.md`](../../doc/srs/PrimeScore-SRS.md) | Project SRS — CLS-001, CLS-002, CLS-003, CLS-004, CLS-006, CLS-008, CLS-009, EXT-004 |
 | [`../../doc/conventions/python-naming.md`](../../doc/conventions/python-naming.md) | Output-focused function/module naming |
 | [`app/registry.py`](app/registry.py) + `data/registry/` | Indicator registry — symbol → class, per-class `N_L`, `deviation_kind`, `expected_frequency_seconds` |
 | [`../../infra/registry.yaml`](../../infra/registry.yaml) | Shared registry schema (Python + future .NET) |

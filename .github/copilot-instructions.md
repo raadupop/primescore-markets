@@ -5,7 +5,7 @@
   (Claude Code, Codex, Cursor, Copilot) sees the same guidance.
 -->
 
-# INVEX — Agent Instructions
+# PrimeScore AI — Agent Instructions
 
 The canonical project context lives in [`AGENTS.md`](../AGENTS.md) at the
 repository root. Service-local context for the Python classification service
@@ -14,8 +14,8 @@ lives in [`apps/classification/AGENTS.md`](../apps/classification/AGENTS.md).
 Read those files first. They cover:
 
 - Repository structure and the six architecture iterations
-- Document hierarchy (SRS at `doc/srs/INVEX-SRS.md`, `INVEX-API-v1.yaml`, per-component `AGENTS.md`)
-- Contract-first convention — `INVEX-API-v1.yaml` is the single source of truth
+- Document hierarchy (SRS at `doc/srs/PrimeScore-SRS.md`, `PrimeScore-API-v1.yaml`, per-component `AGENTS.md`)
+- Contract-first convention — `PrimeScore-API-v1.yaml` is the single source of truth
   for the .NET external API; `apps/classification/doc/openapi.yaml` is the
   contract for the Python classification service
 - Black-box acceptance test discipline (EVO-001)

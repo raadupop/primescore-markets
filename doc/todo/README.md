@@ -1,6 +1,6 @@
 # ToDo registry
 
-Forward-work tracker for INVEX / DeltaFeed.
+Forward-work tracker for PrimeScore AI / DeltaFeed.
 
 [`registry.yaml`](registry.yaml) holds the open tasks. Open work lives
 here, not in ADRs (per [adr-discipline.md](../conventions/adr-discipline.md))

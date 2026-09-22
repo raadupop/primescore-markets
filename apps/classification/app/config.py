@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     finnhub_api_key: str = ""
     log_level: str = "INFO"
 
-    # Path to the indicator registry. Override via INVEX_REGISTRY_PATH.
+    # Path to the indicator registry. Override via PRIMESCORE_REGISTRY_PATH.
     registry_path: Path = _DEFAULT_REGISTRY_PATH
 
 

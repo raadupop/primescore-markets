@@ -1,4 +1,4 @@
-# ADR-0001: Agent harness architecture for DeltaFeed / INVEX
+# ADR-0001: Agent harness architecture for PrimeScore AI
 
 - **Status:** Accepted
 - **Date:** 2026-05-03
@@ -131,7 +131,7 @@ Operating constraints shape the response:
 - **Iteration-stable contract.** The classifier must not change shape
   every time a .NET iteration begins; the contract layer makes
   iteration churn safe.
-- **Controlled-variable framing** ([SRS](../srs/INVEX-SRS.md) ACX-001,
+- **Controlled-variable framing** ([SRS](../srs/PrimeScore-SRS.md) ACX-001,
   ACX-002, EVO-001). Agent context is itself a measurement variable
   in the research design; changes to AGENTS.md, skills, or permissions
   require justification because they affect the variable being
@@ -139,8 +139,8 @@ Operating constraints shape the response:
 
 ## Decision
 
-The INVEX agent harness is **five layers** plus a defined **execution
-model** (who fires what, when). Each layer has a concrete INVEX
+The PrimeScore AI agent harness is **five layers** plus a defined **execution
+model** (who fires what, when). Each layer has a concrete PrimeScore AI
 implementation today; gaps are named explicitly.
 
 ### Layer 1 — Context architecture (what the agent knows)
@@ -153,8 +153,8 @@ implementation today; gaps are named explicitly.
 - [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md)
   → root AGENTS.md (single source across Claude Code, Codex, Cursor,
   Copilot).
-- Document hierarchy: [SRS](../srs/INVEX-SRS.md) → OpenAPI (root
-  [`doc/INVEX-API-v1.yaml`](../INVEX-API-v1.yaml) + per-component
+- Document hierarchy: [SRS](../srs/PrimeScore-SRS.md) → OpenAPI (root
+  [`doc/PrimeScore-API-v1.yaml`](../PrimeScore-API-v1.yaml) + per-component
   [`apps/classification/doc/openapi.yaml`](../../apps/classification/doc/openapi.yaml))
   → ADRs (project root + per-component) → conventions
   ([`doc/conventions/python-naming.md`](../conventions/python-naming.md)).
@@ -205,7 +205,7 @@ to its tech stack and risk profile.
   mathematical axioms, structural fitness, and the planned
   reality-derived backtest (Layer A — currently unbuilt).
 - **.NET iterations (future):** EVO-001 mandates black-box acceptance
-  tests against `INVEX-API-v1.yaml`; iteration-specific structural
+  tests against `PrimeScore-API-v1.yaml`; iteration-specific structural
   tests (the architecture being measured varies). Each iteration
   adds its own ADR + per-component HARNESS.md.
 - **Universal floor for every component:** at minimum a contract
@@ -455,7 +455,7 @@ That is a property of the discipline, not a gap to close.
 
 ## Per-component instantiation rule
 
-For each INVEX component (Python classification today; six .NET
+For each PrimeScore AI component (Python classification today; six .NET
 iterations to come), the harness MUST manifest as:
 
 - `AGENTS.md` (Layer 1)
@@ -535,7 +535,7 @@ extend per-component via `.claude/settings.local.json` and convention.
 - [`.claude/settings.json`](../../.claude/settings.json) +
   [`settings.local.json`](../../.claude/settings.local.json) — Layer 3
   permissions
-- [SRS](../srs/INVEX-SRS.md) — ACX-001, ACX-002, EVO-001 (controlled-
+- [SRS](../srs/PrimeScore-SRS.md) — ACX-001, ACX-002, EVO-001 (controlled-
   variable framing)
 - [Classification ADR-0001](../../apps/classification/doc/adr/0001-per-indicator-tuning-parameters.md)
   — wrong-level abstraction postmortem

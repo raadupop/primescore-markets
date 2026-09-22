@@ -203,5 +203,5 @@ iterations and not accidentally couple EVO-001 to classifier changes.
 - [CLS-001 SRS annex stub](../../apps/classification/doc/adr/srs-annex-cls-001-severity-formula.md) — normative formula
 - [LIMITATIONS.md](../../apps/classification/LIMITATIONS.md) — #1, #3, #4, #5
 - [HARNESS.md](../../apps/classification/HARNESS.md) — three-layer test model
-- `doc/INVEX-SRS-v2.3.1.pdf` — CLS-001, CLS-004, CLS-006, RSK-002, §9 Validation Event Set, Definitions (Risk Regime Transition)
+- `doc/PrimeScore-SRS-v2.3.1.pdf` — CLS-001, CLS-004, CLS-006, RSK-002, §9 Validation Event Set, Definitions (Risk Regime Transition)
 - [`doc/research/event-study-pipeline-notes.md`](event-study-pipeline-notes.md) — companion research notes

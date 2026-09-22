@@ -1,7 +1,7 @@
 # SRS v2.3.2 revision drafts — §3 Definitions, CLS-001, CLS-009, §11.12
 
 - **Target SRS version:** v2.3.2 (to be produced from v2.3.1 by applying the blocks below)
-- **Source SRS:** `doc/INVEX-SRS-v2.3.1.docx`
+- **Source SRS:** `doc/PrimeScore-SRS-v2.3.1.docx`
 - **Status:** Interim text, awaiting paste into Word and save-as v2.3.2
 - **Date:** 2026-04-18 (revised same day after user critique — terminology bundled in §3 Definitions; SIG-001 not modified; CLS-001 certainty formula made explicit)
 - **Relates to:** [ADR-0002](../../apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md), [CLS-001 SRS annex stub](../../apps/classification/doc/adr/srs-annex-cls-001-severity-formula.md)
@@ -145,8 +145,8 @@ Verification:
 
 ## Application procedure
 
-1. Open `doc/INVEX-SRS-v2.3.1.docx` in Word.
-2. Save as `doc/INVEX-SRS-v2.3.2.docx`.
+1. Open `doc/PrimeScore-SRS-v2.3.1.docx` in Word.
+2. Save as `doc/PrimeScore-SRS-v2.3.2.docx`.
 3. Update the header revision table (front of document) with a v2.3.2 entry summarising the four changes (§3 Definitions additions; CLS-001 revision; CLS-009 addition; §11.12 amendment).
 4. Paste **Block 1** entries into §3 Definitions alphabetically, using the existing §3 formatting style. Do not remove or reword existing definitions.
 5. Paste **Block 2** over the existing CLS-001 body in §5.2. Preserve Word's paragraph styles ("Rationale:" and "Verification:" should adopt the same styles as surrounding requirements).
@@ -160,5 +160,5 @@ Verification:
 
 - ADR-0002: [`apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md`](../../apps/classification/doc/adr/0002-ecdf-severity-and-backtest-harness.md)
 - CLS-001 severity-formula annex stub: [`apps/classification/doc/adr/srs-annex-cls-001-severity-formula.md`](../../apps/classification/doc/adr/srs-annex-cls-001-severity-formula.md)
-- SRS v2.3.1 source: `doc/INVEX-SRS-v2.3.1.docx` / `.pdf`
-- Extracted text used to author this document: `doc/INVEX-SRS-v2.3.1.txt` (produced via `pdftotext -layout`)
+- SRS v2.3.1 source: `doc/PrimeScore-SRS-v2.3.1.docx` / `.pdf`
+- Extracted text used to author this document: `doc/PrimeScore-SRS-v2.3.1.txt` (produced via `pdftotext -layout`)

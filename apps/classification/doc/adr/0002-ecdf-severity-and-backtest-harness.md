@@ -24,7 +24,7 @@ four fixtures collapsed to regression guards — their bands reflect whatever
 the classifier currently outputs, because no cross-tech formula exists to
 independently compute the "correct" severity.
 
-Root cause: [CLS-001 in the SRS](../../../../doc/srs/INVEX-SRS.md) was at
+Root cause: [CLS-001 in the SRS](../../../../doc/srs/PrimeScore-SRS.md) was at
 the time deliberately qualitative ("severity is quantified; certainty
 has two independent dimensions combined somehow") with no formula. This is
 intentional per Insight 7 (spec precision treated as an experimental
@@ -159,7 +159,7 @@ Out of scope: GEOPOLITICAL (LLM-judged).
 
 ## SRS requirements impacted
 
-Landed in the [SRS](../../../../doc/srs/INVEX-SRS.md). The CLS-001
+Landed in the [SRS](../../../../doc/srs/PrimeScore-SRS.md). The CLS-001
 ECDF formula, CLS-009 degraded-confidence fallback, the indicator
 registry definition, and the §11 acceptance criterion extension are
 all in §3 and §5.2 — see the SRS for normative text. SIG-001's "no
@@ -268,6 +268,6 @@ the ECDF formula from the start.
 - Limitations cross-reference: [`../../LIMITATIONS.md`](../../LIMITATIONS.md) #1, #3, #4, #5
 - Test-oracle architecture (Layer 4 of the project harness): [ADR-0003](0003-test-oracle-architecture.md); inferable inventory in [`../../HARNESS.md`](../../HARNESS.md); project-wide harness in [`doc/adr/0001-agent-harness-architecture.md`](../../../../doc/adr/0001-agent-harness-architecture.md)
 - `/chief-architect` briefing: `doc/research/chief-architect-briefing-harness-redesign.md`
-- SRS: [`doc/srs/INVEX-SRS.md`](../../../../doc/srs/INVEX-SRS.md)
+- SRS: [`doc/srs/PrimeScore-SRS.md`](../../../../doc/srs/PrimeScore-SRS.md)
   (CLS-001, CLS-009, §9 Validation Event Set)
 - ADR format: Michael Nygard, *Documenting Architecture Decisions* (2011)

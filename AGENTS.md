@@ -1,15 +1,16 @@
-# DeltaFeed / INVEX
+# PrimeScore AI
 
-This repository is two things in one tree:
+PrimeScore AI is the venture brand. Its first product, PrimeScore Markets, will classify events and compare volatility estimates with observed implied volatility. This repository contains the Python classifier and its agent harness: instructions, tool hooks and code checks around coding-agent edits. The planned .NET application will aggregate classifications and evaluate positions; see [README.md](README.md) for implemented scope.
 
-**INVEX** — an event-driven volatility quant engine. It trades the gap between its implied-volatility forecast and observed implied volatility via convex options, sized to cap downside at allocated capital.
-
-**DeltaFeed** — a research framework on harness engineering: the practice of wrapping the probabilistic behavior of AI coding agents with deterministic engineering constraints (architecture, steering loops, fitness functions, contract gates).
+The architecture research programme formerly called DeltaFeed studies coding agents under deterministic constraints. Its six engine iterations are planned; there are no comparative results yet.
 
 ## Repository Structure
 
 - `doc/` — SRS (Markdown-native, see `doc/srs/`), INVEX-API-v1.yaml, project-wide ADRs
 - `apps/classification/` — Python classification service (constant across all iterations)
+- `apps/demo/` — local historical replay dashboard; separate from the engine iterations
+- `sites/` — static brand and product pages
+- `docs/` — status, demonstration and deployment runbooks
 - .NET iteration projects will be added starting at Iteration 1
 
 ## Document Hierarchy
@@ -35,7 +36,7 @@ The SRS references the OpenAPI spec, not the other way around. Component-specifi
 
 ## Python Classification Service
 
-Constant external dependency across all six .NET iterations. Lives in `apps/classification/`. Has its own `AGENTS.md`. The .NET app calls `POST /classify` over HTTP. The Python service does not affect architecture measurements — it's constant infrastructure.
+Constant external dependency across all six .NET iterations. Lives in `apps/classification/`. Has its own `AGENTS.md`. The planned .NET app will call `POST /classify` over HTTP. The Python service does not affect architecture measurements — it's constant infrastructure.
 
 ## Conventions
 

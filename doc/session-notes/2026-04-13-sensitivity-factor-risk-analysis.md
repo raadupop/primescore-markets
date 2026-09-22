@@ -35,7 +35,7 @@ Configured via a map of volatility regimes:
 
 ## 2. Core Risk Challenge: Is a 10-Point Dislocation Exploitable?
 
-**Question:** ~70% of market volume is institutional/algorithmic. How can an event remain unpriced long enough for INVEX to exploit?
+**Question:** ~70% of market volume is institutional/algorithmic. How can an event remain unpriced long enough for PrimeScore AI to exploit?
 
 ### Latency Stack Reality
 
@@ -43,15 +43,15 @@ Configured via a map of volatility regimes:
 |------|---------|---|
 | Event occurs | T+0 | Everyone sees simultaneously |
 | Institutional algos reprice | T+50ms to T+2s | Options surface adjusts |
-| INVEX classifier processes | T+seconds to minutes | Rolling window + HTTP to Python |
-| INVEX detects dislocation | T+minutes | Composite -> IV comparison |
-| INVEX places order | T+minutes+ | Retail broker API |
+| PrimeScore AI classifier processes | T+seconds to minutes | Rolling window + HTTP to Python |
+| PrimeScore AI detects dislocation | T+minutes | Composite -> IV comparison |
+| PrimeScore AI places order | T+minutes+ | Retail broker API |
 
-**Conclusion:** By the time INVEX computes a 10-point dislocation, it no longer exists.
+**Conclusion:** By the time PrimeScore AI computes a 10-point dislocation, it no longer exists.
 
 ### When Dislocations DO Persist
 
-| Scenario | Dislocation | Duration | INVEX Exploitable? |
+| Scenario | Dislocation | Duration | PrimeScore AI Exploitable? |
 |----------|-------------|----------|-------------------|
 | Standard macro release (CPI, NFP) | Repriced <2s | Milliseconds | No |
 | Sudden geopolitical event | 5-15 pts | Seconds to minutes | No — too slow |
@@ -60,7 +60,7 @@ Configured via a map of volatility regimes:
 | Cross-asset lag | 2-5 pts | Minutes to hours | **Yes — if using non-VIX instruments** |
 | Multi-signal synthesis | 2-5 pts | Minutes to hours | **Possible — this is the real thesis** |
 
-### Realistic INVEX Operating Zone
+### Realistic PrimeScore AI Operating Zone
 
 - Dislocations of **1-4 points** (not 10)
 - In **less liquid vol instruments** (not VIX itself)
@@ -72,7 +72,7 @@ Configured via a map of volatility regimes:
 1. Realistic dislocation thresholds: 1.5-3 pts for VIX-adjacent, 3-5 for less liquid instruments
 2. Latency budget: measure actual event-to-order time; if >60s, competing on synthesis not speed
 3. Backtest against execution reality: actual fills with spread widening, not mid-price
-4. Accepted risk statement: "INVEX does not compete on latency. The edge is in multi-source signal synthesis during novel events."
+4. Accepted risk statement: "PrimeScore AI does not compete on latency. The edge is in multi-source signal synthesis during novel events."
 
 ---
 

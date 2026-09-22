@@ -1,7 +1,7 @@
 # SRS Annex — CLS-001 severity formula (stub)
 
 - **Status:** **Superseded (2026-04-19).** The normative text of this
-  annex is now inline in the [SRS](../../../../doc/srs/INVEX-SRS.md)
+  annex is now inline in the [SRS](../../../../doc/srs/PrimeScore-SRS.md)
   §3 Definitions (deviation, ECDF rank, indicator class, indicator
   registry, `N`, window-degeneracy guard) and §5.2 CLS-001 / CLS-009.
   The indicator registry is anchored in §3 Definitions, not as

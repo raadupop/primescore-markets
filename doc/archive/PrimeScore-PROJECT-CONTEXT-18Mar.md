@@ -1,10 +1,10 @@
-# Invex Project Context — March 18, 2026
+# PrimeScore AI Project Context — March 18, 2026
 
-Upload this file alongside `Invex-SRS-v2.2.1.docx` and `Invex-API-v1.yaml` when starting a new conversation.
+Upload this file alongside `PrimeScore AI-SRS-v2.2.1.docx` and `PrimeScore AI-API-v1.yaml` when starting a new conversation.
 
 ---
 
-## What Invex Is
+## What PrimeScore AI Is
 
 A volatility-exploitation trading system used as a **research vehicle** to measure how AI agents (Claude Code) handle six architecture patterns. The system is real and designed for eventual production use. The research produces publishable articles with quantifiable findings on AI-driven software architecture.
 
@@ -15,7 +15,7 @@ A volatility-exploitation trading system used as a **research vehicle** to measu
 | Artifact | Status |
 |---|---|
 | SRS v2.2.1 | Complete. `.docx` file, edited directly from v2.2 XML. |
-| Invex-API-v1.yaml | Complete. 20 endpoints, 43 schemas. The external interface contract. |
+| PrimeScore AI-API-v1.yaml | Complete. 20 endpoints, 43 schemas. The external interface contract. |
 | API acceptance test design | Complete as traceability map (markdown). Not yet code. |
 | CLAUDE.md for Iteration 1 | **Next deliverable** |
 | Python classification service | **Next deliverable** (can parallel with CLAUDE.md) |
@@ -36,15 +36,15 @@ A volatility-exploitation trading system used as a **research vehicle** to measu
 ## Key Architecture Decisions
 
 ### Contract-First Design
-- `Invex-API-v1.yaml` is the single source of truth
-- NSwag generates a shared project Invex.Api.Contracts with **controller base classes, DTOs and typed HTTP client**
-- Test project and WebApi refference Invex.Api.Contracts
+- `PrimeScore AI-API-v1.yaml` is the single source of truth
+- NSwag generates a shared project PrimeScore AI.Api.Contracts with **controller base classes, DTOs and typed HTTP client**
+- Test project and WebApi refference PrimeScore AI.Api.Contracts
 - The generated controller base class enforces routes, HTTP methods, input/output types
 - Each iteration inherits from the generated bases and fills in the logic
 
 ### Document Hierarchy
 - **SRS v2.2.1** — requirements (what). References the OpenAPI spec.
-- **Invex-API-v1.yaml** — external interface contract (message content and format per IEEE 830 §3.1)
+- **PrimeScore AI-API-v1.yaml** — external interface contract (message content and format per IEEE 830 §3.1)
 - **CLAUDE.md per iteration** — agent context (ACX-001, ACX-002)
 - Three separate artifacts. Never merged into one document.
 
@@ -83,7 +83,7 @@ Signal Ingestion · Classification orchestration · Decision Engine · Position 
 
 ## Skill-Building Goals
 
-Radu is positioning for AI engineer / Software Architect / senior big tech roles. Invex covers:
+Radu is positioning for AI engineer / Software Architect / senior big tech roles. PrimeScore AI covers:
 - **.NET/C#** — six architecture iterations
 - **Python** — classification service
 - **RAG, LangChain, Prompt Engineering** — GEOPOLITICAL classifier
@@ -95,7 +95,7 @@ Radu is positioning for AI engineer / Software Architect / senior big tech roles
 
 1. CLAUDE.md for Iteration 1 ← **start here**
 2. Python classification service (can parallel with step 1)
-3. Invex solution structure + NSwag contract-first code generation
+3. PrimeScore AI solution structure + NSwag contract-first code generation
 4. Implement API acceptance tests
 5. Iterations 1–6
 
