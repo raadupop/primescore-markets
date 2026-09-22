@@ -14,7 +14,7 @@ todos:
 
   - id: TODO-001
     title: Implement v2.3.3 signed-score axiom (vol compression negative)
-    status: open
+    status: done
     priority: high
     owner: radu
     source:
@@ -23,13 +23,11 @@ todos:
     related_adr: []
     related_test: apps/classification/tests/acceptance/test_signed_score_axioms.py::test_vol_compression_returns_negative_score
     created: 2026-05-09
-    updated: 2026-05-09
+    updated: 2026-09-22
     blocked_by: []
     notes: >
-      The classification suite is currently red on this axiom. The harness
-      will surface it on every Stop with edits and escalate as
-      escalate:stuck on the second attempt. Closing this unblocks
-      uninterrupted harness operation.
+      Signed and zero-deviation axioms now pass; numerical, history and
+      fit-rejection controls run in the shared validation gate.
 
   - id: TODO-002
     title: Wire PostToolUse reminder for /statistician on strategy / severity-formula edits
@@ -95,7 +93,7 @@ todos:
 
   - id: TODO-006
     title: Add CI workflow invoking harness/check-suite.sh
-    status: open
+    status: done
     priority: medium
     owner: radu
     source:
@@ -104,16 +102,15 @@ todos:
       section: "Sequencing step 3"
     related_adr: [ADR-0001]
     created: 2026-05-09
-    updated: 2026-05-09
+    updated: 2026-09-22
     blocked_by: []
     notes: >
-      Defence in depth: harness runs on push/PR even when local hooks are
-      bypassed. CI invokes the oracle layer directly (no agent payload
-      required, since it is pure code-state).
+      GitHub Actions invokes the shared gate on push and pull requests
+      under Python 3.12 on Ubuntu and Windows.
 
   - id: TODO-007
     title: Update apps/classification/HARNESS.md to reference wired Layer 4 implementation
-    status: open
+    status: done
     priority: low
     owner: radu
     source:
@@ -121,14 +118,11 @@ todos:
       ref: apps/classification/HARNESS.md
     related_adr: [ADR-0001]
     created: 2026-05-09
-    updated: 2026-05-09
+    updated: 2026-09-22
     blocked_by: []
     notes: >
-      Per ADR-0001, HARNESS.md is the regenerable inventory of layers as
-      instantiated at the component. With the harness/ + .claude/hooks/
-      split now wired, HARNESS.md should reference the three components
-      (adapter / steering manager / oracle scripts) for the classification
-      service.
+      HARNESS.md now describes the implemented adapters, steering manager,
+      oracles, invocation paths and excluded validation.
 
   - id: TODO-008
     title: Optional ADR-0002 capturing steering-loop mechanics

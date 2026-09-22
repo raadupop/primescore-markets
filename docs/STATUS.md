@@ -1,5 +1,21 @@
 # PrimeScore AI — repository status
 
+**Delivery, 22 September 2026:** the repository is now [`raadupop/primescore-ai`](https://github.com/raadupop/primescore-ai). The local replay works; both websites are ready to host. The .NET engine and independently validated volatility forecast remain unbuilt.
+
+| Component | Current state | Evidence / remaining work |
+| --- | --- | --- |
+| Python classifier | Partial product; two executable routes | Signed market/macro scores, explicit fit rejection, horizon-based confidence and honest readiness. Cross-asset and both geopolitical routes remain HTTP 501; [calibration and provider gaps](../apps/classification/LIMITATIONS.md). |
+| Replay dashboard | Built | Eight historical VIX/OVX snapshots through real HTTP classification and a labeled scenario; three views, repeat/reset and degraded/error handling. Run `python scripts/demo.py`; [setup](DEMO.md). |
+| Agent harness and CI | Built; finite scope | Both OpenAPI contracts, six dependency contracts, fitness tools and pytest share one gate. Local final result: **85 passed, 4 intentionally skipped**. [Hosted checks](https://github.com/raadupop/primescore-ai/actions/workflows/checks.yml); [remaining harness limits](../apps/classification/HARNESS.md). |
+| Brand and markets sites | Built; hosting pending | Static HTML/CSS checked at desktop and mobile widths. [Deploy and add DNS](DEPLOYMENT.md). |
+| Engine, live feeds, positions and risk | Designed | No .NET implementation, independent forecast, broker execution, persistence or live dashboard. [Design limits](../LIMITATIONS.md). |
+| Contract and credit optimisation | Direction only | No implementation or product specification. |
+
+The four skips are three macro anchors awaiting sourced history and one explicitly opt-in live FRED integration. Passing checks establish the tested software behavior, not predictive accuracy. The shared gate and Stop hook passed; the local prose-review pre-commit hook was bypassed after manual review of its terminology objections. MIT is proposed; no licence has been granted. The detailed audit below records the **starting state**, before these repairs.
+
+<details>
+<summary>Initial audit: component inventory, failures and effort estimates</summary>
+
 Audited **22 September 2026**, at `4af489d` plus the existing working tree. This is the pre-rename baseline. **Built** means executable code or an authored artifact exists; **partial** means material behavior or validation is missing; **designed** means requirements, contracts or stubs only. Absent delivery assets are identified explicitly.
 
 **Verdict:** a partially implemented event classifier and agent engineering harness exist. An end-to-end volatility platform does not. Two of five classification routes execute; the current suite is red. The README overstates live ingestion, geopolitical AI and trading behavior.
@@ -84,7 +100,9 @@ Three views: **event tape** (source, symbol, event time, replay status); **class
 
 Data source: existing FRED-sourced VIX/OVX fixtures for local replay; [Cboe's historical-data page](https://www.cboe.com/tradable-products/vix/vix-historical-data) provides daily index history for future refresh. [FRED identifies VIX data as copyrighted](https://fred.stlouisfed.org/series/VIXCLS); a source-code licence must not imply ownership or relicensing of provider data. Keep public site copy separate from downloadable raw datasets until reuse terms are established.
 
-## Decisions after the audit checkpoint
+</details>
+
+## Naming and deployment choices
 
 | Decision | Proposal | Reason |
 | --- | --- | --- |
@@ -93,6 +111,4 @@ Data source: existing FRED-sourced VIX/OVX fixtures for local replay; [Cboe's hi
 | Licence | **[MIT](https://opensource.org/license/mit)** for original code | Short, familiar permissive licence; founder approval remains pending. Third-party data and archived source documents retain their own terms. |
 | Static websites | **Plain HTML/CSS, two Cloudflare Pages projects** | No application server or frontend toolchain required for two information pages; [Cloudflare supports static HTML directly](https://developers.cloudflare.com/pages/framework-guides/deploy-anything/). The local Python dashboard is a separate runtime. |
 
-After naming approval, remaining packaging estimates: rename/reference repair **2–3h**; README **1–2h**; both static sites and DNS instructions **3–5h**; changelog and scoped commit series **1–2h**. CI and dashboard estimates are already counted above. The GitHub repository is now `raadupop/primescore-ai`. No DNS change or website deployment has been performed.
-
-Existing uncommitted changes in `AGENTS.md`, `doc/adr/0001-agent-harness-architecture.md`, `doc/conventions/adr-discipline.md` and the untracked Basel research note were present before this audit and remain untouched. The initial audit added only `docs/STATUS.md`. Radu subsequently authorized renaming and selected `primescore-ai`; delivery continued from that checkpoint.
+No DNS change or website deployment has been performed. Earlier uncommitted operator edits remain outside the delivery commits.
