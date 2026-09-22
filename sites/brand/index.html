@@ -1,8 +1,119 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PrimeScore AI &mdash; Scoring information for better decisions</title><meta name="description" content="PrimeScore AI is a self-funded product venture developing event-driven volatility intelligence, with contract and credit optimisation as a future direction."><link rel="canonical" href="https://primescore.ai/"><meta property="og:title" content="PrimeScore AI"><meta property="og:description" content="AI that scores things so people make better decisions."><meta property="og:type" content="website"><meta property="og:url" content="https://primescore.ai/"><link rel="stylesheet" href="/styles.css"><link rel="icon" href="/favicon.svg" type="image/svg+xml"></head>
-<body><a class="skip" href="#main">Skip to content</a><div class="wrap"><header class="header"><a class="brand" href="/" aria-label="PrimeScore AI home"><span class="mark" aria-hidden="true">P</span>PrimeScore AI</a><nav aria-label="Main"><a href="#products">Products</a><a href="#founder">Founder</a><a href="https://github.com/raadupop/primescore-ai">Repository &#8599;</a></nav></header>
-<main id="main"><section class="hero"><span class="eyebrow">Independent product venture / Founded 2025</span><h1>AI that scores things.<br><em>So people make<br>better decisions.</em></h1><p class="lead">PrimeScore AI turns information into scores that people can inspect and question. The aim is to make the evidence, assumptions and uncertainty behind a decision visible. Its first product explores event-driven volatility intelligence for options research.</p><div class="actions"><a class="button" href="https://markets.primescore.ai/">Explore PrimeScore Markets &#8599;</a><a class="textlink" href="https://github.com/raadupop/primescore-ai">Inspect the work</a></div></section>
-<section class="section" id="products"><div class="section-heading"><h2>One idea.<br>Different decisions.</h2><p>The markets prototype is in development. Contract and credit optimisation is a future direction; no second product is available.</p></div><div class="cards"><article class="card"><div class="card-top"><span>01 / MARKETS</span><span class="tag active">In development</span></div><h3>PrimeScore Markets</h3><p>Classify market and macroeconomic events by severity and certainty. Replay historical observations and inspect experimental volatility scenarios. Live feeds, geopolitical classification and an independent forecasting engine are planned.</p><a href="https://markets.primescore.ai/">See what exists today &#8599;</a></article><article class="card"><div class="card-top"><span>02 / CONTRACTS &amp; CREDIT</span><span class="tag">Future direction</span></div><h3>Contract and credit optimisation</h3><p>Explore how scoring could help people assess contractual terms and credit choices. This is a roadmap direction, without an implemented product or an availability date.</p></article></div></section>
-<section class="section"><div class="section-heading"><h2>A score should<br>be inspectable.</h2><p>A number alone is not enough. The work pairs scores with source information, uncertainty and a trace of how the result was produced.</p></div><div class="method"><div><span class="index">01 / EVIDENCE</span><strong>Keep the source visible</strong><p>Connect an observation to its origin and the point in time it represents.</p></div><div><span class="index">02 / SCORING</span><strong>Expose the assumptions</strong><p>Show the method, the available history and the limits of the result.</p></div><div><span class="index">03 / JUDGEMENT</span><strong>Support the decision</strong><p>Give people information to examine, with uncertainty they can take into account.</p></div></div></section>
-<section class="section founder" id="founder"><h2>Founded and built<br>by Radu Pop.</h2><div><span class="eyebrow">Founder &amp; Engineer / November 2025&ndash;May 2026</span><p>PrimeScore AI began as a self-funded venture. It paused ahead of a funding round, after which Radu joined an energy-tech startup as hands-on CTO. The markets MVP is now being completed.</p><p>The repository documents the implementation, architecture decisions and the agent engineering approach used to build it.</p><a class="button" href="https://github.com/raadupop">Contact Radu on GitHub &#8599;</a></div></section></main>
-<footer class="footer"><span>&copy; 2026 Radu Pop &middot; PrimeScore AI</span><div><a href="https://markets.primescore.ai/">Markets</a><a href="https://github.com/raadupop/primescore-ai">Source repository</a></div></footer></div></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PrimeScore AI — Clarity in complexity</title>
+  <meta name="description" content="AI that scores things so people make better decisions. Explore PrimeScore Markets, our first product in development.">
+  <link rel="canonical" href="https://primescore.ai/">
+  <meta property="og:title" content="PrimeScore AI — Clarity in complexity">
+  <meta property="og:description" content="AI that scores things. So people make better decisions.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://primescore.ai/">
+  <meta name="theme-color" content="#080b10">
+  <link rel="preload" href="/fonts/space-grotesk.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/brand.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script src="/site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="page-glow" aria-hidden="true"></div>
+  <header class="site-header container">
+    <a class="wordmark" href="/" aria-label="PrimeScore AI home">
+      <svg class="logo-mark" viewBox="0 0 32 36" aria-hidden="true"><path fill="currentColor" d="M2 24h6v10H2zM13 13h6v21h-6zM24 2h6v32h-6z"/></svg>
+      <span>PrimeScore<span class="ai"> AI</span></span>
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="main-nav">Menu</button>
+    <nav class="site-nav" id="main-nav" aria-label="Main navigation">
+      <a class="nav-link" href="#products">Products</a>
+      <a class="nav-link" href="#approach">Our approach</a>
+      <a class="nav-link" href="#contact">Contact</a>
+      <a class="nav-cta" data-site="markets" href="https://markets.primescore.ai/">Explore Markets <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="brand-hero container" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow">Intelligence for better decisions</p>
+        <h1 id="hero-title">Clarity in<br><span>complexity.</span></h1>
+        <p class="hero-lead">AI that scores things.<br>So people make better decisions.</p>
+        <p class="hero-description">We’re building tools that turn complex information into scores you can inspect and question.</p>
+        <a class="button button-primary" href="#products">Explore our products <span aria-hidden="true">↗</span></a>
+        <div class="hero-footnote"><span class="footnote-dot" aria-hidden="true"></span>Starting with the markets.</div>
+      </div>
+      <figure class="score-stage" aria-label="Concept: connecting evidence and context to a score">
+        <div class="stage-corners" aria-hidden="true"></div>
+        <div class="stage-topline"><span>THE PRIMESCORE APPROACH</span><span class="stage-coordinate" aria-hidden="true">PS / 01</span></div>
+        <div class="score-visual" aria-hidden="true">
+          <img class="score-field" src="/score-field.svg" width="600" height="560" alt="">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="lens-core"><svg viewBox="0 0 32 36"><path fill="currentColor" d="M2 24h6v10H2zM13 13h6v21h-6zM24 2h6v32h-6z"/></svg></div>
+          <div class="data-label evidence-label"><span class="label-icon">↗</span><div><small>01 / INPUT</small><strong>Evidence</strong></div></div>
+          <div class="data-label context-label"><span class="label-icon">⊕</span><div><small>02 / ANALYSIS</small><strong>Context</strong></div></div>
+          <div class="data-label decision-label"><span class="label-icon">✓</span><div><small>03 / OUTPUT</small><strong>A score with a reason.</strong></div></div>
+        </div>
+        <figcaption class="stage-bottomline"><span>EVIDENCE <b>→</b> CONTEXT <b>→</b> DECISION</span><button class="motion-toggle" type="button" hidden aria-pressed="false" aria-label="Pause diagram animation"><span class="motion-symbol" aria-hidden="true">Ⅱ</span> <span class="motion-label">Motion on</span></button></figcaption>
+      </figure>
+    </section>
+
+    <div class="thesis-strip container"><span class="section-kicker">A number is a starting point.</span><p>The evidence behind it is what matters.</p><span class="strip-arrow" aria-hidden="true">↓</span></div>
+
+    <section class="section container products-section" id="products" aria-labelledby="products-title">
+      <div class="section-heading">
+        <div><p class="section-kicker">01 / Products</p><h2 id="products-title">One idea.<br>Different decisions.</h2></div>
+        <p>Start with the question.<br>Build the intelligence around it.</p>
+      </div>
+      <article class="markets-feature">
+        <div class="feature-copy">
+          <span class="status">In development</span>
+          <h3>PrimeScore<br>Markets<span class="heading-period">.</span></h3>
+          <p>Event-driven volatility intelligence for options research. Classify events, replay market history, and explore how volatility scenarios change.</p>
+          <a class="button button-ghost" data-site="markets" href="https://markets.primescore.ai/">Explore Markets <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="market-diagram" aria-label="Events feed classification, which informs a volatility scenario">
+          <div class="diagram-header"><span>EVENT-DRIVEN INTELLIGENCE</span><span class="diagram-symbol">VIX / OVX</span></div>
+          <div class="diagram-plot" aria-hidden="true">
+            <svg viewBox="0 0 600 220" preserveAspectRatio="none">
+              <defs><linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#c5f56a" stop-opacity=".2"/><stop offset="1" stop-color="#c5f56a" stop-opacity="0"/></linearGradient></defs>
+              <path class="plot-grid" d="M0 40H600M0 95H600M0 150H600M0 205H600M60 0V220M180 0V220M300 0V220M420 0V220M540 0V220"/>
+              <path class="plot-base" d="M0 158C40 143 53 179 96 157S150 138 190 157 229 142 259 154 294 123 329 140 362 117 399 130 426 95 466 105 515 112 543 90 571 96 600 68"/>
+              <path fill="url(#area-fill)" d="M0 171L45 167 75 175 105 161 130 166 162 142 190 152 213 139 245 151 276 127 301 135 327 66 349 93 370 47 388 63 415 36 449 70 480 65 513 91 538 74 567 83 600 70V220H0Z"/>
+              <path class="plot-signal" d="M0 171L45 167 75 175 105 161 130 166 162 142 190 152 213 139 245 151 276 127 301 135 327 66 349 93 370 47 388 63 415 36 449 70 480 65 513 91 538 74 567 83 600 70"/>
+              <path class="plot-event" d="M327 15V220"/><circle cx="327" cy="66" r="5" fill="#c5f56a" stroke="#10151d" stroke-width="3"/>
+            </svg>
+            <span class="event-chip">Event → assessment</span>
+          </div>
+          <div class="diagram-steps"><span><b>01</b> Event</span><i aria-hidden="true">→</i><span><b>02</b> Classification</span><i aria-hidden="true">→</i><span><b>03</b> Scenario</span></div>
+          <p class="diagram-caption">Concept illustration</p>
+        </div>
+      </article>
+      <article class="future-product">
+        <span class="future-icon" aria-hidden="true">↳</span>
+        <div><span class="section-kicker">Future direction</span><h3>Contracts &amp; credit</h3><p>Scoring contractual terms and credit choices to make their trade-offs clearer.</p></div>
+        <span class="future-label">On the horizon</span>
+      </article>
+    </section>
+
+    <section class="section approach-section" id="approach" aria-labelledby="approach-title">
+      <div class="container">
+        <div class="section-heading"><div><p class="section-kicker">02 / Our approach</p><h2 id="approach-title">A score should<br>stand up to a question.</h2></div><p>We design for the moment you ask:<br>“Why this result?”</p></div>
+        <div class="principles">
+          <article class="principle"><div class="principle-art evidence-art" aria-hidden="true"><span></span><span></span><span></span><i>↗</i></div><span class="principle-number">01</span><h3>Start with evidence.</h3><p>Keep the source connected to the observation.</p></article>
+          <article class="principle"><div class="principle-art context-art" aria-hidden="true"><span></span><span></span><span></span></div><span class="principle-number">02</span><h3>Make uncertainty visible.</h3><p>Show how much the available information can tell us.</p></article>
+          <article class="principle"><div class="principle-art reasoning-art" aria-hidden="true"><span></span><span></span><span></span><i>✓</i></div><span class="principle-number">03</span><h3>Explain the result.</h3><p>Give people a reasoning trail they can inspect.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="contact-section container" id="contact" aria-labelledby="contact-title">
+      <div><h2 id="contact-title">Explore the work.<br>Start a conversation.</h2></div>
+      <div class="contact-detail"><p>Radu Pop<span>Founder &amp; Engineer</span></p><a class="button button-primary" href="https://github.com/raadupop">Get in touch <span aria-hidden="true">↗</span></a></div>
+    </section>
+  </main>
+  <footer class="site-footer container"><span>© 2026 PrimeScore AI</span><div class="footer-links"><a data-site="markets" href="https://markets.primescore.ai/">Markets ↗</a><a href="https://github.com/raadupop/primescore-ai">GitHub ↗</a></div></footer>
+</body>
+</html>
