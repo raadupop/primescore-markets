@@ -40,5 +40,10 @@ coverage.xml
 .DS_Store
 Thumbs.db
 
-# Empty placeholders
-apps/core/
+# .NET engine (apps/engine)
+bin/
+obj/
+.vs/
+*.user
+TestResults/
+apps/engine/var/

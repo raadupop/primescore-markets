@@ -1,0 +1,97 @@
+@using PrimeScore.Engine.Host.Health
+@inject EngineHealthService HealthService
+
+<section class="panel" aria-labelledby="health-title">
+    <div class="panel-head">
+        <div>
+            <div class="kicker">Engine</div>
+            <h2 id="health-title">Health</h2>
+        </div>
+        @if (_snapshot is not null)
+        {
+            <span class="status @(_snapshot.Ok ? "" : "status-warn")">@(_snapshot.Ok ? "ok" : "degraded")</span>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="degraded"><strong>Health check failed.</strong> @_error</div>
+    }
+    else if (_snapshot is null)
+    {
+        <div class="loading">Checking ledger and classifier…</div>
+    }
+    else
+    {
+        <dl class="kv">
+            <dt>Ledger entries</dt>
+            <dd>@_snapshot.Ledger.Entries.ToString("N0", CultureInfo.InvariantCulture)</dd>
+            <dt>Head sequence</dt>
+            <dd>@_snapshot.Ledger.HeadSequence</dd>
+            <dt>Last verification</dt>
+            <dd>
+                @if (_snapshot.Ledger.LastVerification is { } verification)
+                {
+                    <span class="status @(verification.Ok ? "" : "status-bad")">@(verification.Ok ? "chain intact" : "chain broken")</span>
+                    <span> @verification.VerifiedAt.ToString("u", CultureInfo.InvariantCulture)</span>
+                }
+                else
+                {
+                    <span class="status status-muted">never verified</span>
+                }
+            </dd>
+            <dt>Classifier</dt>
+            <dd>
+                @if (_snapshot.Classifier.Reachable)
+                {
+                    <span class="status">reachable</span>
+                }
+                else
+                {
+                    <span class="status status-bad">unreachable</span>
+                }
+                <span> @_snapshot.Classifier.BaseUrl</span>
+            </dd>
+            @if (_snapshot.Classifier.Detail is { } detail)
+            {
+                <dt>Classifier detail</dt>
+                <dd>@detail</dd>
+            }
+            <dt>Engine version</dt>
+            <dd>@_snapshot.EngineVersion</dd>
+            <dt>Checked</dt>
+            <dd>@_snapshot.CheckedAt.ToString("u", CultureInfo.InvariantCulture)</dd>
+        </dl>
+        @if (!_snapshot.Classifier.Reachable)
+        {
+            <p class="panel-note">Classification is unavailable while the classifier is unreachable; no assessment is invented.</p>
+        }
+    }
+    <p class="panel-note"><button class="button button-ghost" @onclick="RefreshAsync" disabled="@_loading">Refresh</button></p>
+</section>
+
+@code {
+    private EngineHealthSnapshot? _snapshot;
+    private string? _error;
+    private bool _loading;
+
+    protected override Task OnInitializedAsync() => RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _snapshot = await HealthService.GetAsync(CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

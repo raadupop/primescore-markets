@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Versioned configuration: weighting schemes, windows, thresholds, regime maps, conditions (SRS NFR-003). Public contracts reference only the shared kernel (brief §5 rule 2). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Modules.Configuration.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>

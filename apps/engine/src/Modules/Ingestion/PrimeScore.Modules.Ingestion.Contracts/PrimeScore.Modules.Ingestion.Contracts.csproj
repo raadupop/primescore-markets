@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Signal ingestion: validation, append-only persistence, point-in-time queries, source adapters (SRS SIG-001..004). Public contracts reference only the shared kernel (brief §5 rule 2). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Modules.Ingestion.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,45 @@
+@page "/"
+
+<PageTitle>Overview · PrimeScore Markets</PageTitle>
+
+<div class="page-head">
+    <div>
+        <div class="eyebrow">Overview</div>
+        <h1>Volatility contexts</h1>
+        <p>
+            Per reference instrument: the latest observed implied volatility, the composite of classified signals,
+            the signal-implied scenario and the decision the rules would have recorded, each traceable to its ledger entry.
+        </p>
+    </div>
+</div>
+
+<div class="grid grid-2">
+    @foreach (var context in Contexts)
+    {
+        <section class="panel" aria-label="@context.Name context">
+            <div class="panel-head">
+                <div>
+                    <div class="kicker">@context.Name context · reference @context.Reference</div>
+                    <h2>@context.Title</h2>
+                </div>
+                <span class="status status-muted">no data</span>
+            </div>
+            <EmptyState Title="No observations yet">
+                Ingestion is not built yet (milestone M1). Until @context.Reference closes are ingested there is no observed level,
+                composite, scenario or decision to show, and none is estimated.
+            </EmptyState>
+        </section>
+    }
+</div>
+
+<HealthPanel />
+
+@code {
+    private sealed record ContextCard(string Name, string Reference, string Title);
+
+    private static readonly ContextCard[] Contexts =
+    [
+        new("equity", "VIX", "US equity implied volatility"),
+        new("oil", "OVX", "Crude oil implied volatility"),
+    ];
+}

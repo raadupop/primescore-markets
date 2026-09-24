@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- EVO-001b / EVO-002: the architecture's dependency rules (brief §5), one test per rule. -->
+  <ItemGroup>
+    <PackageReference Include="NetArchTest.Rules" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Api.Contracts\PrimeScore.Api.Contracts\PrimeScore.Api.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\src\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+    <ProjectReference Include="..\..\src\Host\PrimeScore.Engine.Host\PrimeScore.Engine.Host.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Ingestion\PrimeScore.Modules.Ingestion\PrimeScore.Modules.Ingestion.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Ingestion\PrimeScore.Modules.Ingestion.Contracts\PrimeScore.Modules.Ingestion.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Classification\PrimeScore.Modules.Classification\PrimeScore.Modules.Classification.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Classification\PrimeScore.Modules.Classification.Contracts\PrimeScore.Modules.Classification.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Decision\PrimeScore.Modules.Decision\PrimeScore.Modules.Decision.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Decision\PrimeScore.Modules.Decision.Contracts\PrimeScore.Modules.Decision.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Analytics\PrimeScore.Modules.Analytics\PrimeScore.Modules.Analytics.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Analytics\PrimeScore.Modules.Analytics.Contracts\PrimeScore.Modules.Analytics.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Configuration\PrimeScore.Modules.Configuration\PrimeScore.Modules.Configuration.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Configuration\PrimeScore.Modules.Configuration.Contracts\PrimeScore.Modules.Configuration.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Positions\PrimeScore.Modules.Positions.Contracts\PrimeScore.Modules.Positions.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Exits\PrimeScore.Modules.Exits.Contracts\PrimeScore.Modules.Exits.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Risk\PrimeScore.Modules.Risk.Contracts\PrimeScore.Modules.Risk.Contracts.csproj" />
+  </ItemGroup>
+</Project>

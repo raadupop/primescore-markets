@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Append-only, hash-chained ledger and synchronous projection infrastructure (brief §6).
+       References no module (brief §5 rule 3). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Ledger</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PrimeScore.Ledger.Tests" />
+  </ItemGroup>
+</Project>

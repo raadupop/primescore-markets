@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- One deployable: API controllers, Blazor UI, hosted schedulers, auth, composition root (brief §4). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Engine.Host</RootNamespace>
+    <UserSecretsId>primescore-engine-host</UserSecretsId>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Api.Contracts\PrimeScore.Api.Contracts\PrimeScore.Api.Contracts.csproj" />
+    <ProjectReference Include="..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+    <ProjectReference Include="..\..\Modules\Ingestion\PrimeScore.Modules.Ingestion\PrimeScore.Modules.Ingestion.csproj" />
+    <ProjectReference Include="..\..\Modules\Ingestion\PrimeScore.Modules.Ingestion.Contracts\PrimeScore.Modules.Ingestion.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\Classification\PrimeScore.Modules.Classification\PrimeScore.Modules.Classification.csproj" />
+    <ProjectReference Include="..\..\Modules\Classification\PrimeScore.Modules.Classification.Contracts\PrimeScore.Modules.Classification.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\Decision\PrimeScore.Modules.Decision\PrimeScore.Modules.Decision.csproj" />
+    <ProjectReference Include="..\..\Modules\Decision\PrimeScore.Modules.Decision.Contracts\PrimeScore.Modules.Decision.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\Analytics\PrimeScore.Modules.Analytics\PrimeScore.Modules.Analytics.csproj" />
+    <ProjectReference Include="..\..\Modules\Analytics\PrimeScore.Modules.Analytics.Contracts\PrimeScore.Modules.Analytics.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\Configuration\PrimeScore.Modules.Configuration\PrimeScore.Modules.Configuration.csproj" />
+    <ProjectReference Include="..\..\Modules\Configuration\PrimeScore.Modules.Configuration.Contracts\PrimeScore.Modules.Configuration.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\Positions\PrimeScore.Modules.Positions.Contracts\PrimeScore.Modules.Positions.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\Exits\PrimeScore.Modules.Exits.Contracts\PrimeScore.Modules.Exits.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\Risk\PrimeScore.Modules.Risk.Contracts\PrimeScore.Modules.Risk.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PrimeScore.Engine.Host.Tests" />
+  </ItemGroup>
+</Project>

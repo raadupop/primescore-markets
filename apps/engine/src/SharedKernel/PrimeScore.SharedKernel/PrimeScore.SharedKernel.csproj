@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Primitives every module shares. References no module (brief §5 rule 3). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.SharedKernel</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PrimeScore.SharedKernel.Tests" />
+  </ItemGroup>
+</Project>

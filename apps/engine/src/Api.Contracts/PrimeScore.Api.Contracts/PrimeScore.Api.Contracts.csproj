@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Contract-first (brief §11): DTOs, abstract controller bases and the typed client are
+    regenerated from doc/PrimeScore-API-v1.yaml on every build into obj/; nothing generated
+    is committed. SignalInput is hand-written (see SignalInput.cs).
+  -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Api.Contracts</RootNamespace>
+    <ApiContractFile>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../../../../doc/PrimeScore-API-v1.yaml'))</ApiContractFile>
+    <ApiGeneratedDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)$(BaseIntermediateOutputPath)generated'))</ApiGeneratedDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="NSwag.MSBuild" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <UpToDateCheckInput Include="$(ApiContractFile);nswag.json" />
+  </ItemGroup>
+
+  <Target Name="GenerateApiContracts"
+          Inputs="$(ApiContractFile);$(MSBuildThisFileDirectory)nswag.json"
+          Outputs="$(ApiGeneratedDir)/Contracts.g.cs;$(ApiGeneratedDir)/Client.g.cs">
+    <Error Condition="!Exists('$(ApiContractFile)')" Text="API contract not found: $(ApiContractFile)" />
+    <MakeDir Directories="$(ApiGeneratedDir)" />
+    <Exec Command="$(NSwagExe_Net100) run &quot;$(MSBuildThisFileDirectory)nswag.json&quot; /variables:Contract=&quot;$(ApiContractFile)&quot;,GeneratedDir=&quot;$(ApiGeneratedDir)&quot;" />
+  </Target>
+
+  <Target Name="IncludeApiContracts" DependsOnTargets="GenerateApiContracts" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <Compile Include="$(ApiGeneratedDir)/*.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

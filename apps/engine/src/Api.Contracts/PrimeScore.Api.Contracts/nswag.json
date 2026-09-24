@@ -1,0 +1,68 @@
+{
+  "runtime": "Net100",
+  "defaultVariables": null,
+  "documentGenerator": {
+    "fromDocument": {
+      "url": "$(Contract)"
+    }
+  },
+  "codeGenerators": {
+    "openApiToCSharpController": {
+      "namespace": "PrimeScore.Api.Contracts",
+      "className": "{controller}",
+      "operationGenerationMode": "MultipleClientsFromFirstTagAndOperationId",
+      "controllerStyle": "Abstract",
+      "controllerTarget": "AspNetCore",
+      "controllerBaseClass": null,
+      "basePath": "api",
+      "useActionResultType": true,
+      "useCancellationToken": true,
+      "generateModelValidationAttributes": false,
+      "routeNamingStrategy": "None",
+      "jsonLibrary": "SystemTextJson",
+      "jsonLibraryVersion": 10.0,
+      "generateNullableReferenceTypes": true,
+      "generateOptionalPropertiesAsNullable": true,
+      "dateTimeType": "System.DateTimeOffset",
+      "dateType": "System.DateOnly",
+      "classStyle": "Poco",
+      "generateDataAnnotations": false,
+      "arrayType": "System.Collections.Generic.List",
+      "arrayInstanceType": "System.Collections.Generic.List",
+      "arrayBaseType": "System.Collections.Generic.List",
+      "dictionaryType": "System.Collections.Generic.Dictionary",
+      "dictionaryInstanceType": "System.Collections.Generic.Dictionary",
+      "dictionaryBaseType": "System.Collections.Generic.Dictionary",
+      "responseArrayType": "System.Collections.Generic.ICollection",
+      "excludedTypeNames": ["SignalInput"],
+      "output": "$(GeneratedDir)/Contracts.g.cs"
+    },
+    "openApiToCSharpClient": {
+      "namespace": "PrimeScore.Api.Contracts",
+      "className": "PrimeScoreApiClient",
+      "operationGenerationMode": "SingleClientFromOperationId",
+      "generateClientClasses": true,
+      "generateClientInterfaces": true,
+      "generateDtoTypes": false,
+      "injectHttpClient": true,
+      "disposeHttpClient": false,
+      "useBaseUrl": false,
+      "generateBaseUrlProperty": false,
+      "useCancellationToken": true,
+      "exceptionClass": "PrimeScoreApiException",
+      "jsonLibrary": "SystemTextJson",
+      "jsonLibraryVersion": 10.0,
+      "generateNullableReferenceTypes": true,
+      "generateOptionalPropertiesAsNullable": true,
+      "dateTimeType": "System.DateTimeOffset",
+      "dateType": "System.DateOnly",
+      "arrayType": "System.Collections.Generic.List",
+      "arrayInstanceType": "System.Collections.Generic.List",
+      "responseArrayType": "System.Collections.Generic.ICollection",
+      "dictionaryType": "System.Collections.Generic.Dictionary",
+      "dictionaryInstanceType": "System.Collections.Generic.Dictionary",
+      "excludedTypeNames": ["SignalInput"],
+      "output": "$(GeneratedDir)/Client.g.cs"
+    }
+  }
+}

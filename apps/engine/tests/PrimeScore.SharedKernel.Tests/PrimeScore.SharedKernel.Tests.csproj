@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit tests for canonical JSON and the shared registry reader. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>

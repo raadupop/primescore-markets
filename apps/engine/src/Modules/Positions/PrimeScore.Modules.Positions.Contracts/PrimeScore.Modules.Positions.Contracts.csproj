@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Milestone B slot. Contracts only in v1 (brief §5 rule 7). Public contracts reference only the shared kernel (brief §5 rule 2). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Modules.Positions.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>

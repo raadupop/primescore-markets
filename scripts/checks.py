@@ -6,6 +6,7 @@ import argparse
 import importlib.util
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -16,6 +17,7 @@ TOOLS = (
     "pytest", "pytest_asyncio", "yaml", "jsonschema", "openapi_spec_validator",
     "importlinter", "ruff", "mypy", "xenon", "vulture",
 )
+ENGINE_SETTING_PREFIXES = ("engine__", "auth__", "fred__", "classifier__", "registry__")
 
 
 def has_changes(root: Path) -> bool:
@@ -29,7 +31,10 @@ def has_changes(root: Path) -> bool:
 
 def check_environment() -> dict[str, str]:
     """Use declared test settings, independent of operator environment or .env."""
-    env = os.environ.copy()
+    env = {
+        key: value for key, value in os.environ.items()
+        if not key.lower().startswith(ENGINE_SETTING_PREFIXES)
+    }
     env.update(
         BOOTSTRAP_MODE="disabled",
         RUN_LIVE_BOOTSTRAP="",
@@ -46,17 +51,34 @@ def check_environment() -> dict[str, str]:
         PYTHONHASHSEED="0",
         PYTHONUTF8="1",
         PYTHONPATH=os.pathsep.join((str(ROOT), str(CLASSIFICATION))),
+        PRIMESCORE_PYTHON=sys.executable,
+        DOTNET_NOLOGO="1",
+        DOTNET_CLI_TELEMETRY_OPTOUT="1",
     )
     return env
 
 
-def require_tools() -> bool:
+def require_tools(engine: bool = True) -> bool:
     missing = [name for name in TOOLS if importlib.util.find_spec(name) is None]
     for name in missing:
         print(f"FAILED dependency:{name}", flush=True)
     if missing:
         print("Install apps/classification/requirements-dev.txt with this interpreter.", flush=True)
+    if engine and shutil.which("dotnet") is None:
+        missing.append("dotnet")
+        print("FAILED dependency:dotnet", flush=True)
+        print("Install the .NET 10 SDK (apps/engine/global.json).", flush=True)
     return not missing
+
+
+def bash_executable() -> str:
+    """Git Bash on Windows, where the system bash.exe may launch WSL (ORACLE.md)."""
+    if os.name == "nt":
+        for base in (os.environ.get("ProgramFiles"), os.environ.get("ProgramW6432")):
+            candidate = Path(base or "C:/Program Files") / "Git" / "bin" / "bash.exe"
+            if candidate.is_file():
+                return str(candidate)
+    return shutil.which("bash") or "bash"
 
 
 def run_check(name: str, args: list[str], cwd: Path, env: dict[str, str]) -> bool:
@@ -104,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.changed_only and not has_changes(ROOT):
         return 0
-    if not require_tools():
+    if not require_tools(engine=not args.file):
         return 1
     env = check_environment()
     if args.file:
@@ -130,6 +152,9 @@ def main(argv: list[str] | None = None) -> int:
              "-o", "asyncio_default_fixture_loop_scope=function"],
             ROOT, env,
         ))
+    results.append(run_check(
+        "engine", [bash_executable(), str(ROOT / "harness" / "check-engine.sh")], ROOT, env,
+    ))
     return int(not all(results))
 
 

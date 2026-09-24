@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Classifier client, assessments, composite score and IV dislocation (SRS CLS-001, CLS-002, CLS-004, CLS-006, CLS-009).
+       Only the registration entry point is public (brief §5 rules 1 and 4). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Modules.Classification</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PrimeScore.Modules.Classification.Contracts\PrimeScore.Modules.Classification.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\..\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PrimeScore.Modules.Classification.Tests" />
+  </ItemGroup>
+</Project>

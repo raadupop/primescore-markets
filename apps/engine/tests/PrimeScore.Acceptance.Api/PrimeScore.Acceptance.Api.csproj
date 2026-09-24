@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    EVO-001a: black-box HTTP acceptance suite. Compiles against the generated API contract only;
+    the Host reference exists solely to build the engine first (no assembly reference).
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Api.Contracts\PrimeScore.Api.Contracts\PrimeScore.Api.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Host\PrimeScore.Engine.Host\PrimeScore.Engine.Host.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+  </ItemGroup>
+</Project>

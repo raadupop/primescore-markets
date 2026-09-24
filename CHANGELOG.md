@@ -2,6 +2,8 @@
 
 ## 2026-09-25
 
+- Engine API contract 1.1.0 (additive): `GET /health`, an optional `context` query parameter on `GET /classification/composite` and `GET /classification/dislocation` (default `equity`), and documented `501` responses for the Milestone B position, exit, risk, execution-mode and approval endpoints.
+- Engine milestone M0: .NET 10 solution under `apps/engine` with build-time contract generation, the hash-chained ledger and its verification command, module skeletons, bearer-token roles, the UI shell with health, structural and black-box acceptance suites, and a .NET stage in the shared gate and CI. No ingestion, classification or decisions yet.
 - Restyled the local replay dashboard to the Markets site design: dark theme, Space Grotesk (bundled locally with its OFL licence), lime accent, bar logo. Asset links are versioned so browsers drop the cached old design. Replay behaviour, data and HTTP interface are unchanged.
 
 ## 2026-09-22

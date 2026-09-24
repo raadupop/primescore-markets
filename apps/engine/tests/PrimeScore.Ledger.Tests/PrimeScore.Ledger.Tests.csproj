@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit tests for the hash chain, append atomicity and tamper detection (SRS AUD-001, AUD-002). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+    <ProjectReference Include="..\..\src\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>

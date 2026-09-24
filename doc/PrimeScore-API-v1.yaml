@@ -13,7 +13,7 @@ info:
     - Contract-first: this spec exists before implementation.
     - Black-box: no reference to internal types, layers, or persistence.
     - Iteration-stable: identical across all six architecture iterations.
-  version: "1.0.0"
+  version: "1.1.0"
   contact:
     name: PrimeScore AI Project
 
@@ -108,6 +108,7 @@ paths:
         (SRS SIG-004, ANA-001).
       parameters:
         - $ref: "#/components/parameters/AsOf"
+        - $ref: "#/components/parameters/Context"
       responses:
         "200":
           description: Composite score.
@@ -152,6 +153,7 @@ paths:
       summary: Get the most recent IV dislocation
       parameters:
         - $ref: "#/components/parameters/AsOf"
+        - $ref: "#/components/parameters/Context"
       responses:
         "200":
           description: IV dislocation entity.
@@ -236,6 +238,8 @@ paths:
                   $ref: "#/components/schemas/PositionRecord"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
 
   /positions/{position_id}:
     get:
@@ -260,6 +264,8 @@ paths:
           description: Position not found.
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
 
   # ────────────────────────────────────────────────────────────────────
   # EXITS
@@ -287,6 +293,8 @@ paths:
                   $ref: "#/components/schemas/ExitRecord"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
 
   # ────────────────────────────────────────────────────────────────────
   # RISK
@@ -305,6 +313,8 @@ paths:
                 $ref: "#/components/schemas/RiskStatus"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
 
   # ────────────────────────────────────────────────────────────────────
   # AUDIT
@@ -389,6 +399,24 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LogEntry"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /health:
+    get:
+      operationId: getHealth
+      tags: [Observability]
+      summary: Engine readiness and dependency status
+      description: |
+        Reports ledger state and classifier reachability. Requires READ
+        privileges like every other endpoint (SRS SEC-001). Added in 1.1.0.
+      responses:
+        "200":
+          description: Engine health.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineHealth"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -514,6 +542,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
 
   /config/holding-period:
     put:
@@ -541,6 +571,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
 
   /config/execution-mode:
     put:
@@ -567,6 +599,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
 
   /config/approval-threshold:
     put:
@@ -593,6 +627,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "501":
+          $ref: "#/components/responses/NotImplemented"
 
   # ────────────────────────────────────────────────────────────────────
   # REPLAY
@@ -658,6 +694,16 @@ components:
         type: string
         format: date-time
       description: Point-in-time filter. Only data with timestamp <= as_of.
+    Context:
+      name: context
+      in: query
+      schema:
+        type: string
+        default: equity
+      description: |
+        Deployment context: a reference instrument plus the source categories
+        expected for it (SRS CLS-006). Default `equity`. Unknown contexts
+        return 404. Added in 1.1.0.
     From:
       name: from
       in: query
@@ -683,6 +729,15 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     Forbidden:
       description: Insufficient privileges. ADMIN required (SRS SEC-001).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotImplemented:
+      description: |
+        Milestone B capability (positions, exits, risk). Requires an options
+        price source that v1 does not have; the response body says so.
+        Added in 1.1.0.
       content:
         application/json:
           schema:
@@ -1537,6 +1592,49 @@ components:
           type: number
           format: double
           description: Maximum total allocated capital across all open positions (SRS POS-002).
+
+    EngineHealth:
+      type: object
+      description: Engine readiness and dependency status. Added in 1.1.0.
+      required: [status, engine_version, checked_at, ledger, classifier]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          description: "'degraded' when the classifier is unreachable or the last ledger verification failed."
+        engine_version:
+          type: string
+        checked_at:
+          type: string
+          format: date-time
+        ledger:
+          type: object
+          required: [entries, head_sequence]
+          properties:
+            entries:
+              type: integer
+              format: int64
+            head_sequence:
+              type: integer
+              format: int64
+              description: Sequence of the newest entry; 0 when the ledger is empty.
+            last_verified_at:
+              type: string
+              format: date-time
+            last_verification_ok:
+              type: boolean
+        classifier:
+          type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              enum: [reachable, unreachable]
+            ready:
+              type: boolean
+              description: The classifier's own readiness flag (process-local windows bootstrapped).
+            detail:
+              type: string
 
     ErrorResponse:
       type: object

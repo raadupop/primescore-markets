@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Signal ingestion: validation, append-only persistence, point-in-time queries, source adapters (SRS SIG-001..004).
+       Only the registration entry point is public (brief §5 rules 1 and 4). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Modules.Ingestion</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PrimeScore.Modules.Ingestion.Contracts\PrimeScore.Modules.Ingestion.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\..\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PrimeScore.Modules.Ingestion.Tests" />
+  </ItemGroup>
+</Project>

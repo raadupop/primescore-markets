@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Classifier client, assessments, composite score and IV dislocation (SRS CLS-001, CLS-002, CLS-004, CLS-006, CLS-009). Public contracts reference only the shared kernel (brief §5 rule 2). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Modules.Classification.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,164 @@
+@page "/sources"
+@using PrimeScore.Ledger
+@using PrimeScore.SharedKernel
+@using PrimeScore.SharedKernel.Registry
+@inject ILedgerVerifier Verifier
+@inject ILedgerStatusQuery LedgerStatus
+@inject IndicatorRegistry Registry
+
+<PageTitle>Sources and health · PrimeScore Markets</PageTitle>
+
+<div class="page-head">
+    <div>
+        <div class="eyebrow">Operations</div>
+        <h1>Sources and health</h1>
+        <p>Source adapters and their schedules, the indicator registry the engine shares with the classifier, and the ledger's tamper-evidence check.</p>
+    </div>
+</div>
+
+<div class="grid grid-2">
+    <HealthPanel />
+
+    <section class="panel" aria-labelledby="verify-title">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">Audit · SRS AUD-002</div>
+                <h2 id="verify-title">Ledger verification</h2>
+            </div>
+        </div>
+        <p>Recomputes every entry's SHA-256 link from the first entry to the head and checks the head recorded by the last verification. Edits, removals and reordering at or below that recorded head are detected; entries appended since the last verification can be truncated or rewritten undetected, so verify regularly.</p>
+        <p class="panel-note">
+            <button class="button button-primary" @onclick="VerifyAsync" disabled="@_verifying">@(_verifying ? "Verifying…" : "Verify ledger now")</button>
+        </p>
+        @if (_verifyError is not null)
+        {
+            <div class="degraded"><strong>Verification could not run.</strong> @_verifyError</div>
+        }
+        else if (_verification is { } result)
+        {
+            <dl class="kv">
+                <dt>Result</dt>
+                <dd><span class="status @(result.Ok ? "" : "status-bad")">@(result.Ok ? "chain intact" : "chain broken")</span></dd>
+                <dt>Entries checked</dt>
+                <dd>@result.EntriesChecked.ToString("N0", CultureInfo.InvariantCulture)</dd>
+                <dt>Head sequence</dt>
+                <dd>@result.HeadSequence</dd>
+                @if (!result.Ok)
+                {
+                    <dt>First invalid entry</dt>
+                    <dd>@result.FirstInvalidSequence</dd>
+                    <dt>Reason</dt>
+                    <dd>@result.Reason</dd>
+                }
+                <dt>Verified</dt>
+                <dd>@result.VerifiedAt.ToString("u", CultureInfo.InvariantCulture)</dd>
+            </dl>
+        }
+        else
+        {
+            <p class="panel-note">No verification has run yet.</p>
+        }
+    </section>
+</div>
+
+<section class="panel" aria-labelledby="adapters-title">
+    <div class="panel-head">
+        <div>
+            <div class="kicker">Ingestion</div>
+            <h2 id="adapters-title">Source adapters</h2>
+        </div>
+    </div>
+    <EmptyState Title="No adapters running">
+        The FRED adapter (daily schedule and backfill) arrives in milestone M1. Until then no observation is pulled.
+    </EmptyState>
+</section>
+
+<section class="panel" aria-labelledby="registry-title">
+    <div class="panel-head">
+        <div>
+            <div class="kicker">infra/registry.yaml · shared with the classifier</div>
+            <h2 id="registry-title">Indicator registry</h2>
+        </div>
+        <span class="status status-muted">@Registry.Symbols.Count symbols · @Registry.Classes.Count classes</span>
+    </div>
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th scope="col">Symbol</th>
+                    <th scope="col">Category</th>
+                    <th scope="col">Class</th>
+                    <th scope="col">N</th>
+                    <th scope="col">N_L</th>
+                    <th scope="col">Cadence</th>
+                    <th scope="col">Provider series</th>
+                    <th scope="col">Mapping</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var symbol in Registry.Symbols.Values.OrderBy(symbol => symbol.IndicatorClass.SourceCategory).ThenBy(symbol => symbol.Symbol, StringComparer.Ordinal))
+                {
+                    <tr>
+                        <td class="mono">@symbol.Symbol</td>
+                        <td>@symbol.IndicatorClass.SourceCategory.ToWireName()</td>
+                        <td class="mono">@symbol.IndicatorClass.Name</td>
+                        <td class="num">@symbol.IndicatorClass.N</td>
+                        <td class="num">@(symbol.IndicatorClass.LongHorizonN?.ToString(CultureInfo.InvariantCulture) ?? "parametric")</td>
+                        <td>@symbol.IndicatorClass.Cadence</td>
+                        <td class="mono">@(symbol.Bootstrap is { } mapping ? $"{mapping.Provider}:{mapping.SeriesId}" : "none")</td>
+                        <td>
+                            @if (symbol.Bootstrap is null)
+                            {
+                                <span class="status status-muted">no provider</span>
+                            }
+                            else if (symbol.Bootstrap.Verified)
+                            {
+                                <span class="status">verified</span>
+                            }
+                            else
+                            {
+                                <span class="status status-warn">provider mapping unverified</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+@code {
+    private LedgerVerification? _verification;
+    private string? _verifyError;
+    private bool _verifying;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _verification = (await LedgerStatus.GetAsync(CancellationToken.None)).LastVerification;
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException exception)
+        {
+            _verifyError = exception.Message;
+        }
+    }
+
+    private async Task VerifyAsync()
+    {
+        _verifying = true;
+        _verifyError = null;
+        try
+        {
+            _verification = await Verifier.VerifyAsync(CancellationToken.None);
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException exception)
+        {
+            _verifyError = exception.Message;
+        }
+        finally
+        {
+            _verifying = false;
+        }
+    }
+}

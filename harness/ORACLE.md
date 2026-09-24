@@ -23,9 +23,11 @@ python scripts/checks.py
 ```
 
 The gate runs both OpenAPI validators, all six dependency-boundary contracts,
-the classifier suite (including ruff, mypy, xenon and vulture), and root
-`tests/` when present. It reports skip reasons and returns `0` only when all
-stages pass; validation/setup failure returns `1`.
+the classifier suite (including ruff, mypy, xenon and vulture), root `tests/`
+when present, and then [`check-engine.sh`](check-engine.sh): the .NET engine
+build (warnings are errors) and its structural, unit and API acceptance suites.
+Engine failures print `FAILED engine-build:<file>:<code>` or `FAILED engine:<test>`; a test host hung for 4 minutes is killed and fails the stage. It reports skip reasons and
+returns `0` only when all stages pass; validation/setup failure returns `1`.
 
 `--changed-only` skips with empty stdout only when `git status` shows no staged,
 unstaged or untracked nonignored files anywhere in the checkout. Registry,
@@ -42,8 +44,12 @@ invalid invocation returns `64`.
 ## Runtime
 
 Python 3.12 with
-[`requirements-dev.txt`](../apps/classification/requirements-dev.txt); Git and
-Bash. Claude adapters and the steering regression tests additionally require
+[`requirements-dev.txt`](../apps/classification/requirements-dev.txt); the .NET
+10 SDK ([`global.json`](../apps/engine/global.json)); Git and Bash. The engine
+acceptance suite starts the classifier with the gate's interpreter
+(`PRIMESCORE_PYTHON`); engine settings and secrets in the environment
+(`Engine__*`, `Auth__*`, `Fred__*`, `Classifier__*`, `Registry__*`) are removed
+before any stage runs. Claude adapters and the steering regression tests additionally require
 `jq`. CI exercises Ubuntu and Windows. On Windows use Git Bash; the Windows
 system `bash.exe` may launch WSL.
 

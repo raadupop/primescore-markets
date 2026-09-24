@@ -56,7 +56,7 @@
             "type": "command",
             "shell": "bash",
             "command": "bash .claude/hooks/stop-pytest.sh",
-            "timeout": 120
+            "timeout": 600
           }
         ]
       }

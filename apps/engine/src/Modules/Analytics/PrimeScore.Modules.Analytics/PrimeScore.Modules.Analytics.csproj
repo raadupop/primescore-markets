@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Point-in-time replay and validation-set evaluation (SRS ANA-001).
+       Only the registration entry point is public (brief §5 rules 1 and 4). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Modules.Analytics</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PrimeScore.Modules.Analytics.Contracts\PrimeScore.Modules.Analytics.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\..\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PrimeScore.Modules.Analytics.Tests" />
+  </ItemGroup>
+</Project>

@@ -52,6 +52,36 @@ def test_missing_fitness_tool_fails_before_pytest_can_skip(monkeypatch, capsys) 
     assert "FAILED dependency:ruff" in capsys.readouterr().out
 
 
+def test_missing_dotnet_fails_before_any_stage_runs(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(checks.shutil, "which", lambda name: None if name == "dotnet" else "found")
+    monkeypatch.setattr(checks, "run_check", lambda *args, **kwargs: pytest.fail("no stage may run"))
+    assert checks.main([]) == 1
+    assert "FAILED dependency:dotnet" in capsys.readouterr().out
+
+
+def test_per_file_lint_does_not_require_dotnet(monkeypatch) -> None:
+    monkeypatch.setattr(checks.shutil, "which", lambda name: None if name == "dotnet" else "found")
+    monkeypatch.setattr(checks, "check_file", lambda file, env: True)
+    assert checks.main(["--file", "apps/classification/app/config.py"]) == 0
+
+
+def test_engine_stage_runs_last_through_the_engine_script(monkeypatch) -> None:
+    stages: list[tuple[str, list[str]]] = []
+    monkeypatch.setattr(checks, "validate_contract", lambda path: True)
+    monkeypatch.setattr(checks, "run_check", lambda name, args, cwd, env: stages.append((name, args)) or True)
+    assert checks.main([]) == 0
+    assert [name for name, _ in stages] == ["import-contracts", "classification-tests", "repository-tests", "engine"]
+    assert stages[-1][1][-1] == str(checks.ROOT / "harness" / "check-engine.sh")
+
+
+def test_engine_settings_and_secrets_do_not_reach_the_gate(monkeypatch) -> None:
+    for name in ("Fred__ApiKey", "Auth__ApiTokens__0__Sha256", "Engine__DatabasePath"):
+        monkeypatch.setenv(name, "operator-value")
+    env = checks.check_environment()
+    assert not any(key.lower().startswith(checks.ENGINE_SETTING_PREFIXES) for key in env)
+    assert env["PRIMESCORE_PYTHON"] == checks.sys.executable
+
+
 def test_gate_blocks_inherited_live_credentials_and_test_filters(monkeypatch, tmp_path: Path) -> None:
     for name in ("FRED_API_KEY", "RUN_LIVE_BOOTSTRAP", "PYTEST_ADDOPTS"):
         monkeypatch.setenv(name, "test-sentinel")

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Point-in-time replay and validation-set evaluation (SRS ANA-001). Public contracts reference only the shared kernel (brief §5 rule 2). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Modules.Analytics.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>
