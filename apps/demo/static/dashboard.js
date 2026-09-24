@@ -76,7 +76,7 @@ function historyChart(history, current, symbol) {
   }
   chart.append(svgElement("polyline", {points: history.map((value, index) => `${x(index)},${y(value)}`).join(" "), class: "chart-history"}));
   const last = history.length - 1;
-  if (history.length === 1) chart.append(svgElement("circle", {cx: x(0), cy: y(history[0]), r: 3, fill: "#245d4c"}));
+  if (history.length === 1) chart.append(svgElement("circle", {cx: x(0), cy: y(history[0]), r: 4, class: "chart-point"}));
   chart.append(svgElement("line", {x1: x(last), y1: y(history[last]), x2: x(history.length), y2: y(current), class: "chart-join"}));
   chart.append(svgElement("circle", {cx: x(history.length), cy: y(current), r: 4, class: "chart-event"}));
   chart.append(svgElement("text", {x: 48, y: 202, class: "chart-label"}, "Prior observation 1"));
@@ -132,7 +132,7 @@ function showResult(result) {
   byId("reasoning").textContent = classification.reasoning_trace;
   byId("observed").textContent = number(result.event.observed_iv);
   historyChart(result.history, result.event.observed_iv, result.event.symbol);
-  byId("history-caption").textContent = `${result.history.length.toLocaleString()} prior sourced closes in green; selected event in gold. No per-observation timestamps are present.`;
+  byId("history-caption").textContent = `${result.history.length.toLocaleString()} prior sourced closes in blue; selected event in lime. No per-observation timestamps are present.`;
   provenance(result);
   if (result.scenario === null) {
     for (const id of ["scenario", "gap", "conviction"]) byId(id).textContent = "Unavailable";

@@ -4,25 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Local historical market replay through the PrimeScore AI classifier and an experimental volatility scenario.">
-  <title>Market replay · PrimeScore AI</title>
-  <link rel="stylesheet" href="/assets/styles.css">
-  <script src="/assets/dashboard.js" defer></script>
+  <meta name="theme-color" content="#080b10">
+  <title>Market replay · PrimeScore Markets</title>
+  <link rel="icon" href="/assets/favicon.svg?v=2026-09-25" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css?v=2026-09-25">
+  <script src="/assets/dashboard.js?v=2026-09-25" defer></script>
 </head>
 <body>
   <a class="skip" href="#dashboard">Skip to dashboard</a>
-  <header class="wrap header">
-    <a class="brand" href="/" aria-label="PrimeScore AI market replay"><span class="mark" aria-hidden="true">P</span> PrimeScore AI</a>
-    <nav aria-label="Main"><span class="tag">Local replay</span><a href="https://github.com/raadupop/primescore-ai">Repository ↗</a></nav>
+  <header class="wrap site-header">
+    <a class="wordmark" href="/" aria-label="PrimeScore Markets local replay"><span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 32 36" fill="currentColor"><path d="M2 24h6v10H2z M13 13h6v21h-6z M24 2h6v32h-6z"/></svg></span>PrimeScore<span class="wordmark-product">Markets</span></a>
+    <nav class="site-nav" aria-label="Main"><span class="status">Local replay</span><a class="nav-cta" href="https://github.com/raadupop/primescore-ai">Repository <span aria-hidden="true">↗</span></a></nav>
   </header>
   <main class="wrap" id="dashboard">
     <section class="intro" aria-labelledby="title">
-      <div><span class="eyebrow">Markets / working demonstration</span><h1>Follow an observation<br>through the pipeline.</h1></div>
+      <div><span class="eyebrow">Markets / working demonstration</span><h1 id="title">Follow an observation<br>through <span>the pipeline.</span></h1></div>
       <p>Replay a historical VIX or OVX close through the HTTP classifier. Inspect its score, then explore a transparent volatility scenario.</p>
     </section>
-    <div class="pipeline" aria-label="Demonstrated pipeline"><span>01 &nbsp; Historical snapshot</span><span aria-hidden="true">→</span><span>02 &nbsp; HTTP classification</span><span aria-hidden="true">→</span><span>03 &nbsp; Experimental scenario</span></div>
+    <div class="pipeline" aria-label="Demonstrated pipeline"><span><b>01</b> Historical snapshot</span><span class="arrow" aria-hidden="true">→</span><span><b>02</b> HTTP classification</span><span class="arrow" aria-hidden="true">→</span><span><b>03</b> Experimental scenario</span></div>
     <form id="controls" class="controls">
       <label for="history-mode">Prior history<select id="history-mode"><option value="full">Full sourced window</option><option value="one_prior_close">One prior close · degraded example</option></select></label>
-      <div class="actions"><button id="replay" type="submit" disabled>Replay selected</button><button id="reset" class="secondary" type="button">Reset</button></div>
+      <div class="actions"><button id="replay" class="button button-primary" type="submit" disabled>Replay selected</button><button id="reset" class="button button-ghost" type="button">Reset</button></div>
       <p id="status" role="status" aria-live="polite">Loading historical snapshots…</p>
     </form>
     <noscript><p class="error">JavaScript is needed for replay controls. The HTTP endpoints are documented in docs/DEMO.md.</p></noscript>
@@ -42,7 +44,7 @@
         <details id="provenance"><summary>Source and snapshot limitations</summary><dl class="source-details" id="source-details"></dl><p>Individual prior closes have no timestamps in these fixtures. Source provenance is recorded; trader signoff remains pending.</p></details>
       </section>
       <section class="panel scenario-panel" aria-labelledby="scenario-title">
-        <div class="panel-heading"><span class="eyebrow">03 / Volatility scenario</span><h2 id="scenario-title">Make the assumption visible.</h2><span class="tag active">Experimental · uncalibrated</span></div>
+        <div class="panel-heading"><span class="eyebrow">03 / Volatility scenario</span><h2 id="scenario-title">Make the assumption visible.</h2><span class="experimental">Experimental · uncalibrated</span></div>
         <label class="sensitivity-label" for="sensitivity">Scenario multiplier <span>k = <output id="sensitivity-value" for="sensitivity">0.25</output></span></label>
         <input id="sensitivity" type="range" min="0" max="1" step="0.05" value="0.25" aria-describedby="sensitivity-help">
         <p id="sensitivity-help" class="metric-note">0 to 1. Changing k replays the same snapshot with the chosen assumption.</p>
@@ -53,6 +55,6 @@
       </section>
     </div>
   </main>
-  <footer class="wrap footer"><span>PrimeScore AI · Markets in development</span><a href="https://github.com/raadupop/primescore-ai/blob/master/docs/DEMO.md">Demo method and limits ↗</a></footer>
+  <footer class="wrap site-footer"><span>PrimeScore Markets · in development</span><a href="https://github.com/raadupop/primescore-ai/blob/master/docs/DEMO.md">Demo method and limits <span aria-hidden="true">↗</span></a></footer>
 </body>
 </html>

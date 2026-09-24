@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-25
+
+- Restyled the local replay dashboard to the Markets site design: dark theme, Space Grotesk (bundled locally with its OFL licence), lime accent, bar logo. Asset links are versioned so browsers drop the cached old design. Replay behaviour, data and HTTP interface are unchanged.
+
 ## 2026-09-22
 
 - Renamed the venture and GitHub repository to PrimeScore AI / `primescore-ai`, preserving history; documented implemented and planned scope.
