@@ -32,12 +32,14 @@ internal sealed class ClassificationGate : IDisposable
 /// <item>Three consecutive failures (no answer or an invalid one) stop calls for the rest of the run; the remaining
 /// signals still get their CLS-004 outcome locally. An unchanged outcome is not recorded again.</item>
 /// <item>The scheduled pass takes the gate one page at a time, so a newly recorded batch never waits for a whole pass.</item>
+/// <item>Composites and dislocations follow, also a page at a time (ADR-0004 §7).</item>
 /// </list>
 /// </summary>
 internal sealed partial class ClassificationRunner(
     IQueryHandler<GetSignalKeysInObservationOrder, IReadOnlyList<SignalKey>> signalKeys,
     IQueryHandler<GetSignalsById, SignalPage> signalsById,
     SignalClassifier classifier,
+    Aggregation.CompositeRunner composites,
     ClassificationReadStore reads,
     ILedger ledger,
     ClassificationGate gate,
@@ -82,8 +84,18 @@ internal sealed partial class ClassificationRunner(
             LogBreaker(tally.NotSent);
         }
 
-        gate.LastRun = new ClassificationRunView(clock.UtcNow, only is null, tally.Classified, tally.Fallbacks, tally.Unavailable, tally.NotSent, tally.Breaker);
-        return new ClassifyPendingAck(tally.Classified, tally.Fallbacks, tally.Unavailable, tally.NotSent);
+        // Every new assessment of a context member gets its composite and dislocation (ADR-0004 §7).
+        var recorded = 0;
+        for (var more = true; more;)
+        {
+            var page = (Recorded: 0, More: false);
+            await UnderGateAsync(async () => page = await composites.CatchUpPageAsync(cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+            recorded += page.Recorded;
+            more = page.More;
+        }
+
+        gate.LastRun = new ClassificationRunView(clock.UtcNow, only is null, tally.Classified, tally.Fallbacks, tally.Unavailable, tally.NotSent, tally.Breaker, recorded);
+        return new ClassifyPendingAck(tally.Classified, tally.Fallbacks, tally.Unavailable, tally.NotSent, recorded);
     }
 
     private async Task UnderGateAsync(Func<Task> work, CancellationToken cancellationToken)

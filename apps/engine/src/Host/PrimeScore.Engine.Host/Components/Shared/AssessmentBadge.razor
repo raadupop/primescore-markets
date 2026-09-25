@@ -49,11 +49,5 @@ else
         _ => "Classifier flag",
     };
 
-    public static string Stale(double? seconds) => seconds switch
-    {
-        null => "age unknown",
-        < 3600 => $"{seconds.Value / 60:0} min old",
-        < 172800 => $"{seconds.Value / 3600:0} h old",
-        _ => $"{seconds.Value / 86400:0} d old",
-    };
+    public static string Stale(double? seconds) => seconds is null ? "age unknown" : $"{Fmt.Duration(seconds)} old";
 }

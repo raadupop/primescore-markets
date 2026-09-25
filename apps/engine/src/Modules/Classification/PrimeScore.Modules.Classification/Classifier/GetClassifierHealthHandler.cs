@@ -29,7 +29,7 @@ internal sealed class GetClassifierHealthHandler(
                 HttpStatusCode.OK => Health(reachable: true, ready: true, detail: null),
                 HttpStatusCode.ServiceUnavailable => Health(
                     reachable: true, ready: false,
-                    detail: "Classifier reports not_ready: its process-local windows are not bootstrapped."),
+                    detail: "Classifier reports not_ready: its own process-local windows are not bootstrapped. The engine sends every request with its reference window, so classification is unaffected (ADR-0005)."),
                 _ => Health(reachable: false, ready: null, detail: $"Unexpected HTTP {(int)response.StatusCode} from /health."),
             };
         }

@@ -38,6 +38,15 @@ internal static class Fmt
         }
     }
 
+    /// <summary>A length of time: minutes below an hour, hours below two days, then days.</summary>
+    public static string Duration(double? seconds) => seconds switch
+    {
+        null => "—",
+        < 3600 => string.Create(CultureInfo.InvariantCulture, $"{seconds.Value / 60:0} min"),
+        < 172800 => string.Create(CultureInfo.InvariantCulture, $"{seconds.Value / 3600:0} h"),
+        _ => string.Create(CultureInfo.InvariantCulture, $"{seconds.Value / 86400:0} d"),
+    };
+
     public static string Age(DateTimeOffset? instant, DateTimeOffset now)
     {
         if (instant is not { } value)

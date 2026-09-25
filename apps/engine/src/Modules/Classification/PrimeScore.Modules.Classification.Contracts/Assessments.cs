@@ -10,7 +10,8 @@ namespace PrimeScore.Modules.Classification.Contracts;
 public sealed record ClassifyPendingSignals : ICommand<ClassifyPendingAck>;
 
 /// <param name="Unavailable">Signals recorded as not classifiable (awaiting consensus, route not implemented, classifier failure).</param>
-public sealed record ClassifyPendingAck(int Classified, int Fallbacks, int Unavailable, int Remaining) : ICommandAck;
+/// <param name="Composites">Composites recorded after the pass (each with its dislocation when a reference level exists).</param>
+public sealed record ClassifyPendingAck(int Classified, int Fallbacks, int Unavailable, int Remaining, int Composites = 0) : ICommandAck;
 
 /// <summary>Why a signal has no assessment of its own.</summary>
 public enum UnavailableReason

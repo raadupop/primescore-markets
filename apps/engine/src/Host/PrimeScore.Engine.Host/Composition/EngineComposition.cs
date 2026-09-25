@@ -35,7 +35,11 @@ internal static class EngineComposition
                 options.ModelBinderProviders.Insert(0, new UtcDateTimeOffsetModelBinderProvider());
                 options.Filters.Add<RejectUnreadableParametersFilter>();
             })
-            .AddJsonOptions(options => ApiJson.Configure(options.JsonSerializerOptions));
+            .AddJsonOptions(options =>
+            {
+                ApiJson.Configure(options.JsonSerializerOptions);
+                ContractJson.RequireContractValueTypes(options.JsonSerializerOptions);
+            });
         services.AddRazorComponents().AddInteractiveServerComponents();
         services.AddScoped<EngineHealthService>();
         services.AddHostedService<LedgerVerificationScheduler>();

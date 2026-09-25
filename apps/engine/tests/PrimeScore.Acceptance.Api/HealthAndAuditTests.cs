@@ -17,8 +17,10 @@ public sealed class HealthAndAuditTests(EngineFixture fixture)
 
         Assert.Equal(EngineHealthStatus.Ok, health.Status);
         Assert.False(string.IsNullOrWhiteSpace(health.Engine_version));
-        Assert.Equal(0, health.Ledger.Entries);
-        Assert.Equal(0, health.Ledger.Head_sequence);
+        // The only entry of a fresh engine is configuration version 1, seeded on first start so every
+        // composite can name the version it used (brief §6, NFR-003; this assertion was 0 before M3).
+        Assert.Equal(1, health.Ledger.Entries);
+        Assert.Equal(1, health.Ledger.Head_sequence);
         Assert.Equal(ClassifierStatus.Reachable, health.Classifier.Status);
 
         // The classifier runs with provider bootstrap disabled, so it reports not_ready itself.

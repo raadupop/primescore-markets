@@ -201,7 +201,8 @@
         {
             <p class="panel-note">
                 Last run @Fmt.Age(run.FinishedAt, Clock.UtcNow) (@(run.FullPass ? "scheduled pass" : "new signals")):
-                @Fmt.Count(run.Classified) classified, @Fmt.Count(run.Fallbacks) fallback(s), @Fmt.Count(run.Unavailable) unavailable.
+                @Fmt.Count(run.Classified) classified, @Fmt.Count(run.Fallbacks) fallback(s), @Fmt.Count(run.Unavailable) unavailable;
+                @Fmt.Count(run.Composites) composite(s) recorded.
                 @if (run.BreakerTripped)
                 {
                     <span class="status status-bad">classifier failed 3 times in a row; @Fmt.Count(run.NotSent) signal(s) not sent</span>

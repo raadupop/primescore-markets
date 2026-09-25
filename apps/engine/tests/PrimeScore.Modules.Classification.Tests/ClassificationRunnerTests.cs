@@ -9,6 +9,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using PrimeScore.Ledger;
 using PrimeScore.Modules.Classification.Contracts;
+using PrimeScore.Modules.Configuration;
+using PrimeScore.Modules.Configuration.Contracts;
 using PrimeScore.Modules.Ingestion;
 using PrimeScore.Modules.Ingestion.Contracts;
 using PrimeScore.SharedKernel;
@@ -43,6 +45,7 @@ public sealed class ClassificationRunnerTests : IAsyncLifetime
             .AddSharedKernel(configuration)
             .AddLedger(configuration)
             .AddIngestionModule(configuration)
+            .AddConfigurationModule(configuration)
             .AddClassificationModule(configuration);
         services.AddHttpClient("classifier").ConfigurePrimaryHttpMessageHandler(() => _classifier);
         _services = services.BuildServiceProvider();
@@ -297,6 +300,98 @@ public sealed class ClassificationRunnerTests : IAsyncLifetime
         Assert.Equal(0, again.Unavailable);
     }
 
+    [Fact]
+    public async Task Each_assessment_of_a_context_member_records_a_composite_and_dislocation_at_its_observation_time()
+    {
+        // Scripted conviction per close: 0.25 × 0.8 = 0.2. Thursday alone is unconfirmed (0.25 < 0.999 bypass):
+        // composite 0. Friday has Thursday in its two-trading-day window: s_MD = 0.2, composite 0.3 × 0.2 / 0.3 = 0.2.
+        // Friday's IV 12 is above its one prior level (11): percentile 1.0 > 0.70, high regime, k = 0.5:
+        // dislocation 12 × 0.2 × 0.5 = 1.2, below the 1.5 threshold.
+        await IngestAsync(Market("VIX", 11.0, Day1), Market("VIX", 12.0, Day1.AddDays(1)));
+        var signals = (await Query<GetSignals, SignalPage>(new GetSignals(new SignalFilter()))).Signals;
+
+        var thursday = (await Query<GetComposite, CompositeView?>(new GetComposite("equity", Day1)))!;
+        var friday = (await Query<GetComposite, CompositeView?>(new GetComposite("EQUITY")))!;
+        var dislocation = (await Query<GetDislocation, DislocationView?>(new GetDislocation("equity")))!;
+
+        Assert.Equal(0.0, thursday.Score);
+        Assert.Contains("unconfirmed", Assert.Single(thursday.Absent, absent => absent.Category == SourceCategory.MarketData).Reason, StringComparison.Ordinal);
+        Assert.Equal(0.2, friday.Score, 12);
+        Assert.Equal(Day1.AddDays(1), friday.AsOf);
+        Assert.Equal(signals.Single(signal => signal.ObservedAt == Day1.AddDays(1)).CorrelationId, friday.CorrelationId);
+        Assert.Equal((friday.CompositeId, "high_vol", 0.5), (dislocation.CompositeId, dislocation.Regime, dislocation.SensitivityFactor));
+        Assert.Equal(1.2, dislocation.DislocationValue, 12);
+        Assert.False(dislocation.ThresholdBreached);
+        Assert.Null(await Query<GetComposite, CompositeView?>(new GetComposite("equity", Day1.AddSeconds(-1))));
+        Assert.Null(await Query<GetComposite, CompositeView?>(new GetComposite("oil")));
+
+        // Point in time: both closes arrived in one batch, yet Thursday's dislocation saw only Thursday's level.
+        var thursdayDislocation = (await Query<GetDislocation, DislocationView?>(new GetDislocation("equity", Day1)))!;
+        Assert.Equal((11.0, Day1, 0, "normal", 0.0), (thursdayDislocation.MarketObservedIv, thursdayDislocation.IvObservedAt,
+            thursdayDislocation.RegimeHistory, thursdayDislocation.Regime, thursdayDislocation.DislocationValue));
+        Assert.Equal((1, (double?)1.0), (dislocation.RegimeHistory, dislocation.RegimePercentile));
+
+        // A lower threshold applies from the next close: Monday (history 11, 12; level 12 at percentile 1.0)
+        // has Friday in its window, composite 0.2 again, dislocation 12 × 0.2 × 0.5 = 1.2 ≥ 1.0.
+        await CommandAsync(new SetDislocationSettings(1.0, "VIX", null, null, "test"));
+        await IngestAsync(Market("VIX", 12.0, Day1.AddDays(4)));
+        var monday = (await Query<GetDislocation, DislocationView?>(new GetDislocation("equity")))!;
+
+        Assert.Equal((Day1.AddDays(4), 1.0, true), (monday.AsOf, monday.Threshold, monday.ThresholdBreached));
+        Assert.Equal(1.2, monday.DislocationValue, 12);
+    }
+
+    [Fact]
+    public async Task A_late_close_for_an_earlier_date_records_a_composite_at_that_date_and_leaves_later_ones_unchanged()
+    {
+        // Thursday and Monday first: Thursday is outside Monday's two-trading-day window, so Monday is unconfirmed (0).
+        await IngestAsync(Market("VIX", 11.0, Day1), Market("VIX", 13.0, Day1.AddDays(4)));
+        var mondayBefore = (await Query<GetComposite, CompositeView?>(new GetComposite("equity", Day1.AddDays(4))))!;
+
+        // Friday arrives late: Thursday confirms it, 0.3 × 0.2 / 0.3 = 0.2 at Friday's time.
+        await IngestAsync(Market("VIX", 12.0, Day1.AddDays(1)));
+        var friday = (await Query<GetComposite, CompositeView?>(new GetComposite("equity", Day1.AddDays(1))))!;
+        var mondayAfter = (await Query<GetComposite, CompositeView?>(new GetComposite("equity", Day1.AddDays(4))))!;
+        var fridaySignal = (await Query<GetSignals, SignalPage>(new GetSignals(new SignalFilter()))).Signals.Single(signal => signal.ObservedAt == Day1.AddDays(1));
+
+        Assert.Equal(0.0, mondayBefore.Score);
+        Assert.Equal((Day1.AddDays(1), fridaySignal.CorrelationId), (friday.AsOf, friday.CorrelationId));
+        Assert.Equal(0.2, friday.Score, 12);
+        Assert.Equal((mondayBefore.CompositeId, mondayBefore.LedgerSequence, 0.0), (mondayAfter.CompositeId, mondayAfter.LedgerSequence, mondayAfter.Score));
+        Assert.Equal(mondayBefore.CompositeId, (await Query<GetComposite, CompositeView?>(new GetComposite("equity")))!.CompositeId);
+    }
+
+    [Fact]
+    public async Task A_new_weighting_scheme_applies_from_the_next_composite_and_changes_the_score_0_54_to_0_37()
+    {
+        // VIX answers 0.6 × 0.9 = 0.54, VXN 0.2 × 1.0 = 0.2; the two closes of a day confirm each other.
+        _classifier.Answers["VIX"] = (0.6, 0.9);
+        _classifier.Answers["VXN"] = (0.2, 1.0);
+        await IngestAsync(Market("VIX", 11.0, Day1), Market("VXN", 20.0, Day1));
+        var ack = await CommandAsync(new SetWeightingScheme(
+            new WeightingSettings("equal_weight", new Dictionary<string, double> { ["MARKET_DATA"] = 1, ["MACROECONOMIC"] = 1, ["CROSS_ASSET_FLOW"] = 1 }, Configuration.Contracts.Aggregation.WeightedMean),
+            null, "test"));
+
+        // Friday's window holds four confirmed convictions: mean (0.54 + 0.2 + 0.54 + 0.2) / 4 = 0.37.
+        await IngestAsync(Market("VIX", 12.0, Day1.AddDays(1)), Market("VXN", 21.0, Day1.AddDays(1)));
+        var before = (await Query<GetComposite, CompositeView?>(new GetComposite("equity", Day1)))!;
+        var after = (await Query<GetComposite, CompositeView?>(new GetComposite("equity")))!;
+
+        Assert.Equal(2, ack.Version);
+        Assert.Equal(("srs_default", 1), (before.WeightingSchemeId, before.ConfigVersion.Value));
+        Assert.Equal(0.54, before.Score, 12);
+        Assert.Equal(("equal_weight", 2, "WeightedMean"), (after.WeightingSchemeId, after.ConfigVersion.Value, after.Aggregation));
+        Assert.Equal(0.37, after.Score, 12);
+    }
+
+    private async Task<SettingsChangeAck> CommandAsync<TCommand>(TCommand command) where TCommand : ICommand<SettingsChangeAck>
+    {
+        using var scope = _services.CreateScope();
+        var ack = await scope.ServiceProvider.GetRequiredService<ICommandHandler<TCommand, SettingsChangeAck>>().HandleAsync(command, Token);
+        Assert.True(ack.Accepted, string.Join("; ", ack.Errors));
+        return ack;
+    }
+
     private static HttpResponseMessage Reply(int status, string body) =>
         new((HttpStatusCode)status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
@@ -364,6 +459,9 @@ public sealed class ClassificationRunnerTests : IAsyncLifetime
 
         public string Metrics { get; set; } = "{}";
 
+        /// <summary>Per-symbol (score, certainty); symbols not listed answer (0.25, 0.8).</summary>
+        public Dictionary<string, (double Score, double Certainty)> Answers { get; } = new(StringComparer.Ordinal);
+
         public List<JsonObject> Requests { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -392,7 +490,12 @@ public sealed class ClassificationRunnerTests : IAsyncLifetime
                 sufficiency = Math.Round(Math.Min(1.0, body["reference_window"]!["values"]!.AsArray().Count / (double)length), 4);
             }
 
-            var answer = "{\"score\":0.25,\"score_type\":\"ANOMALY_DETECTION\",\"certainty\":0.8,\"history_sufficiency\":"
+            var (score, certainty) = body["structured_payload"]?["symbol"]?.GetValue<string>() is { } symbol && Answers.TryGetValue(symbol, out var scripted)
+                ? scripted
+                : (0.25, 0.8);
+            var answer = "{\"score\":" + score.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ",\"score_type\":\"ANOMALY_DETECTION\",\"certainty\":" + certainty.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ",\"history_sufficiency\":"
                 + (ReportedSufficiency ?? sufficiency).ToString(System.Globalization.CultureInfo.InvariantCulture)
                 + ",\"temporal_relevance\":1.0,\"event_taxonomy\":null,\"classification_method\":\"RULE_BASED\",\"reasoning_trace\":\"scripted\",\"computed_metrics\":"
                 + Metrics + "}";

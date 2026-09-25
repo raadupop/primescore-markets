@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PrimeScore.Engine.Host.Security;
 using PrimeScore.Modules.Classification.Contracts;
+using PrimeScore.Modules.Configuration.Contracts;
 using PrimeScore.SharedKernel.Cqrs;
 using PrimeScore.Modules.Decision.Contracts;
 using PrimeScore.Modules.Exits.Contracts;
@@ -15,13 +16,26 @@ namespace PrimeScore.Engine.Host.Api.Controllers;
 
 [Authorize(Policy = ApiPolicies.Read)]
 public sealed class ClassificationController(
-    IQueryHandler<GetAssessments, IReadOnlyList<AssessmentView>> assessments) : Dto.ClassificationControllerBase
+    IQueryHandler<GetAssessments, IReadOnlyList<AssessmentView>> assessments,
+    IQueryHandler<GetComposite, CompositeView?> composites,
+    IQueryHandler<GetDislocation, DislocationView?> dislocations,
+    IQueryHandler<GetActiveSettings, SettingsVersion> settings) : Dto.ClassificationControllerBase
 {
-    public override Task<ActionResult<Dto.CompositeScore>> GetCompositeScore(
+    /// <summary>
+    /// The newest composite of the context observed at or before <c>as_of</c> (SRS CLS-002,
+    /// SIG-004); 404 for an unknown context or when none has been computed yet.
+    /// </summary>
+    public override async Task<ActionResult<Dto.CompositeScore>> GetCompositeScore(
         DateTimeOffset? as_of,
         string? context = "equity",
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult<ActionResult<Dto.CompositeScore>>(ApiResults.NotYetBuilt("M3", "CLS-002"));
+        CancellationToken cancellationToken = default)
+    {
+        var name = string.IsNullOrWhiteSpace(context) ? "equity" : context;
+        var view = await composites.HandleAsync(new GetComposite(name, as_of), cancellationToken).ConfigureAwait(false);
+        return view is not null
+            ? AggregateDtos.From(view)
+            : await MissingAsync(name, "No composite has been computed for this context" + (as_of is null ? "" : " by as_of"), cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// The latest assessment of each signal; <c>as_of</c> filters on the signal's observation time
@@ -38,11 +52,29 @@ public sealed class ClassificationController(
         return views.Select(AssessmentDtos.From).ToList();
     }
 
-    public override Task<ActionResult<Dto.IvDislocation>> GetDislocation(
+    /// <summary>
+    /// The newest dislocation of the context observed at or before <c>as_of</c> (SRS CLS-006);
+    /// 404 for an unknown context or when no reference level had been observed.
+    /// </summary>
+    public override async Task<ActionResult<Dto.IvDislocation>> GetDislocation(
         DateTimeOffset? as_of,
         string? context = "equity",
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult<ActionResult<Dto.IvDislocation>>(ApiResults.NotYetBuilt("M3", "CLS-006"));
+        CancellationToken cancellationToken = default)
+    {
+        var name = string.IsNullOrWhiteSpace(context) ? "equity" : context;
+        var view = await dislocations.HandleAsync(new GetDislocation(name, as_of), cancellationToken).ConfigureAwait(false);
+        return view is not null
+            ? AggregateDtos.From(view)
+            : await MissingAsync(name, "No dislocation has been computed for this context" + (as_of is null ? "" : " by as_of"), cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<ObjectResult> MissingAsync(string context, string message, CancellationToken cancellationToken)
+    {
+        var active = await settings.HandleAsync(new GetActiveSettings(), cancellationToken).ConfigureAwait(false);
+        return active.Settings.Context(context) is null
+            ? ApiResults.NotFound($"Unknown context '{context}'; configured: {string.Join(", ", active.Settings.Contexts.Select(known => known.Name))}.")
+            : ApiResults.NotFound(message + ".");
+    }
 }
 
 [Authorize(Policy = ApiPolicies.Read)]
@@ -83,17 +115,41 @@ public sealed class AuditController : Dto.AuditControllerBase
     }
 }
 
+/// <summary>
+/// Each accepted change records a new configuration version with who, when and the diff
+/// (SRS NFR-003); it applies from the next composite. A change the formulas cannot use is a
+/// 400 listing every problem, and nothing is recorded.
+/// </summary>
 [Authorize(Policy = ApiPolicies.Admin)]
-public sealed class ConfigurationController : Dto.ConfigurationControllerBase
+public sealed class ConfigurationController(
+    ICommandHandler<SetWeightingScheme, SettingsChangeAck> setScheme,
+    ICommandHandler<SetDislocationSettings, SettingsChangeAck> setDislocation) : Dto.ConfigurationControllerBase
 {
-    public override Task<IActionResult> SetWeightingScheme(Dto.WeightingScheme body, CancellationToken cancellationToken = default) =>
-        Task.FromResult<IActionResult>(ApiResults.NotYetBuilt("M3", "CLS-002, NFR-003"));
+    public override async Task<IActionResult> SetWeightingScheme(Dto.WeightingScheme body, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        if (AggregateDtos.ToSettings(body) is not { } scheme)
+        {
+            return ApiResults.BadRequest("The weighting scheme was not changed.", ["aggregation: must be WEIGHTED_MEAN or MAX_CONFIRMED_WEIGHTED"]);
+        }
+
+        var ack = await setScheme.HandleAsync(
+            new SetWeightingScheme(scheme, body.Source_dropout_penalty, User.Identity?.Name ?? "unknown"),
+            cancellationToken).ConfigureAwait(false);
+        return Result(ack, "The weighting scheme was not changed.");
+    }
 
     public override Task<IActionResult> SetDeployConditions(Dto.DeployConditionsConfig body, CancellationToken cancellationToken = default) =>
         Task.FromResult<IActionResult>(ApiResults.NotYetBuilt("M4", "DEC-001, NFR-003"));
 
-    public override Task<IActionResult> SetDislocationThreshold(Dto.Body body, CancellationToken cancellationToken = default) =>
-        Task.FromResult<IActionResult>(ApiResults.NotYetBuilt("M3", "CLS-006, NFR-003"));
+    public override async Task<IActionResult> SetDislocationThreshold(Dto.Body body, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        var ack = await setDislocation.HandleAsync(
+            new SetDislocationSettings(body.Threshold, body.Reference_instrument, body.Sensitivity_factor_map, body.Regime_boundaries, User.Identity?.Name ?? "unknown"),
+            cancellationToken).ConfigureAwait(false);
+        return Result(ack, "The dislocation settings were not changed.");
+    }
 
     public override Task<IActionResult> SetRiskLimits(Dto.RiskLimitsConfig body, CancellationToken cancellationToken = default) =>
         Task.FromResult<IActionResult>(ApiResults.NotImplemented(RiskCapability.NotImplementedReason));
@@ -106,6 +162,9 @@ public sealed class ConfigurationController : Dto.ConfigurationControllerBase
 
     public override Task<IActionResult> SetApprovalThreshold(Dto.Body4 body, CancellationToken cancellationToken = default) =>
         Task.FromResult<IActionResult>(ApiResults.NotImplemented(ApprovalCapability.NotImplementedReason));
+
+    private static IActionResult Result(SettingsChangeAck ack, string refused) =>
+        ack.Accepted ? new OkResult() : ApiResults.BadRequest(refused, ack.Errors);
 }
 
 [Authorize(Policy = ApiPolicies.Admin)]

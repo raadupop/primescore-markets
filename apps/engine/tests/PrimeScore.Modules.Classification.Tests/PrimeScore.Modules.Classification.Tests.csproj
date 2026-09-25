@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Unit tests for classifier-answer validation, consensus provenance and the classification run. -->
+  <!-- Unit tests for classifier-answer validation, consensus provenance, the classification run, the composite and the dislocation. -->
   <ItemGroup>
     <ProjectReference Include="..\..\src\Modules\Classification\PrimeScore.Modules.Classification\PrimeScore.Modules.Classification.csproj" />
     <ProjectReference Include="..\..\src\Modules\Classification\PrimeScore.Modules.Classification.Contracts\PrimeScore.Modules.Classification.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Configuration\PrimeScore.Modules.Configuration\PrimeScore.Modules.Configuration.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Configuration\PrimeScore.Modules.Configuration.Contracts\PrimeScore.Modules.Configuration.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Modules\Ingestion\PrimeScore.Modules.Ingestion\PrimeScore.Modules.Ingestion.csproj" />
     <ProjectReference Include="..\..\src\Modules\Ingestion\PrimeScore.Modules.Ingestion.Contracts\PrimeScore.Modules.Ingestion.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />

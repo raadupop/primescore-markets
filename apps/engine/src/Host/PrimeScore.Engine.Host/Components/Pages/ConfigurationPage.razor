@@ -1,4 +1,8 @@
 @page "/configuration"
+@using PrimeScore.Modules.Configuration.Contracts
+@using PrimeScore.SharedKernel.Cqrs
+@inject IQueryHandler<GetActiveSettings, SettingsVersion> ActiveQuery
+@inject IQueryHandler<GetSettingsHistory, IReadOnlyList<SettingsVersion>> HistoryQuery
 
 <PageTitle>Configuration · PrimeScore Markets</PageTitle>
 
@@ -6,10 +10,153 @@
     <div>
         <div class="eyebrow">Configuration</div>
         <h1>Parameters</h1>
-        <p>Weighting schemes, corroboration windows, bypass percentile, dropout schedule, sensitivity map, thresholds and deploy conditions, with version history.</p>
+        <p>
+            Every parameter the composite and the dislocation read (ADR-0004), as one versioned value. Each composite and
+            dislocation names the version it used; each change is a ledger entry with who, when and the diff.
+        </p>
     </div>
 </div>
 
-<EmptyState Title="No configuration recorded">
-    Versioned configuration arrives in milestone M3 (SRS NFR-003). Seeded defaults will be marked "uncalibrated default".
-</EmptyState>
+@if (_error is not null)
+{
+    <div class="degraded"><strong>The configuration could not be read.</strong> @_error</div>
+}
+else if (_active is null)
+{
+    <div class="loading">Loading the configuration…</div>
+}
+else
+{
+    var settings = _active.Settings;
+    <section class="panel" aria-label="Active configuration">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">Version @_active.Version.Value · recorded @Fmt.Utc(_active.RecordedAt) by @_active.ChangedBy</div>
+                <h2>Active configuration</h2>
+            </div>
+            <span class="status @(settings.Calibration == "uncalibrated default" ? "status-warn" : "status-muted")">@settings.Calibration</span>
+        </div>
+        <p class="panel-note">
+            Changing parameters from this screen arrives with the operator sign-in (milestone M6). Until then an ADMIN token changes them
+            through <span class="mono">PUT /api/config/weighting-scheme</span> and <span class="mono">PUT /api/config/dislocation-threshold</span>;
+            a change takes effect from the next composite, without a restart.
+        </p>
+        <div class="settings-grid">
+            <dl class="kv">
+                <dt>Weighting scheme</dt><dd>@settings.Weighting.SchemeId · @Aggregation(settings.Weighting.Aggregation)</dd>
+                @foreach (var (category, weight) in settings.Weighting.CategoryWeights.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                {
+                    <dt>w · @category</dt><dd>@Fmt.Number(weight, 3)</dd>
+                }
+                <dt>Bypass percentile</dt><dd>|severity| ≥ @Fmt.Number(settings.BypassPercentile, 4) confirms alone</dd>
+                <dt>Dropout d(Δt)</dt><dd>@string.Join(" · ", settings.DropoutSchedule.Select(Tier))</dd>
+            </dl>
+            <dl class="kv">
+                @foreach (var (category, window) in settings.CorroborationWindows.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                {
+                    <dt>Window · @category</dt>
+                    <dd>@window · fresh for @(settings.ReportingIntervals.TryGetValue(category, out var interval) ? interval.ToString() : "—")</dd>
+                }
+            </dl>
+        </div>
+    </section>
+
+    <div class="grid grid-2">
+        @foreach (var context in settings.Contexts)
+        {
+            <section class="panel" aria-label="@context.Name context settings">
+                <div class="panel-head">
+                    <div>
+                        <div class="kicker">Context</div>
+                        <h2>@context.Name · reference @context.ReferenceInstrument</h2>
+                    </div>
+                </div>
+                <dl class="kv">
+                    @foreach (var (category, instruments) in context.Members.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                    {
+                        <dt>@category</dt><dd>@string.Join(", ", instruments)</dd>
+                    }
+                    <dt>Dislocation threshold</dt><dd>±@Fmt.Number(context.DislocationThreshold, 2) index points (magnitude)</dd>
+                    <dt>Sensitivity k</dt>
+                    <dd>low @Fmt.Number(context.Sensitivity.LowVol, 2) · normal @Fmt.Number(context.Sensitivity.Normal, 2) · high @Fmt.Number(context.Sensitivity.HighVol, 2)</dd>
+                    <dt>Regime</dt><dd>@Regime(context.Regime)</dd>
+                </dl>
+            </section>
+        }
+    </div>
+
+    <section class="panel" aria-label="Configuration versions">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">@_history.Count version(s), newest first</div>
+                <h2>Version history</h2>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr><th>Version</th><th>Recorded</th><th>By</th><th>Reason</th><th>Changes</th><th>Ledger</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var version in _history)
+                    {
+                        <tr>
+                            <td class="num">v@(version.Version.Value)</td>
+                            <td class="mono">@Fmt.Utc(version.RecordedAt)</td>
+                            <td>@version.ChangedBy</td>
+                            <td>@version.Reason</td>
+                            <td>
+                                @if (version.Version.Value == 1)
+                                {
+                                    <span class="panel-note">seeded defaults (@version.Changes.Count values)</span>
+                                }
+                                else
+                                {
+                                    <ul class="changes">
+                                        @foreach (var change in version.Changes)
+                                        {
+                                            <li>@change</li>
+                                        }
+                                    </ul>
+                                }
+                            </td>
+                            <td><a href="ledger/@version.LedgerSequence">#@version.LedgerSequence</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@code {
+    private SettingsVersion? _active;
+    private IReadOnlyList<SettingsVersion> _history = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _active = await ActiveQuery.HandleAsync(new GetActiveSettings(), CancellationToken.None);
+            _history = await HistoryQuery.HandleAsync(new GetSettingsHistory(), CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            _error = exception.Message;
+        }
+    }
+
+    private static string Aggregation(Aggregation aggregation) => aggregation switch
+    {
+        Modules.Configuration.Contracts.Aggregation.WeightedMean => "WEIGHTED_MEAN (mean of confirmed convictions)",
+        _ => "MAX_CONFIRMED_WEIGHTED (net max of confirmed convictions)",
+    };
+
+    private static string Tier(DropoutTier tier) =>
+        tier.BelowSeconds is { } below ? $"{Fmt.Number(tier.Factor, 2)} below {Fmt.Number(below, 0)} s" : $"{Fmt.Number(tier.Factor, 2)} beyond";
+
+    private static string Regime(RegimeRule rule) => rule.Mode == RegimeMode.Percentile
+        ? $"percentile of the reference level: low below p{Fmt.Number(rule.LowBelow * 100, 0)}, high above p{Fmt.Number(rule.HighAbove * 100, 0)}"
+        : $"level: low below {Fmt.Number(rule.LowVolUpper, 2)}, high above {Fmt.Number(rule.HighVolLower, 2)}";
+}

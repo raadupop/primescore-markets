@@ -60,6 +60,17 @@ internal sealed class ApiTokenOptionsValidator : IValidateOptions<ApiTokenOption
             {
                 failures.Add($"Auth:ApiTokens:{index}:Sha256 must be 64 hex characters.");
             }
+
+            if (string.IsNullOrWhiteSpace(entry.Name))
+            {
+                failures.Add($"Auth:ApiTokens:{index}:Name is required: it is recorded as who made each change.");
+            }
+        }
+
+        foreach (var duplicate in options.ApiTokens.Where(entry => !string.IsNullOrWhiteSpace(entry.Name))
+            .GroupBy(entry => entry.Name.Trim(), StringComparer.Ordinal).Where(group => group.Count() > 1))
+        {
+            failures.Add($"Auth:ApiTokens: Name '{duplicate.Key}' is used more than once; audit records could not tell the callers apart.");
         }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);

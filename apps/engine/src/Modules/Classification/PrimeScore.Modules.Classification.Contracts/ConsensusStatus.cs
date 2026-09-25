@@ -20,7 +20,7 @@ public sealed record ClassificationSummary(IReadOnlyList<OutcomeCount> Outcomes,
 
 /// <param name="FullPass">True for the scheduled pass over every signal, false for a newly recorded batch.</param>
 /// <param name="NotSent">Signals not sent because the classifier failed three times in a row; retried on the next run.</param>
-public sealed record ClassificationRunView(DateTimeOffset FinishedAt, bool FullPass, int Classified, int Fallbacks, int Unavailable, int NotSent, bool BreakerTripped);
+public sealed record ClassificationRunView(DateTimeOffset FinishedAt, bool FullPass, int Classified, int Fallbacks, int Unavailable, int NotSent, bool BreakerTripped, int Composites = 0);
 
 /// <param name="Outcome"><c>assessed</c>, <c>fallback</c>, or an <see cref="UnavailableReason"/> name.</param>
 public sealed record OutcomeCount(SourceCategory Category, string Outcome, int Signals);

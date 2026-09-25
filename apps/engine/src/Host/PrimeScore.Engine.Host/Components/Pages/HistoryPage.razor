@@ -1,4 +1,11 @@
 @page "/history"
+@using PrimeScore.Modules.Classification.Contracts
+@using PrimeScore.Modules.Configuration.Contracts
+@using PrimeScore.SharedKernel
+@using PrimeScore.SharedKernel.Cqrs
+@inject IQueryHandler<GetCompositeHistory, IReadOnlyList<DailyAggregate>> HistoryQuery
+@inject IQueryHandler<GetActiveSettings, SettingsVersion> SettingsQuery
+@inject IClock Clock
 
 <PageTitle>History · PrimeScore Markets</PageTitle>
 
@@ -6,10 +13,164 @@
     <div>
         <div class="eyebrow">Composite and dislocation</div>
         <h1>History</h1>
-        <p>Daily composite score and signal-implied dislocation per context, with decision markers, regime shading and the active thresholds.</p>
+        <p>
+            The last composite recorded each New York trading day and its signal-implied dislocation, as the ledger holds them:
+            each point used only what had been observed by then. Shading marks the reference instrument's volatility regime.
+        </p>
     </div>
 </div>
 
-<EmptyState Title="No composite history">
-    Composite scoring and dislocation arrive in milestone M3 (SRS CLS-002, CLS-006).
-</EmptyState>
+<div class="filters" role="group" aria-label="History filters">
+    <label>
+        Range
+        <select @bind="Range" @bind:after="LoadAsync">
+            <option value="1">Last year</option>
+            <option value="5">Last 5 years</option>
+            <option value="0">Everything recorded</option>
+        </select>
+    </label>
+    <label>
+        Context
+        <select @bind="Context" @bind:after="LoadAsync">
+            @foreach (var context in _contexts)
+            {
+                <option value="@context.Name">@context.Name · @context.ReferenceInstrument</option>
+            }
+        </select>
+    </label>
+</div>
+
+@if (_error is not null)
+{
+    <div class="degraded"><strong>The history could not be read.</strong> @_error</div>
+}
+else if (_days is null)
+{
+    <div class="loading">Loading the composite history…</div>
+}
+else if (_days.Count == 0)
+{
+    <EmptyState Title="No composite recorded for this context">
+        A composite is recorded for every classified signal of the context's member instruments. Load history on Sources and health
+        (FRED backfill) or through <span class="mono">POST /api/admin/signals</span>; nothing is estimated in its place.
+    </EmptyState>
+}
+else
+{
+    <section class="panel" aria-label="Composite and dislocation history">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">@Context context · @Fmt.Count(_days.Count) trading days · @_days[0].Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) to @_days[^1].Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</div>
+                <h2>Composite score and dislocation</h2>
+            </div>
+            <span class="status status-muted" title="Decisions are recorded from milestone M4.">no decision markers yet</span>
+        </div>
+        <SeriesChart Dates="_dates" Panels="_panels" Runs="_runs" Extras="_extras"
+                     AriaLabel="@($"Daily composite score and dislocation for the {Context} context")"
+                     Footnote="@_footnote" />
+    </section>
+}
+
+@code {
+    private IReadOnlyList<ContextSettings> _contexts = [];
+    private IReadOnlyList<DailyAggregate>? _days;
+    private IReadOnlyList<DateOnly> _dates = [];
+    private IReadOnlyList<SeriesPanel> _panels = [];
+    private IReadOnlyList<ShadedRun> _runs = [];
+    private IReadOnlyList<ExtraColumn> _extras = [];
+    private string? _footnote;
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "context")]
+    public string? ContextQuery { get; set; }
+
+    private string Context { get; set; } = "equity";
+
+    private string Range { get; set; } = "5";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _contexts = (await SettingsQuery.HandleAsync(new GetActiveSettings(), CancellationToken.None)).Settings.Contexts;
+            Context = _contexts.FirstOrDefault(context => string.Equals(context.Name, ContextQuery, StringComparison.OrdinalIgnoreCase))?.Name
+                ?? _contexts.FirstOrDefault()?.Name ?? "equity";
+        }
+        catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            _error = exception.Message;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            var years = int.Parse(Range, CultureInfo.InvariantCulture);
+            var from = years > 0 ? Clock.UtcNow.AddYears(-years) : (DateTimeOffset?)null;
+            var days = await HistoryQuery.HandleAsync(new GetCompositeHistory(Context, from), CancellationToken.None);
+            var threshold = _contexts.FirstOrDefault(context => context.Name == Context)?.DislocationThreshold;
+            Build(days, threshold);
+            _days = days;
+        }
+        catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException or FormatException)
+        {
+            _error = exception.Message;
+        }
+    }
+
+    private void Build(IReadOnlyList<DailyAggregate> days, double? threshold)
+    {
+        _dates = days.Select(day => day.Date).ToArray();
+        var references = threshold is { } active
+            ? new[] { new ReferenceLine(active, $"active threshold ±{Fmt.Number(active, 2)}"), new ReferenceLine(-active, "") }
+            : [];
+        _panels =
+        [
+            new SeriesPanel("Composite", "#5b8ef0", days.Select(day => (double?)day.Composite).ToArray(), value => Fmt.Signed(value, 2), -1, 1),
+            new SeriesPanel("Dislocation", "#d8692f", days.Select(day => day.DislocationValue).ToArray(), value => Fmt.Signed(value, 2), 0, 0, references),
+        ];
+        _runs = Runs(days);
+        _extras =
+        [
+            new ExtraColumn("IV observed", index => days[index].MarketObservedIv is { } iv ? Fmt.Number(iv, 2) : "—"),
+            new ExtraColumn("Regime · k", index => days[index].Regime is { } regime ? $"{regime.Replace('_', ' ')} · {Fmt.Number(days[index].SensitivityFactor, 2)}" : "—"),
+            new ExtraColumn("Breached", index => days[index].ThresholdBreached switch { true => "yes", false => "no", null => "—" }),
+            new ExtraColumn("Config", index => $"v{days[index].ConfigVersion} · {days[index].WeightingSchemeId}"),
+        ];
+        var versions = days.Select(day => day.ConfigVersion).Distinct().Count();
+        _footnote = versions > 1
+            ? $"{versions} configuration versions over this range; each point used the version in force when it was recorded. Dashed lines: the active threshold (breached by magnitude)."
+            : "Dashed lines: the active threshold (breached by magnitude, ADR-0004 §6).";
+        _footnote += " The dislocation is the scenario IV × (1 + composite × k) minus the observed IV: an uncalibrated multiplier, not an independent volatility forecast.";
+    }
+
+    /// <summary>Contiguous runs of the low and high regimes; normal is left unshaded.</summary>
+    private static ShadedRun[] Runs(IReadOnlyList<DailyAggregate> days)
+    {
+        var runs = new List<ShadedRun>();
+        var start = -1;
+        string? kind = null;
+        for (var index = 0; index <= days.Count; index++)
+        {
+            var current = index < days.Count ? days[index].Regime switch { "high_vol" => "high", "low_vol" => "low", _ => null } : null;
+            if (current == kind)
+            {
+                continue;
+            }
+
+            if (kind is not null)
+            {
+                runs.Add(new ShadedRun(start, index - 1, kind));
+            }
+
+            (start, kind) = (index, current);
+        }
+
+        return [.. runs];
+    }
+}

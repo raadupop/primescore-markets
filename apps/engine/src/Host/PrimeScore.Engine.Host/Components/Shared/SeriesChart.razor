@@ -1,0 +1,328 @@
+@* Daily series as stacked SVG panels sharing one date axis (never a second y-scale). The hover layer is
+   SVG + CSS only: a column per date (bucketed when dense) shows a crosshair across every panel and one
+   tooltip listing every series at that date. The table view holds every value without hovering. *@
+
+@if (Dates.Count == 0)
+{
+    return;
+}
+
+<figure class="chart @(Compact ? "chart-compact" : "")">
+    @if (Panels.Count > 1 || Runs.Count > 0 || !Compact)
+    {
+        <figcaption class="chart-legend" aria-hidden="true">
+            @foreach (var panel in Panels)
+            {
+                <span class="legend-item"><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="@panel.Color" stroke-width="2" stroke-linecap="round" /></svg>@panel.Name</span>
+            }
+            @if (Runs.Any(run => run.Kind == "high"))
+            {
+                <span class="legend-item"><span class="legend-swatch band-high"></span>high-vol regime</span>
+            }
+            @if (Runs.Any(run => run.Kind == "low"))
+            {
+                <span class="legend-item"><span class="legend-swatch band-low"></span>low-vol regime</span>
+            }
+            @foreach (var label in Panels.SelectMany(panel => panel.References ?? []).Select(reference => reference.Label).Where(label => label.Length > 0).Distinct())
+            {
+                <span class="legend-item"><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" class="ref-line" /></svg>@label</span>
+            }
+        </figcaption>
+    }
+    <svg viewBox="0 0 @Width @TotalHeight" role="img" aria-label="@AriaLabel" preserveAspectRatio="xMidYMid meet">
+        <defs>
+            <pattern id="@($"hatch-{_id}")" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="6" class="hatch-stroke" />
+            </pattern>
+        </defs>
+        @for (var p = 0; p < Panels.Count; p++)
+        {
+            var panel = Panels[p];
+            var top = PanelTop(p);
+            var (min, max) = Domain(panel);
+            <g class="panel-plot">
+                @foreach (var run in Runs)
+                {
+                    var x1 = Math.Max(Left, X(run.First) - (Step / 2));
+                    var x2 = Math.Min(Width - Right, X(run.Last) + (Step / 2));
+                    <rect x="@F(x1)" y="@F(top)" width="@F(Math.Max(1, x2 - x1))" height="@F(PanelHeight)"
+                          class="band band-@run.Kind" fill="@(run.Kind == "low" ? $"url(#hatch-{_id})" : null)" />
+                }
+                @if (!Compact)
+                {
+                    <g>
+                        <text x="@F(Left)" y="@F(top - 8)" class="panel-title">@panel.Name</text>
+                    </g>
+                    @foreach (var tick in Ticks(min, max))
+                    {
+                        var y = Y(tick, min, max, top);
+                        <g>
+                            <line x1="@F(Left)" x2="@F(Width - Right)" y1="@F(y)" y2="@F(y)" class="@(tick == 0 ? "grid zero" : "grid")" />
+                            <text x="@F(Left - 8)" y="@F(y + 4)" class="axis-label" text-anchor="end">@panel.Format(tick)</text>
+                        </g>
+                    }
+                }
+                else if (min < 0 && max > 0)
+                {
+                    var zero = Y(0, min, max, top);
+                    <line x1="@F(Left)" x2="@F(Width - Right)" y1="@F(zero)" y2="@F(zero)" class="grid zero" />
+                }
+                @foreach (var reference in panel.References ?? [])
+                {
+                    var y = Y(reference.Value, min, max, top);
+                    <line x1="@F(Left)" x2="@F(Width - Right)" y1="@F(y)" y2="@F(y)" class="ref-line" />
+                }
+                <path d="@LinePath(panel, min, max, top)" fill="none" stroke="@panel.Color" stroke-width="@(Compact ? 1.5 : 2)" stroke-linejoin="round" stroke-linecap="round" />
+            </g>
+        }
+        @if (!Compact)
+        {
+            <g>
+                @foreach (var (index, label) in XTicks())
+                {
+                    <g>
+                        <text x="@F(X(index))" y="@F(TotalHeight - 6)" class="axis-label" text-anchor="middle">@label</text>
+                    </g>
+                }
+            </g>
+        }
+        @foreach (var index in HoverColumns())
+        {
+            var x = X(index);
+            var tipLeft = x + 12 + TipWidth > Width - Right;
+            var tipX = tipLeft ? x - 12 - TipWidth : x + 12;
+            var rows = TooltipRows(index);
+            <g class="hover-col">
+                <rect x="@F(Math.Max(0, x - (ColumnWidth / 2)))" y="0" width="@F(ColumnWidth)" height="@F(TotalHeight)" class="hit" />
+                <g class="hover-layer">
+                    <line x1="@F(x)" x2="@F(x)" y1="@F(PanelTop(0))" y2="@F(PanelTop(Panels.Count - 1) + PanelHeight)" class="crosshair" />
+                    @for (var p = 0; p < Panels.Count; p++)
+                    {
+                        if (Panels[p].Values[index] is { } value)
+                        {
+                            var (min, max) = Domain(Panels[p]);
+                            <circle cx="@F(x)" cy="@F(Y(value, min, max, PanelTop(p)))" r="4" fill="@Panels[p].Color" class="hover-dot" />
+                        }
+                    }
+                    <g transform="translate(@F(tipX) @F(Compact ? 2 : PanelTop(0)))">
+                        <rect width="@F(TipWidth)" height="@F(18 + (rows.Count * 17))" rx="6" class="tip-box" />
+                        <text x="10" y="15" class="tip-date">@Dates[index].ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</text>
+                        @for (var r = 0; r < rows.Count; r++)
+                        {
+                            var row = rows[r];
+                            var y = 32 + (r * 17);
+                            <g>
+                                @if (row.Color is not null)
+                                {
+                                    <line x1="10" x2="20" y1="@F(y - 4)" y2="@F(y - 4)" stroke="@row.Color" stroke-width="2" stroke-linecap="round" />
+                                }
+                                <text x="26" y="@F(y)" class="tip-value">@row.Value</text>
+                                <text x="@F(TipWidth - 10)" y="@F(y)" class="tip-name" text-anchor="end">@row.Name</text>
+                            </g>
+                        }
+                    </g>
+                </g>
+            </g>
+        }
+    </svg>
+    @if (!Compact)
+    {
+        <div class="chart-foot">
+            <button class="button button-ghost" type="button" @onclick="() => _table = !_table" aria-expanded="@(_table ? "true" : "false")">
+                @(_table ? "Hide table view" : "Table view")
+            </button>
+            @if (Footnote is not null)
+            {
+                <span class="panel-note">@Footnote</span>
+            }
+        </div>
+        @if (_table)
+        {
+            <div class="table-wrap chart-table">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Date (New York)</th>
+                            @foreach (var panel in Panels)
+                            {
+                                <th>@panel.Name</th>
+                            }
+                            @foreach (var extra in Extras ?? [])
+                            {
+                                <th>@extra.Name</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var index = Dates.Count - 1; index >= 0; index--)
+                        {
+                            var row = index;
+                            <tr>
+                                <td class="mono">@Dates[row].ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</td>
+                                @foreach (var panel in Panels)
+                                {
+                                    <td class="num">@(panel.Values[row] is { } value ? panel.Format(value) : "—")</td>
+                                }
+                                @foreach (var extra in Extras ?? [])
+                                {
+                                    <td class="mono">@extra.Value(row)</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</figure>
+
+@code {
+    // Compact charts sit in a half-width card: a narrower canvas keeps text at its intended size.
+    private double Width => Compact ? 480 : 1000;
+
+    private double Left => Compact ? 6 : 64;
+
+    private double Right => Compact ? 6 : 16;
+
+    private double TipWidth => Compact ? 200 : 230;
+
+    private static int _instances;
+    private readonly int _id = Interlocked.Increment(ref _instances);
+    private bool _table;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<DateOnly> Dates { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<SeriesPanel> Panels { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<ShadedRun> Runs { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<ExtraColumn>? Extras { get; set; }
+
+    /// <summary>Small multiples without axes or table, for the overview.</summary>
+    [Parameter]
+    public bool Compact { get; set; }
+
+    [Parameter]
+    public string AriaLabel { get; set; } = "Time series chart";
+
+    [Parameter]
+    public string? Footnote { get; set; }
+
+    private double PanelHeight => Compact ? 64 : 170;
+
+    private double PanelGap => Compact ? 12 : 40;
+
+    private double Top => Compact ? 4 : 24;
+
+    private double TotalHeight => Top + (Panels.Count * PanelHeight) + ((Panels.Count - 1) * PanelGap) + (Compact ? 4 : 26);
+
+    private double PlotWidth => Width - Left - Right;
+
+    private double Step => Dates.Count > 1 ? PlotWidth / (Dates.Count - 1) : PlotWidth;
+
+    private int Bucket => Math.Max(1, (int)Math.Ceiling(Dates.Count / (Compact ? 160.0 : 320.0)));
+
+    private double ColumnWidth => Math.Max(Step * Bucket, 3);
+
+    private double PanelTop(int panel) => Top + (panel * (PanelHeight + PanelGap));
+
+    private double X(int index) => Dates.Count > 1 ? Left + (index * Step) : Left + (PlotWidth / 2);
+
+    private double Y(double value, double min, double max, double top) =>
+        top + PanelHeight - ((value - min) / (max - min) * PanelHeight);
+
+    private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>The panel's domain widened to every value and reference line, never zero-width.</summary>
+    private static (double Min, double Max) Domain(SeriesPanel panel)
+    {
+        var values = panel.Values.OfType<double>().Concat((panel.References ?? []).Select(reference => reference.Value)).ToArray();
+        var min = Math.Min(panel.Minimum, values.Length > 0 ? values.Min() : panel.Minimum);
+        var max = Math.Max(panel.Maximum, values.Length > 0 ? values.Max() : panel.Maximum);
+        return max - min < 1e-9 ? (min - 1, max + 1) : (min, max);
+    }
+
+    /// <summary>Four to six round ticks (1, 2 or 5 × 10ⁿ) inside the domain.</summary>
+    private static IEnumerable<double> Ticks(double min, double max)
+    {
+        var raw = (max - min) / 4;
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(raw)));
+        var step = new[] { 1.0, 2.0, 5.0, 10.0 }.Select(factor => factor * magnitude).First(candidate => candidate >= raw / 1.5);
+        for (var tick = Math.Ceiling(min / step) * step; tick <= max + (step * 1e-9); tick += step)
+        {
+            yield return Math.Abs(tick) < step * 1e-9 ? 0 : Math.Round(tick, 10);
+        }
+    }
+
+    /// <summary>January of each year over long spans, otherwise the first date of each month.</summary>
+    private IEnumerable<(int Index, string Label)> XTicks()
+    {
+        var years = Dates[^1].Year - Dates[0].Year;
+        var every = years > 12 ? 2 : 1;
+        for (var index = 1; index < Dates.Count; index++)
+        {
+            var (previous, current) = (Dates[index - 1], Dates[index]);
+            if (years >= 2 && current.Year != previous.Year && current.Year % every == 0)
+            {
+                yield return (index, current.Year.ToString(CultureInfo.InvariantCulture));
+            }
+            else if (years < 2 && current.Month != previous.Month)
+            {
+                yield return (index, current.ToString("MMM yy", CultureInfo.InvariantCulture));
+            }
+        }
+    }
+
+    private string LinePath(SeriesPanel panel, double min, double max, double top)
+    {
+        var path = new System.Text.StringBuilder();
+        var pen = false;
+        for (var index = 0; index < Dates.Count; index++)
+        {
+            if (panel.Values[index] is not { } value)
+            {
+                pen = false;
+                continue;
+            }
+
+            path.Append(pen ? 'L' : 'M').Append(F(X(index))).Append(' ').Append(F(Y(value, min, max, top))).Append(' ');
+
+            // A point with no neighbour on either side is drawn as a dot (round cap on a zero-length segment).
+            if (!pen && (index + 1 >= Dates.Count || panel.Values[index + 1] is null))
+            {
+                path.Append("h0 ");
+            }
+
+            pen = true;
+        }
+
+        return path.ToString();
+    }
+
+    /// <summary>One hover column per date, or per bucket of dates when dense (the bucket's last date).</summary>
+    private IEnumerable<int> HoverColumns()
+    {
+        for (var index = Math.Min(Dates.Count - 1, Bucket - 1); index < Dates.Count; index += Bucket)
+        {
+            yield return index;
+        }
+
+        if ((Dates.Count - 1) % Bucket != Bucket - 1 && Dates.Count > Bucket)
+        {
+            yield return Dates.Count - 1;
+        }
+    }
+
+    private sealed record TipRow(string Value, string Name, string? Color);
+
+    private List<TipRow> TooltipRows(int index)
+    {
+        var rows = Panels.Select(panel => new TipRow(panel.Values[index] is { } value ? panel.Format(value) : "—", panel.Name, panel.Color)).ToList();
+        rows.AddRange((Extras ?? []).Select(extra => new TipRow(extra.Value(index), extra.Name, null)));
+        return rows;
+    }
+}

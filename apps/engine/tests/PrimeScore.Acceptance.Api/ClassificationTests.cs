@@ -69,17 +69,11 @@ public sealed class ClassificationTests(EngineFixture fixture)
     {
         var anchor = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(
             RepositoryPaths.ClassifierDirectory, "tests", "acceptance", "fixtures", "market_data_vix_volmageddon_2018_02_05.json"), Token))!;
-        var history = anchor["long_horizon_window"]!.AsArray().Select(value => value!.GetValue<double>()).ToArray();
         var band = anchor["expected_band"]!;
         await using var engine = await RunningEngine.StartAsync();
 
-        // Values: FRED VIXCLS as cited by the fixture. Timestamps: consecutive business days ending
-        // 2018-02-02, used only to order the closes; the event is the 2018-02-05 close.
-        var days = BusinessDaysEnding(new DateOnly(2018, 2, 2), history.Length);
-        var signals = history.Select((value, index) => (JsonNode)MarketData("VIX", value, days[index], source: "fixture:VIXCLS")).ToList();
-        var eventAt = new DateTimeOffset(2018, 2, 5, 21, 15, 0, TimeSpan.Zero);
-        signals.Add(MarketData("VIX", 37.32, eventAt, source: "fixture:VIXCLS"));
-        var response = await PostAsync(engine, new JsonObject { ["signals"] = new JsonArray([.. signals]) });
+        var response = await AnchorHistory.LoadAsync(engine, "market_data_vix_volmageddon_2018_02_05.json",
+            new DateOnly(2018, 2, 2), 37.32, new DateTimeOffset(2018, 2, 5, 21, 15, 0, TimeSpan.Zero), Token);
 
         var assessment = Assert.Single(await engine.Client(Role.Read).GetAssessmentsAsync(response.Signals.Last().Signal_id, null, Token));
         var expected = band["expected_score_signed"]!.GetValue<double>();
@@ -166,21 +160,6 @@ public sealed class ClassificationTests(EngineFixture fixture)
 
     private static async Task<List<SignalAssessment>> AsOfAsync(HttpClient http, string asOf) =>
         (await http.GetFromJsonAsync<List<SignalAssessment>>($"classification/assessments?as_of={asOf}", ApiJsonOptions.Value, Token))!;
-
-    private static DateTimeOffset[] BusinessDaysEnding(DateOnly last, int count)
-    {
-        var days = new List<DateTimeOffset>(count);
-        for (var date = last; days.Count < count; date = date.AddDays(-1))
-        {
-            if (date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
-            {
-                days.Add(new DateTimeOffset(date.ToDateTime(new TimeOnly(21, 15)), TimeSpan.Zero));
-            }
-        }
-
-        days.Reverse();
-        return [.. days];
-    }
 
     private static async Task<IngestSignalsResponse> PostAsync(RunningEngine engine, JsonObject batch)
     {
