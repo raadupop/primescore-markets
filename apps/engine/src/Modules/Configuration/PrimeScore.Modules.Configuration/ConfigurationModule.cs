@@ -22,7 +22,9 @@ public static class ConfigurationModule
 
         services.AddScoped<IQueryHandler<GetActiveSettings, SettingsVersion>, GetActiveSettingsHandler>();
         services.AddScoped<IQueryHandler<GetSettingsVersion, SettingsVersion?>, GetSettingsVersionHandler>();
+        services.AddScoped<IQueryHandler<GetSettingsAtSequence, SettingsVersion?>, GetSettingsAtSequenceHandler>();
         services.AddScoped<IQueryHandler<GetSettingsHistory, IReadOnlyList<SettingsVersion>>, GetSettingsHistoryHandler>();
+        services.AddScoped<IQueryHandler<ResolveReplaySettings, ReplaySettingsResult>, ResolveReplaySettingsHandler>();
         services.AddScoped<ICommandHandler<SetWeightingScheme, SettingsChangeAck>, SetWeightingSchemeHandler>();
         services.AddScoped<ICommandHandler<SetDislocationSettings, SettingsChangeAck>, SetDislocationSettingsHandler>();
         services.AddScoped<ICommandHandler<SetDeployConditions, SettingsChangeAck>, SetDeployConditionsHandler>();

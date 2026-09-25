@@ -26,7 +26,8 @@ public sealed record GetObservationSeries(
     SourceCategory Category,
     string? Variant,
     DateTimeOffset Before,
-    int Length) : IQuery<ObservationSeries>;
+    int Length,
+    long MaxSequence = long.MaxValue) : IQuery<ObservationSeries>;
 
 public sealed record ObservationSeries(IReadOnlyList<ObservationPoint> Points)
 {

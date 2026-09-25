@@ -72,6 +72,10 @@ public sealed record GetDecisions(
 
 public sealed record GetDecision(Guid DecisionId) : IQuery<DecisionView?>;
 
+/// <summary>Evaluate temporary decisions without recording live aggregates or decisions. SettingsJson is the canonical EngineSettings snapshot.</summary>
+public sealed record GetReplayDecisions(DateTimeOffset From, DateTimeOffset To, long MaxSequence, ConfigVersion Version, string SettingsJson)
+    : IQuery<IReadOnlyList<DecisionView>>;
+
 /// <summary>Just the observation time and outcome of a context's decisions, oldest first (History markers).</summary>
 public sealed record GetDecisionOutcomes(string Context, DateTimeOffset? From = null, DateTimeOffset? To = null) : IQuery<IReadOnlyList<DecisionOutcomePoint>>;
 

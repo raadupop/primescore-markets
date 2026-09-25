@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Analytics\PrimeScore.Modules.Analytics\PrimeScore.Modules.Analytics.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Configuration\PrimeScore.Modules.Configuration\PrimeScore.Modules.Configuration.csproj" />
+  </ItemGroup>
+</Project>

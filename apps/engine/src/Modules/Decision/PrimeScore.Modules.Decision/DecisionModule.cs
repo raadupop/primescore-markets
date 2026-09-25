@@ -26,6 +26,7 @@ public static class DecisionModule
         services.AddScoped<ICommandHandler<MakePendingDecisions, MakePendingDecisionsAck>, MakePendingDecisionsHandler>();
         services.AddScoped<IQueryHandler<GetDecisions, IReadOnlyList<DecisionView>>, GetDecisionsHandler>();
         services.AddScoped<IQueryHandler<GetDecision, DecisionView?>, GetDecisionHandler>();
+        services.AddScoped<IQueryHandler<GetReplayDecisions, IReadOnlyList<DecisionView>>, GetReplayDecisionsHandler>();
         services.AddScoped<IQueryHandler<GetDecisionOutcomes, IReadOnlyList<DecisionOutcomePoint>>, GetDecisionOutcomesHandler>();
         services.AddScoped<IQueryHandler<GetAuditEntries, IReadOnlyList<AuditEntryView>>, GetAuditEntriesHandler>();
         services.AddScoped<IIntegrationEventHandler<AggregatesRecorded>, AggregatesRecordedHandler>();

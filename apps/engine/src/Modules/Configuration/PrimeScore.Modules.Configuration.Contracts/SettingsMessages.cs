@@ -8,8 +8,15 @@ public sealed record GetActiveSettings : IQuery<SettingsVersion>;
 /// <summary>A stored version, or null when it does not exist.</summary>
 public sealed record GetSettingsVersion(int Version) : IQuery<SettingsVersion?>;
 
+public sealed record GetSettingsAtSequence(long MaxSequence) : IQuery<SettingsVersion?>;
+
 /// <summary>Stored versions, newest first.</summary>
 public sealed record GetSettingsHistory(int Take = 50) : IQuery<IReadOnlyList<SettingsVersion>>;
+
+/// <summary>Validate temporary settings against a fixed stored version, without recording a change.</summary>
+public sealed record ResolveReplaySettings(int Version, string? OverridesJson) : IQuery<ReplaySettingsResult>;
+
+public sealed record ReplaySettingsResult(EngineSettings? Settings, IReadOnlyList<string> Errors);
 
 /// <summary>
 /// The contract's <c>PUT /config/weighting-scheme</c>. A <paramref name="SourceDropoutPenalty"/>

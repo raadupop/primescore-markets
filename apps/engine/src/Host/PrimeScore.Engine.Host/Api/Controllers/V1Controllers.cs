@@ -217,8 +217,30 @@ public sealed class ConfigurationController(
 }
 
 [Authorize(Policy = ApiPolicies.Admin)]
-public sealed class ReplayController : Dto.ReplayControllerBase
+public sealed class ReplayController(
+    Ledger.ILedgerStatusQuery status,
+    ICommandHandler<Modules.Analytics.Contracts.RunReplay, Modules.Analytics.Contracts.RunReplayAck> run,
+    IQueryHandler<Modules.Analytics.Contracts.GetReplay, Modules.Analytics.Contracts.ReplayView?> read) : Dto.ReplayControllerBase
 {
-    public override Task<ActionResult<Dto.ReplayResponse>> ReplayEvent(Dto.ReplayRequest body, CancellationToken cancellationToken = default) =>
-        Task.FromResult<ActionResult<Dto.ReplayResponse>>(ApiResults.NotYetBuilt("M5", "ANA-001"));
+    public override async Task<ActionResult<Dto.ReplayResponse>> ReplayEvent(Dto.ReplayRequest body, CancellationToken cancellationToken = default)
+    {
+        var input = await status.GetAsync(cancellationToken).ConfigureAwait(false);
+        var ack = await run.HandleAsync(new Modules.Analytics.Contracts.RunReplay(body.Event_label, body.From, body.To,
+            body.Config_overrides is null ? null : System.Text.Json.JsonSerializer.Serialize(body.Config_overrides),
+            User.Identity?.Name ?? "api", input.HeadSequence, input.HeadHash), cancellationToken).ConfigureAwait(false);
+        if (ack.ReplayId is not { } id)
+        {
+            return ApiResults.BadRequest("Replay could not run.", ack.Errors);
+        }
+
+        var view = await read.HandleAsync(new Modules.Analytics.Contracts.GetReplay(id), cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Committed replay projection is missing.");
+        return new Dto.ReplayResponse
+        {
+            Replay_id = id,
+            Decisions = SharedKernel.Json.CanonicalJson.Deserialize<DecisionView[]>(view.DecisionsJson).Select(DecisionDtos.From).ToList(),
+            Positions = [],
+            Exits = [],
+        };
+    }
 }

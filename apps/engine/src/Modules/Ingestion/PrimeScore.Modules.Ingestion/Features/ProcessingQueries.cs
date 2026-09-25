@@ -70,7 +70,8 @@ internal sealed class GetObservationSeriesHandler(IngestionReadStore reads) : IQ
         var category = query.Category.ToString();
         await using var context = reads.Open();
         var rows = context.Signals.Where(row =>
-            row.Instrument == query.Instrument && row.Category == category && row.ObservedAtMs < before && row.Value != null);
+            row.Instrument == query.Instrument && row.Category == category && row.ObservedAtMs < before && row.Value != null
+            && row.Sequence <= query.MaxSequence);
         if (query.Variant is { } variant)
         {
             rows = rows.Where(row => row.Variant == variant);

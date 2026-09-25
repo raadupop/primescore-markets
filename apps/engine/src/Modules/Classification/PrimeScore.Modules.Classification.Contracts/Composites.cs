@@ -28,6 +28,10 @@ public sealed record GetAggregatesAfter(long AfterSequence, int Take) : IQuery<I
 
 public sealed record AggregateRecord(CompositeView Composite, DislocationView Dislocation, IReadOnlyList<ConfirmedAssessment> Confirmed);
 
+/// <summary>Recompute from stored assessments bounded by observation time and a captured ledger sequence. SettingsJson is the canonical EngineSettings snapshot.</summary>
+public sealed record GetReplayAggregates(DateTimeOffset From, DateTimeOffset To, long MaxSequence, ConfigVersion Version, string SettingsJson)
+    : IQuery<IReadOnlyList<AggregateRecord>>;
+
 /// <summary>An assessment that entered a composite's net conviction.</summary>
 public sealed record ConfirmedAssessment(
     Guid AssessmentId,

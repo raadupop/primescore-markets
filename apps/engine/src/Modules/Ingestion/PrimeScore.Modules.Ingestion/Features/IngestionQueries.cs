@@ -19,7 +19,7 @@ internal sealed class GetSignalsHandler(IngestionReadStore reads) : IQueryHandle
         ArgumentNullException.ThrowIfNull(query);
         var filter = query.Filter;
         await using var context = reads.Open();
-        var rows = context.Signals.AsQueryable();
+        var rows = context.Signals.Where(row => row.Sequence <= filter.MaxSequence);
         if (filter.AsOf is { } asOf)
         {
             var cut = asOf.ToUnixTimeMilliseconds();

@@ -8,6 +8,9 @@
     <ProjectReference Include="..\PrimeScore.Modules.Analytics.Contracts\PrimeScore.Modules.Analytics.Contracts.csproj" />
     <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
     <ProjectReference Include="..\..\..\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+    <ProjectReference Include="..\..\Configuration\PrimeScore.Modules.Configuration.Contracts\PrimeScore.Modules.Configuration.Contracts.csproj" />
+    <ProjectReference Include="..\..\Decision\PrimeScore.Modules.Decision.Contracts\PrimeScore.Modules.Decision.Contracts.csproj" />
+    <ProjectReference Include="..\..\Ingestion\PrimeScore.Modules.Ingestion.Contracts\PrimeScore.Modules.Ingestion.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
@@ -15,5 +18,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="PrimeScore.Modules.Analytics.Tests" />
+    <EmbeddedResource Include="..\..\..\..\data\validation-events.json" LogicalName="validation-events.json" />
   </ItemGroup>
 </Project>

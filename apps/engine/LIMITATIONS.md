@@ -3,6 +3,15 @@
 Limits that hold even when every check passes. Architecture and ledger limits are in
 [ADR-0003](../../doc/adr/0003-engine-modular-monolith-over-hash-chained-ledger.md).
 
+## Replay (M5)
+
+- Replay recomputes composites and decisions from recorded classifications, not fresh classifier calls ([ADR-0006](../../doc/adr/0006-replay-from-recorded-classifications.md)). Missing consensus, unsupported routes and recorded fallbacks remain as recorded. The ledger sequence captured before each run bounds every input; observation timestamps bound each historical calculation.
+- The run uses the configuration at its captured ledger sequence, with validated temporary overrides. It does not reconstruct which configuration was operated on an historical date. The complete effective settings are stored with the replay; overridden runs are labelled `in-sample`.
+- The ten-event report evaluates the equity/VIX market-data proxy. Geopolitical classifications and unsourced macro inputs are absent. SRS true/false-positive labels are target descriptions, not measured performance. No positions, exits or returns are simulated.
+- Replay decisions are stored inside their `ReplayRun`, not returned by the live `/decisions` or `/audit` endpoints. Open the replay's ledger entry to inspect its settings, input sequence and timeline.
+- `config_overrides` uses configuration field names in snake_case. Objects merge, arrays replace; `contexts` also accepts an object keyed by existing context name. Unknown fields, null values and invalid parameter values are refused. Classifier formulas and registry values cannot be overridden.
+- The API returns all replay decisions in one response; long ranges produce large payloads. The UI and report use the same stored run.
+
 ## Data coverage (FRED)
 
 - **VVIX has no FRED series.** The registry maps VVIX to `VVIXCLS` (`verified: false`); FRED answers "series does not exist". Every pull reports it as not pulled; no VVIX value exists in the engine.

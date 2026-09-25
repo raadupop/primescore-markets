@@ -157,7 +157,7 @@ internal sealed partial class CompositeRunner(
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
-    private static CompositeParameters Parameters(EngineSettings settings, ContextSettings context)
+    internal static CompositeParameters Parameters(EngineSettings settings, ContextSettings context)
     {
         static SourceCategory Parse(string name) => SourceCategoryNames.TryParseWireName(name, out var category)
             ? category
@@ -176,7 +176,7 @@ internal sealed partial class CompositeRunner(
             context.Members.Keys.Select(Parse).Distinct().Order().ToArray());
     }
 
-    private static DislocationParameters Dislocation(ContextSettings context) => new(
+    internal static DislocationParameters Dislocation(ContextSettings context) => new(
         context.DislocationThreshold,
         context.Sensitivity.LowVol,
         context.Sensitivity.Normal,
@@ -191,7 +191,7 @@ internal sealed partial class CompositeRunner(
     private int ReferenceLength(string instrument) =>
         registry.TryGetSymbol(instrument, out var symbol) ? symbol.IndicatorClass.ReferenceWindowLength : 1260;
 
-    private static CategoryContribution View(CategoryResult category) => new(
+    internal static CategoryContribution View(CategoryResult category) => new(
         category.Category, category.Weight, category.Discount, category.StalenessSeconds, category.NetConviction,
         category.WeightedContribution, category.MaxPositive, category.MaxNegative, category.Confirmed, category.Unconfirmed);
 

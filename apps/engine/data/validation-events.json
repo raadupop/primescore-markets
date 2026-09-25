@@ -1,0 +1,12 @@
+[
+  {"id":"volmageddon","label":"Volmageddon","date":"2018-02-05","target_date":"2018-02-02","expect_deploy":true,"expected":"Deploy by Feb 2. SRS label: true positive."},
+  {"id":"soleimani","label":"Soleimani Strike","date":"2020-01-03","target_date":"2020-01-03","expect_deploy":true,"expected":"Signal fires. SRS label: false positive."},
+  {"id":"covid","label":"COVID-19","date":"2020-02-21","target_date":"2020-02-20","expect_deploy":true,"expected":"Deploy by Feb 20. SRS label: true positive."},
+  {"id":"ukraine","label":"Russia/Ukraine","date":"2022-02-24","target_date":"2022-02-22","expect_deploy":true,"expected":"Deploy by Feb 22. SRS label: true positive."},
+  {"id":"svb","label":"SVB Collapse","date":"2023-03-10","target_date":"2023-03-09","expect_deploy":true,"expected":"Deploy by Mar 9. SRS label: true positive."},
+  {"id":"yen-carry","label":"Yen Carry Unwind","date":"2024-08-05","target_date":"2024-08-01","expect_deploy":true,"expected":"Deploy by Aug 1. SRS label: true positive."},
+  {"id":"iran-israel","label":"Iran to Israel","date":"2024-10-01","target_date":"2024-10-01","expect_deploy":true,"expected":"Signal fires. SRS label: false positive."},
+  {"id":"fomc","label":"FOMC Surprise","date":"2024-12-18","target_date":"2024-12-18","expect_deploy":false,"expected":"Below dislocation threshold. SRS label: correctly missed."},
+  {"id":"liberation-day","label":"Liberation Day","date":"2025-04-02","target_date":"2025-04-01","expect_deploy":true,"expected":"Deploy by Apr 1. SRS label: true positive."},
+  {"id":"iran-strikes","label":"Iran Strikes","date":"2026-02-28","target_date":"2026-02-27","expect_deploy":true,"expected":"Deploy by Feb 27. Calibration target; SRS label: true positive."}
+]

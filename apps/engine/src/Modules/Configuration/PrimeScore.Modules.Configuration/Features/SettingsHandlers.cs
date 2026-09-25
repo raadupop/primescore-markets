@@ -23,6 +23,17 @@ internal sealed class GetSettingsVersionHandler(ConfigurationReadStore reads) : 
     }
 }
 
+internal sealed class GetSettingsAtSequenceHandler(ConfigurationReadStore reads) : IQueryHandler<GetSettingsAtSequence, SettingsVersion?>
+{
+    public async Task<SettingsVersion?> HandleAsync(GetSettingsAtSequence query, CancellationToken cancellationToken)
+    {
+        await using var context = reads.Open();
+        var row = await context.Versions.Where(version => version.Sequence <= query.MaxSequence)
+            .OrderByDescending(version => version.Version).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        return row is null ? null : SettingsRows.ToVersion(row);
+    }
+}
+
 internal sealed class GetSettingsHistoryHandler(ConfigurationReadStore reads) : IQueryHandler<GetSettingsHistory, IReadOnlyList<SettingsVersion>>
 {
     public async Task<IReadOnlyList<SettingsVersion>> HandleAsync(GetSettingsHistory query, CancellationToken cancellationToken)

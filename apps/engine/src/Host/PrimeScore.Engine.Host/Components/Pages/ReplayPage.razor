@@ -1,15 +1,154 @@
 @page "/replay"
-
+@using PrimeScore.Modules.Analytics.Contracts
+@using PrimeScore.Modules.Decision.Contracts
+@using PrimeScore.SharedKernel
+@using PrimeScore.SharedKernel.Cqrs
+@using PrimeScore.SharedKernel.Json
+@inject IQueryHandler<GetValidationEvents, IReadOnlyList<ValidationEvent>> EventsQuery
+@inject IQueryHandler<GetValidationReport, IReadOnlyList<ValidationEventResult>> ReportQuery
+@inject IQueryHandler<GetReplay, ReplayView?> ReplayQuery
+@inject IQueryHandler<GetReplayHistory, IReadOnlyList<ReplayView>> HistoryQuery
+@inject ICommandHandler<RunReplay, RunReplayAck> Runner
+@inject ICommandHandler<EvaluateValidationEvents, ValidationEvaluationAck> Evaluator
+@inject NavigationManager Navigation
+@inject PrimeScore.Ledger.ILedgerStatusQuery LedgerStatus
 <PageTitle>Replay · PrimeScore Markets</PageTitle>
-
-<div class="page-head">
-    <div>
-        <div class="eyebrow">Point-in-time replay</div>
-        <h1>Replay</h1>
-        <p>Re-run a validation event or date range using only data available at each moment, optionally with overridden configuration, and compare with the expected outcome.</p>
-    </div>
+<div class="page-head"><div>
+    <div class="eyebrow">Point-in-time replay</div><h1>Replay</h1>
+    <p>Recalculate decisions from recorded classifications and observations available by each observation time. Earlier history supplies the reference window. Temporary settings apply only to this run.</p>
+</div></div>
+<p class="degraded">Simulation only. Scenarios use an uncalibrated multiplier, not an independent volatility forecast. Validation targets are not evidence of profitability or predictive performance.</p>
+<div class="filters">
+    <label>Validation event<select @bind="_eventId" @bind:after="SelectEvent">
+        <option value="">Custom range</option>
+        @foreach (var item in _events) { <option value="@item.Id">@item.Label · @item.Date</option> }
+    </select></label>
+    <label>Label<input @bind="_label" maxlength="200" /></label>
+    <label>From (New York)<input type="date" @bind="_from" /></label>
+    <label>To (New York)<input type="date" @bind="_to" /></label>
 </div>
+<details><summary>Temporary configuration overrides (JSON)</summary>
+    <p>Use configuration field names; contexts may be keyed by name. Every changed run is labelled in-sample.</p>
+    <label>Overrides<textarea rows="7" @bind="_overrides" placeholder='{"contexts":{"equity":{"dislocation_threshold":10}}}'></textarea></label>
+</details>
+<div class="actions">
+    <button class="button primary" disabled="@_busy" @onclick="RunAsync">@(_busy ? "Running…" : "Run replay")</button>
+    <button class="button" disabled="@_busy" @onclick="EvaluateAsync">Evaluate ten events</button>
+</div>
+@if (_error is not null) { <div class="degraded" role="alert">@_error</div> }
+@if (_busy) { <div class="loading" role="status">Recalculating from recorded inputs…</div> }
+@if (_run is { } selectedRun)
+{
+    <section class="panel">
+        <h2>@selectedRun.EventLabel</h2>
+        <p>@selectedRun.SignalCount observations · configuration @selectedRun.ConfigVersion.Value · input ledger through @selectedRun.InputSequence · <a href="ledger/@selectedRun.LedgerSequence">Replay ledger entry #@selectedRun.LedgerSequence</a></p>
+        @if (!string.IsNullOrWhiteSpace(selectedRun.OverridesJson)) { <p class="degraded">In-sample: this run used temporary overrides.</p> }
+        @if (_timeline.Count == 0)
+        {
+            <EmptyState Title="Not evaluable">No classifiable context input and reference IV in this range. Missing consensus and unsupported routes remain absent.</EmptyState>
+        }
+        else
+        {
+            <div class="table-wrap"><table class="data">
+                <thead><tr><th>Observed (UTC)</th><th>Context</th><th>Decision</th><th>Composite</th><th>Dislocation</th><th>Explanation</th></tr></thead>
+                <tbody>@foreach (var decision in _timeline)
+                {
+                    <tr><td>@Fmt.Utc(decision.AsOf)</td><td>@decision.Context</td><td><DecisionBadge Outcome="decision.Outcome" /></td>
+                        <td class="num">@Fmt.Signed(decision.CompositeScore, 4)</td><td class="num">@Fmt.Signed(decision.DislocationValue, 2) / ±@Fmt.Number(decision.DislocationThreshold, 2)</td>
+                        <td><details><summary>@decision.Scenario · @decision.Conditions.Count(c => !c.Passed) failed conditions</summary><p>@decision.Explanation</p>
+                            @foreach (var signal in decision.TopContributing.Concat(decision.Dissenting))
+                            { <p><a href="signals?assessment=@signal.AssessmentId">@signal.Instrument · @Fmt.Utc(signal.ObservedAt) · assessment</a></p> }
+                        </details></td></tr>
+                }</tbody>
+            </table></div>
+        }
+        <details><summary>Effective configuration</summary><pre>@Fmt.Json(selectedRun.SettingsJson)</pre></details>
+    </section>
+}
+<section class="panel"><h2>Validation targets</h2>
+    <p>Equity/VIX proxy. “Deploy by D” checks D and the previous NYSE trading day. The FOMC target checks the dislocation threshold. SRS true/false-positive labels are expectations, not measured returns. Iran Feb 2026 is a calibration target.</p>
+    <div class="table-wrap"><table class="data"><thead><tr><th>Event</th><th>SRS expectation</th><th>Result</th><th>Evidence</th></tr></thead>
+        <tbody>@foreach (var row in _report)
+        {
+            <tr><td>@row.Event.Label</td><td>@row.Event.Expected</td><td>@row.Verdict</td><td>@row.Detail
+                @if (row.ReplayId is { } replayId) { <a href="replay?id=@replayId">Open run</a> }</td></tr>
+        }</tbody>
+    </table></div>
+</section>
+<section class="panel"><h2>Recent runs</h2>
+    @if (_history.Count == 0) { <p>No replay has been recorded.</p> }
+    @foreach (var run in _history) { <p><a href="replay?id=@run.ReplayId">@run.EventLabel</a> · @Fmt.Utc(run.RecordedAt)</p> }
+</section>
 
-<EmptyState Title="Replay is not available yet">
-    Replay and the validation-set report arrive in milestone M5 (SRS ANA-001). Replay results describe what the rules would have decided; they are not a backtest of returns.
-</EmptyState>
+@code {
+    [SupplyParameterFromQuery(Name = "id")] public Guid? ReplayId { get; set; }
+    private IReadOnlyList<ValidationEvent> _events = [];
+    private IReadOnlyList<ValidationEventResult> _report = [];
+    private IReadOnlyList<ReplayView> _history = [];
+    private IReadOnlyList<DecisionView> _timeline = [];
+    private ReplayView? _run;
+    private string _eventId = "iran-strikes", _label = "Iran Strikes", _overrides = "";
+    private DateTime _from = new(2026, 2, 26), _to = new(2026, 2, 28);
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _events = await EventsQuery.HandleAsync(new GetValidationEvents(), CancellationToken.None);
+        await RefreshAsync();
+        if (ReplayId is { } id)
+        {
+            _run = await ReplayQuery.HandleAsync(new GetReplay(id), CancellationToken.None);
+            _timeline = _run is null ? [] : CanonicalJson.Deserialize<DecisionView[]>(_run.DecisionsJson);
+            _error = _run is null ? "Replay was not found." : null;
+        }
+    }
+
+    private void SelectEvent()
+    {
+        if (_events.FirstOrDefault(item => item.Id == _eventId) is { } item)
+        {
+            _label = item.Label;
+            _from = MarketTime.NewYorkDate(item.From).ToDateTime(TimeOnly.MinValue);
+            _to = item.Date.ToDateTime(TimeOnly.MinValue);
+        }
+    }
+
+    private async Task RunAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var input = await LedgerStatus.GetAsync(CancellationToken.None);
+            var ack = await Runner.HandleAsync(new RunReplay(_label,
+                MarketTime.AtNewYork(DateOnly.FromDateTime(_from), TimeOnly.MinValue),
+                MarketTime.AtNewYork(DateOnly.FromDateTime(_to), TimeOnly.MaxValue),
+                string.IsNullOrWhiteSpace(_overrides) ? null : _overrides, "local-ui", input.HeadSequence, input.HeadHash), CancellationToken.None);
+            if (ack.ReplayId is { } id) { Navigation.NavigateTo("replay?id=" + id); }
+            else { _error = string.Join("; ", ack.Errors); }
+        }
+        catch (Exception) { _error = "Replay failed. Check Sources and health and the engine log."; }
+        finally { _busy = false; }
+    }
+
+    private async Task EvaluateAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var input = await LedgerStatus.GetAsync(CancellationToken.None);
+            await Evaluator.HandleAsync(new EvaluateValidationEvents("local-ui", input.HeadSequence, input.HeadHash), CancellationToken.None);
+            await RefreshAsync();
+        }
+        catch (Exception) { _error = "Validation did not finish. Check the engine log."; }
+        finally { _busy = false; }
+    }
+
+    private async Task RefreshAsync()
+    {
+        _report = await ReportQuery.HandleAsync(new GetValidationReport(), CancellationToken.None);
+        _history = await HistoryQuery.HandleAsync(new GetReplayHistory(), CancellationToken.None);
+    }
+}

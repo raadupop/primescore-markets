@@ -41,7 +41,8 @@ public sealed record SignalFilter(
     string? Instrument = null,
     int Skip = 0,
     int Take = 100,
-    string? Variant = null);
+    string? Variant = null,
+    long MaxSequence = long.MaxValue);
 
 public sealed record SignalPage(IReadOnlyList<SignalView> Signals, int Total);
 
