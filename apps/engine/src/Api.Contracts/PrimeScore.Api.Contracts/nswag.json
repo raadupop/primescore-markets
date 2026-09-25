@@ -56,6 +56,7 @@
       "generateOptionalPropertiesAsNullable": true,
       "dateTimeType": "System.DateTimeOffset",
       "dateType": "System.DateOnly",
+      "parameterDateTimeFormat": "O",
       "arrayType": "System.Collections.Generic.List",
       "arrayInstanceType": "System.Collections.Generic.List",
       "responseArrayType": "System.Collections.Generic.ICollection",

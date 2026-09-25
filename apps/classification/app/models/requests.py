@@ -1,9 +1,9 @@
 """
 Inbound contract models — ClassifyRequest and its nested payload types.
 """
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------------------
 # Enums expressed as Literal types (common Python idiom for small closed sets)
@@ -58,6 +58,20 @@ class UnstructuredPayload(BaseModel):
 # Top-level request
 # ---------------------------------------------------------------------------
 
+class ReferenceWindow(BaseModel):
+    """Caller-supplied history for one request (ADR-0005).
+
+    `values` are what the process-local window would hold for the symbol: prior
+    levels for MARKET_DATA, prior surprise magnitudes for MACROECONOMIC. When
+    present, the strategy computes against a transient copy and neither reads
+    nor mutates process state.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    values: list[Annotated[float, Field(allow_inf_nan=False)]]
+    last_update: AwareDatetime | None = None  # ISO-8601 with an offset; None when no prior value
+
+
 class ClassifyRequest(BaseModel):
     """
     The single inbound contract for POST /classify.
@@ -69,3 +83,4 @@ class ClassifyRequest(BaseModel):
     payload_type: PayloadType
     structured_payload: dict[str, Any] | None = None
     unstructured_payload: UnstructuredPayload | None = None
+    reference_window: ReferenceWindow | None = None

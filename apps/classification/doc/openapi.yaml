@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: PrimeScore AI Classification Service
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Service-local API contract for the Python classification engine.
 
@@ -44,7 +44,10 @@ paths:
       description: |
         Routes the request to the appropriate strategy based on
         `source_category` and `payload_type`, and returns a score with
-        certainty breakdown and audit trail.
+        certainty breakdown and audit trail. A request carrying
+        `reference_window` is computed against that window only, never reads
+        or mutates the process-local windows, and is served while the service
+        is still bootstrapping (0.2.0, ADR-0005).
       requestBody:
         required: true
         content:
@@ -73,7 +76,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorDetail"
         "503":
-          description: Service is still bootstrapping rolling windows.
+          description: |
+            Service is still bootstrapping rolling windows. Returned only for
+            requests without `reference_window`.
           content:
             application/json:
               schema:
@@ -188,6 +193,26 @@ components:
         source_url:
           type: [string, "null"]
 
+    ReferenceWindow:
+      type: object
+      required: [values]
+      additionalProperties: false
+      description: |
+        Caller-supplied history for one request (0.2.0, ADR-0005). `values`
+        are what the process-local window would hold for the symbol, oldest
+        first: prior levels for MARKET_DATA, prior surprise magnitudes
+        (|actual − expected|) for MACROECONOMIC. At most `N_L` (or `N` when
+        `N_L` is null) are kept, as for the process window.
+      properties:
+        values:
+          type: array
+          items:
+            type: number
+        last_update:
+          type: [string, "null"]
+          format: date-time
+          description: Observation time of the newest value; null when there is none.
+
     ClassifyRequest:
       type: object
       required: [source_category, payload_type]
@@ -213,6 +238,11 @@ components:
           description: Present when payload_type = UNSTRUCTURED.
           oneOf:
             - $ref: "#/components/schemas/UnstructuredPayload"
+            - type: "null"
+        reference_window:
+          description: Optional caller-supplied history; see ReferenceWindow.
+          oneOf:
+            - $ref: "#/components/schemas/ReferenceWindow"
             - type: "null"
 
     ClassifyResponse:

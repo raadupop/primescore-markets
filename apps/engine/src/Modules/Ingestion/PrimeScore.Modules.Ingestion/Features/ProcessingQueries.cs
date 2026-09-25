@@ -21,6 +21,41 @@ internal sealed class GetSignalsInObservationOrderHandler(IngestionReadStore rea
     }
 }
 
+internal sealed class GetSignalKeysInObservationOrderHandler(IngestionReadStore reads) : IQueryHandler<GetSignalKeysInObservationOrder, IReadOnlyList<SignalKey>>
+{
+    public async Task<IReadOnlyList<SignalKey>> HandleAsync(GetSignalKeysInObservationOrder query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        await using var context = reads.Open();
+        var rows = await context.Signals
+            .OrderBy(row => row.ObservedAtMs).ThenBy(row => row.Sequence)
+            .Skip(Math.Max(0, query.Skip)).Take(Math.Clamp(query.Take, 1, 10_000))
+            .Select(row => new { row.SignalId, row.ObservedAtMs })
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return rows.Select(row => new SignalKey(Guid.Parse(row.SignalId), DateTimeOffset.FromUnixTimeMilliseconds(row.ObservedAtMs))).ToArray();
+    }
+}
+
+internal sealed class GetSignalsByIdHandler(IngestionReadStore reads) : IQueryHandler<GetSignalsById, SignalPage>
+{
+    public async Task<SignalPage> HandleAsync(GetSignalsById query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (query.SignalIds.Count > 1000)
+        {
+            throw new ArgumentException("At most 1,000 signal ids per query.", nameof(query));
+        }
+
+        var ids = query.SignalIds.Select(id => id.ToString("D")).Distinct(StringComparer.Ordinal).ToArray();
+        await using var context = reads.Open();
+        var rows = await context.Signals
+            .Where(row => ids.Contains(row.SignalId))
+            .OrderBy(row => row.ObservedAtMs).ThenBy(row => row.Sequence)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return new SignalPage(rows.Select(SignalViews.From).ToArray(), rows.Count);
+    }
+}
+
 internal sealed class GetObservationSeriesHandler(IngestionReadStore reads) : IQueryHandler<GetObservationSeries, ObservationSeries>
 {
     public async Task<ObservationSeries> HandleAsync(GetObservationSeries query, CancellationToken cancellationToken)
@@ -53,7 +88,7 @@ internal sealed class GetObservationSeriesHandler(IngestionReadStore reads) : IQ
             .OrderByDescending(row => row.ObservedAtMs).ThenBy(row => row.Sequence)
             .Take(query.Length)
             .Reverse()
-            .Select(row => new ObservationPoint(DateTimeOffset.FromUnixTimeMilliseconds(row.ObservedAtMs), row.Value!.Value, Guid.Parse(row.SignalId)))
+            .Select(row => new ObservationPoint(DateTimeOffset.FromUnixTimeMilliseconds(row.ObservedAtMs), row.Value!.Value, Guid.Parse(row.SignalId), row.Sequence))
             .ToArray();
         return new ObservationSeries(points);
     }

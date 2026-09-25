@@ -32,6 +32,10 @@ public sealed class ArchitectureRules
                 .Where(other => other != module)
                 .SelectMany(other => EngineSolution.Load(EngineSolution.Implementation(other)).GetTypes())
                 .Select(type => type.FullName!)
+
+                // Compiler-synthesized types (e.g. <>z__ReadOnlySingleElementList`1 for a `[x]` collection
+                // expression) are emitted into every assembly under the same name; they are not module code.
+                .Where(name => !name.StartsWith('<'))
                 .ToArray();
             violations.AddRange(Failing(
                 Types.InAssembly(EngineSolution.Load(project.Name)).Should().NotHaveDependencyOnAny(otherImplementationTypes),

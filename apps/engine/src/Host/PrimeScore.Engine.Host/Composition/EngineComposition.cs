@@ -23,13 +23,19 @@ internal static class EngineComposition
     public static WebApplicationBuilder AddEngine(this WebApplicationBuilder builder)
     {
         EnginePaths.ApplyDefaultDatabasePath(builder.Configuration, builder.Environment.ContentRootPath);
+        EnginePaths.ApplyDefaultConsensusDirectory(builder.Configuration, builder.Environment.ContentRootPath);
 
         // Serve wwwroot from the project when running from build output in any environment.
         builder.WebHost.UseStaticWebAssets();
         var services = builder.Services;
         services.AddEngineCore(builder.Configuration);
         services.AddApiSecurity(builder.Configuration);
-        services.AddControllers().AddJsonOptions(options => ApiJson.Configure(options.JsonSerializerOptions));
+        services.AddControllers(options =>
+            {
+                options.ModelBinderProviders.Insert(0, new UtcDateTimeOffsetModelBinderProvider());
+                options.Filters.Add<RejectUnreadableParametersFilter>();
+            })
+            .AddJsonOptions(options => ApiJson.Configure(options.JsonSerializerOptions));
         services.AddRazorComponents().AddInteractiveServerComponents();
         services.AddScoped<EngineHealthService>();
         services.AddHostedService<LedgerVerificationScheduler>();

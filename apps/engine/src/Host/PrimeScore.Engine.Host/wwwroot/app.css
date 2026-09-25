@@ -130,6 +130,7 @@ table.data tr.selected td { background: #c5f56a0a; }
 table.data tbody tr:hover td { background: #ffffff05; }
 pre.code { background: #070b11; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: 12px/1.6 var(--mono); color: #cfd8e3; margin: 16px 0 0; }
 pre.code-raw { white-space: pre-wrap; word-break: break-all; }
+.trace { white-space: pre-wrap; font: 13px/1.6 var(--mono); color: var(--text, #e6edf3); background: #070b11; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
 details > summary { cursor: pointer; color: var(--muted, #8b98a8); margin-top: 12px; font-size: 13px; }
 details.panel > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 details.panel[open] > summary { margin-bottom: 14px; }

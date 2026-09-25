@@ -7,4 +7,7 @@
     <ProjectReference Include="..\..\src\Api.Contracts\PrimeScore.Api.Contracts\PrimeScore.Api.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Host\PrimeScore.Engine.Host\PrimeScore.Engine.Host.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Data\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

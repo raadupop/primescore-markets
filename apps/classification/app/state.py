@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from app.config import registry
+from app.models.requests import ReferenceWindow
 from app.registry import IndicatorClass, UnknownSymbolError
 
 
@@ -66,6 +67,24 @@ class AppState:
 state = AppState()
 
 
+def working_window(symbol: str, reference: ReferenceWindow | None) -> RollingWindow:
+    """The window a strategy computes against for one request.
+
+    Without a caller-supplied reference window this is the process-local window
+    (created on first use). With one, it is a transient copy built from the
+    caller's values: process state is neither read nor mutated (ADR-0005).
+    Raises UnknownSymbolError for unregistered symbols in both cases.
+    """
+    if reference is None:
+        return state.get_or_create_window(symbol)
+    entry = registry.get_symbol(symbol)
+    return RollingWindow(
+        indicator_class=entry.indicator_class,
+        values=deque(reference.values),
+        last_update=reference.last_update,
+    )
+
+
 # Re-export so strategy code can `from app.state import UnknownSymbolError`
 # without reaching into app.registry (keeps the "state is the boundary" feel).
-__all__ = ["AppState", "RollingWindow", "UnknownSymbolError", "state"]
+__all__ = ["AppState", "RollingWindow", "UnknownSymbolError", "state", "working_window"]

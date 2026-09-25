@@ -15,7 +15,7 @@ from app.math.temporal import compute_temporal_relevance
 from app.models.requests import ClassifyRequest, MacroeconomicPayload
 from app.models.responses import ClassifyResponse, ScoreType
 from app.registry import IndicatorClass
-from app.state import UnknownSymbolError, state
+from app.state import UnknownSymbolError, working_window
 from app.strategies.base import ClassificationStrategy
 
 _MIN_HISTORY_FOR_RANK = 2
@@ -30,7 +30,7 @@ class MacroeconomicStrategy(ClassificationStrategy):
         signal_time = datetime.fromisoformat(payload.release_timestamp)
 
         try:
-            window = state.get_or_create_window(symbol)
+            window = working_window(symbol, request.reference_window)
         except UnknownSymbolError:
             return _degraded(
                 reason=f"{symbol} not in registry — CLS-009 degraded confidence",

@@ -1,9 +1,11 @@
 @page "/"
+@using PrimeScore.Modules.Classification.Contracts
 @using PrimeScore.Modules.Ingestion.Contracts
 @using PrimeScore.SharedKernel
 @using PrimeScore.SharedKernel.Cqrs
 @inject IQueryHandler<GetObservationSeries, ObservationSeries> SeriesQuery
 @inject IQueryHandler<GetSignal, SignalView?> SignalQuery
+@inject IQueryHandler<GetSignalOutcomes, IReadOnlyDictionary<Guid, AssessmentView>> OutcomeQuery
 @inject IClock Clock
 
 <PageTitle>Overview · PrimeScore Markets</PageTitle>
@@ -53,9 +55,14 @@
                     <ProvenanceBadge Provenance="latest.Provenance" /> ·
                     <a href="ledger/@latest.LedgerSequence">ledger #@latest.LedgerSequence</a>
                 </div>
+                <dl class="kv">
+                    <dt>Assessment of this close</dt>
+                    <dd><AssessmentBadge Outcome="@_outcomes.GetValueOrDefault(latest.SignalId)" /></dd>
+                </dl>
                 <p class="panel-note">
-                    Composite, scenario and decision for this context are not computed yet: classification arrives in milestone M2,
-                    aggregation in M3 and decisions in M4. Nothing is estimated in their place.
+                    The assessment classifies this close against the closes observed before it; it is not a forecast.
+                    Composite, scenario and decision for this context are not computed yet: aggregation arrives in milestone M3
+                    and decisions in M4. Nothing is estimated in their place.
                 </p>
             }
             else
@@ -80,6 +87,7 @@
     ];
 
     private readonly Dictionary<string, SignalView?> _latest = new(StringComparer.Ordinal);
+    private IReadOnlyDictionary<Guid, AssessmentView> _outcomes = new Dictionary<Guid, AssessmentView>();
     private bool _loading = true;
     private string? _error;
 
@@ -97,6 +105,9 @@
                     ? await SignalQuery.HandleAsync(new GetSignal(point.SignalId), CancellationToken.None)
                     : null;
             }
+
+            var ids = _latest.Values.OfType<SignalView>().Select(signal => signal.SignalId).ToArray();
+            _outcomes = await OutcomeQuery.HandleAsync(new GetSignalOutcomes(ids), CancellationToken.None);
         }
         catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException or IOException)
         {

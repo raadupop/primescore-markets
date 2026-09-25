@@ -25,6 +25,7 @@ public sealed class RunningEngine : IAsyncDisposable
 
     private readonly string _workDirectory;
     private readonly List<Process> _processes = [];
+    private Process? _classifier;
     private readonly Dictionary<Role, string> _tokens = new()
     {
         [Role.Read] = RandomToken(),
@@ -139,7 +140,7 @@ public sealed class RunningEngine : IAsyncDisposable
         start.Environment["LOG_LEVEL"] = "WARNING";
         start.Environment["PYTHONUTF8"] = "1";
         start.Environment["PYTHONHASHSEED"] = "0";
-        Launch(start, Path.Combine(_workDirectory, "classifier.log"));
+        _classifier = Launch(start, Path.Combine(_workDirectory, "classifier.log"));
 
         // /health answers 503 until windows are bootstrapped; any HTTP answer means it is up.
         await WaitAsync(ClassifierBase, "health", null, accept: _ => true, Path.Combine(_workDirectory, "classifier.log")).ConfigureAwait(false);
@@ -170,6 +171,11 @@ public sealed class RunningEngine : IAsyncDisposable
         start.Environment["Engine__DatabasePath"] = Path.Combine(_workDirectory, "engine.db");
         start.Environment["Registry__Path"] = RepositoryPaths.Registry;
         start.Environment["Classifier__BaseUrl"] = ClassifierBase.ToString();
+
+        // An empty consensus directory unless a test supplies one: the operator's curated files never leak in.
+        var consensus = Path.Combine(_workDirectory, "consensus");
+        Directory.CreateDirectory(consensus);
+        start.Environment["Consensus__Directory"] = consensus;
         start.Environment["Logging__LogLevel__Default"] = "Warning";
         start.Environment["Auth__ApiTokens__0__Name"] = "acceptance-read";
         start.Environment["Auth__ApiTokens__0__Role"] = "READ";
@@ -190,10 +196,22 @@ public sealed class RunningEngine : IAsyncDisposable
         key.StartsWith("Engine__", StringComparison.OrdinalIgnoreCase)
         || key.StartsWith("Auth__", StringComparison.OrdinalIgnoreCase)
         || key.StartsWith("Fred__", StringComparison.OrdinalIgnoreCase)
+        || key.StartsWith("Consensus__", StringComparison.OrdinalIgnoreCase)
+        || key.StartsWith("Classification__", StringComparison.OrdinalIgnoreCase)
         || key.StartsWith("Classifier__", StringComparison.OrdinalIgnoreCase)
         || key.StartsWith("Registry__", StringComparison.OrdinalIgnoreCase);
 
-    private void Launch(ProcessStartInfo start, string logPath)
+    /// <summary>Stops the classifier process, as an outage would (SRS CLS-004 tests).</summary>
+    public async Task StopClassifierAsync()
+    {
+        if (_classifier is { HasExited: false } classifier)
+        {
+            classifier.Kill(entireProcessTree: true);
+            await classifier.WaitForExitAsync().ConfigureAwait(false);
+        }
+    }
+
+    private Process Launch(ProcessStartInfo start, string logPath)
     {
         var log = new StreamWriter(logPath, append: false, Encoding.UTF8) { AutoFlush = true };
         var process = new Process { StartInfo = start, EnableRaisingEvents = true };
@@ -209,6 +227,7 @@ public sealed class RunningEngine : IAsyncDisposable
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         _processes.Add(process);
+        return process;
     }
 
     private async Task WaitAsync(Uri baseAddress, string path, string? token, Func<HttpStatusCode, bool> accept, string logPath)

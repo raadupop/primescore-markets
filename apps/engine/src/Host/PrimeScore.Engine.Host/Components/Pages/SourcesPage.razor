@@ -1,5 +1,6 @@
 @page "/sources"
 @using PrimeScore.Ledger
+@using PrimeScore.Modules.Classification.Contracts
 @using PrimeScore.Modules.Ingestion.Contracts
 @using PrimeScore.SharedKernel
 @using PrimeScore.SharedKernel.Cqrs
@@ -11,6 +12,9 @@
 @inject IQueryHandler<GetSourceStatus, IReadOnlyList<SourceStatus>> SourceStatusQuery
 @inject ICommandHandler<RequestSourcePull, SourcePullAck> PullCommand
 @inject IClock Clock
+@inject IQueryHandler<GetClassificationSummary, ClassificationSummary> SummaryQuery
+@inject IQueryHandler<GetSignals, SignalPage> SignalQuery
+@inject IQueryHandler<GetConsensusStatus, ConsensusStatus> ConsensusQuery
 
 <PageTitle>Sources and health · PrimeScore Markets</PageTitle>
 
@@ -180,6 +184,124 @@
     }
 </section>
 
+<div class="grid grid-2">
+    <section class="panel" aria-labelledby="classification-title">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">Classification · SRS CLS-001, CLS-004</div>
+                <h2 id="classification-title">Classification coverage</h2>
+            </div>
+            @if (_summary?.LastAssessedAt is { } last)
+            {
+                <span class="status status-muted">last outcome @Fmt.Age(last, Clock.UtcNow)</span>
+            }
+        </div>
+        <p>The latest outcome of every recorded signal. Newly recorded signals are classified as they arrive; anything still pending, awaiting consensus or unreachable is retried every few minutes.</p>
+        @if (_summary?.LastRun is { } run)
+        {
+            <p class="panel-note">
+                Last run @Fmt.Age(run.FinishedAt, Clock.UtcNow) (@(run.FullPass ? "scheduled pass" : "new signals")):
+                @Fmt.Count(run.Classified) classified, @Fmt.Count(run.Fallbacks) fallback(s), @Fmt.Count(run.Unavailable) unavailable.
+                @if (run.BreakerTripped)
+                {
+                    <span class="status status-bad">classifier failed 3 times in a row; @Fmt.Count(run.NotSent) signal(s) not sent</span>
+                }
+            </p>
+        }
+        @if (_summaryError is not null)
+        {
+            <div class="degraded"><strong>Classification coverage could not be read.</strong> @_summaryError</div>
+        }
+        else if (_summary is null)
+        {
+            <div class="loading">Loading classification coverage…</div>
+        }
+        else if (_summary.Outcomes.Count == 0)
+        {
+            <EmptyState Title="Nothing classified yet">No signal has a classification outcome. Record signals first, or check that the classifier is reachable above.</EmptyState>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th scope="col">Category</th><th scope="col">Outcome</th><th scope="col" class="num">Signals</th></tr></thead>
+                    <tbody>
+                        @foreach (var count in _summary.Outcomes)
+                        {
+                            <tr>
+                                <td>@Fmt.Category(count.Category)</td>
+                                <td>@OutcomeLabel(count.Outcome)</td>
+                                <td class="num">@Fmt.Count(count.Signals)</td>
+                            </tr>
+                        }
+                        @foreach (var (category, pending) in _pending.Where(pair => pair.Value > 0))
+                        {
+                            <tr>
+                                <td>@Fmt.Category(category)</td>
+                                <td><span class="status status-warn">pending (no outcome yet)</span></td>
+                                <td class="num">@Fmt.Count(pending)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="panel" aria-labelledby="consensus-title">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">Macro prints</div>
+                <h2 id="consensus-title">Consensus files</h2>
+            </div>
+        </div>
+        <p>A macro print is classified only against a sourced consensus row for its release date (<span class="mono">data/consensus/&lt;SYMBOL&gt;.csv</span>). Without one it stays <strong>awaiting consensus</strong>; no expectation is invented.</p>
+        @if (_consensus is null)
+        {
+            <div class="loading">Loading consensus files…</div>
+        }
+        else
+        {
+            <p class="panel-note mono">@(_consensus.Directory ?? "no consensus directory configured")</p>
+            @if (_consensus.Files.Count == 0)
+            {
+                <EmptyState Title="No consensus files">No macro print can be classified until a sourced consensus file is added.</EmptyState>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th scope="col">Indicator</th><th scope="col" class="num">Sourced rows</th><th scope="col">Rejected rows</th></tr></thead>
+                        <tbody>
+                            @foreach (var file in _consensus.Files)
+                            {
+                                <tr>
+                                    <td class="mono">@file.Indicator</td>
+                                    <td class="num">@Fmt.Count(file.Rows)</td>
+                                    <td>
+                                        @if (file.Error is { } fileError)
+                                        {
+                                            <span class="status status-bad" title="@fileError">unreadable</span>
+                                        }
+                                        @if (file.RejectedRows.Count == 0)
+                                        {
+                                            <span class="status status-muted">none</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="status status-warn" title="@string.Join(" | ", file.RejectedRows)">@file.RejectedRows.Count rejected</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </section>
+</div>
+
 <section class="panel" aria-labelledby="registry-title">
     <div class="panel-head">
         <div>
@@ -236,6 +358,11 @@
 
 @code {
     private IReadOnlyList<SourceStatus>? _sources;
+    private ClassificationSummary? _summary;
+    private string? _summaryError;
+    private ConsensusStatus? _consensus;
+    private DateTimeOffset? _summaryLoadedAt;
+    private Dictionary<SourceCategory, long> _pending = [];
     private DateTimeOffset? _sourcesAsOf;
     private string? _sourcesError;
     private string? _pullMessage;
@@ -276,9 +403,40 @@
         }
     }
 
+    private static string OutcomeLabel(string outcome) => outcome switch
+    {
+        "assessed" => "assessed",
+        "fallback" => "fallback to last assessment (CLS-004)",
+        _ => Enum.TryParse<UnavailableReason>(outcome, out var reason) ? AssessmentBadge.Reason(reason) : outcome,
+    };
+
     /// <summary>A failed refresh keeps the last status on screen, flagged with its age; it never breaks the circuit.</summary>
     private async Task LoadSourcesAsync()
     {
+        // Coverage scans every outcome; refresh it every 30 s rather than with the 5 s adapter status.
+        if (_summaryLoadedAt is not { } loaded || Clock.UtcNow - loaded >= TimeSpan.FromSeconds(30))
+        {
+            try
+            {
+                _summary = await SummaryQuery.HandleAsync(new GetClassificationSummary(), CancellationToken.None);
+                _consensus = await ConsensusQuery.HandleAsync(new GetConsensusStatus(), CancellationToken.None);
+                var pending = new Dictionary<SourceCategory, long>();
+                foreach (var category in Enum.GetValues<SourceCategory>())
+                {
+                    var recorded = (await SignalQuery.HandleAsync(new GetSignals(new SignalFilter(Category: category, Take: 1)), CancellationToken.None)).Total;
+                    pending[category] = recorded - _summary.Outcomes.Where(count => count.Category == category).Sum(count => (long)count.Signals);
+                }
+
+                _pending = pending;
+                _summaryError = null;
+            }
+            catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException or IOException)
+            {
+                _summaryError = exception.Message;
+            }
+
+            _summaryLoadedAt = Clock.UtcNow;
+        }
         try
         {
             _sources = await SourceStatusQuery.HandleAsync(new GetSourceStatus(), CancellationToken.None);

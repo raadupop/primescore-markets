@@ -1,9 +1,11 @@
 @page "/tape"
+@using PrimeScore.Modules.Classification.Contracts
 @using PrimeScore.Modules.Ingestion.Contracts
 @using PrimeScore.SharedKernel
 @using PrimeScore.SharedKernel.Cqrs
 @inject IQueryHandler<GetSignals, SignalPage> SignalQuery
 @inject IQueryHandler<GetRejections, IReadOnlyList<RejectionView>> RejectionQuery
+@inject IQueryHandler<GetSignalOutcomes, IReadOnlyDictionary<Guid, AssessmentView>> OutcomeQuery
 
 <PageTitle>Signal tape · PrimeScore Markets</PageTitle>
 
@@ -12,8 +14,8 @@
         <div class="eyebrow">Signal tape</div>
         <h1>Observed signals</h1>
         <p>
-            Every recorded signal in the four source categories, newest observation first, with its provenance and ledger entry.
-            <strong>As of</strong> shows only what had been observed at that moment (SRS SIG-004).
+            Every recorded signal in the four source categories, newest observation first, with its provenance, its
+            classification and their ledger entries. <strong>As of</strong> shows only what had been observed at that moment (SRS SIG-004).
         </p>
     </div>
 </div>
@@ -65,7 +67,7 @@ else
 {
     <p class="panel-note">
         @Fmt.Count(_page.Total) signal(s) · showing @(_skip + 1)–@(_skip + _page.Signals.Count).
-        Classification of recorded signals arrives in milestone M2; until then no assessment is shown.
+        Assessment: signed severity · certainty, a statistical classification of each observation against the history before it, not a forecast.
     </p>
     <div class="table-wrap">
         <table class="data">
@@ -75,6 +77,7 @@ else
                     <th scope="col">Category</th>
                     <th scope="col">Instrument</th>
                     <th scope="col">Value</th>
+                    <th scope="col">Assessment</th>
                     <th scope="col">Source</th>
                     <th scope="col">Recorded</th>
                     <th scope="col">Ledger</th>
@@ -88,6 +91,7 @@ else
                         <td>@Fmt.Category(signal.Category)</td>
                         <td class="mono">@signal.Instrument</td>
                         <td class="num">@Fmt.Number(signal.Value, 4)</td>
+                        <td><AssessmentBadge Outcome="@Outcome(signal)" /></td>
                         <td><ProvenanceBadge Provenance="signal.Provenance" /></td>
                         <td class="mono">@Fmt.Utc(signal.RecordedAt)</td>
                         <td class="mono"><a href="ledger/@signal.LedgerSequence">#@signal.LedgerSequence</a></td>
@@ -115,6 +119,7 @@ else
                 <dt>Signal id</dt><dd>@detail.SignalId</dd>
                 <dt>Correlation id</dt><dd>@detail.CorrelationId</dd>
                 <dt>Source identifier</dt><dd>@detail.SourceIdentifier</dd>
+                <dt>Series</dt><dd>@detail.Variant</dd>
                 <dt>Payload type</dt><dd>@detail.PayloadType</dd>
                 <dt>Provider</dt><dd>@detail.Provenance.Provider</dd>
                 @if (detail.Provenance.Url is { } url)
@@ -141,6 +146,7 @@ else
             </dl>
             <pre class="code">@Fmt.Json(detail.Payload)</pre>
         </section>
+        <AssessmentDetail Outcome="@Outcome(detail)" />
     }
 }
 
@@ -181,6 +187,7 @@ else
     private DateTime? _asOf;
     private int _skip;
     private SignalPage? _page;
+    private IReadOnlyDictionary<Guid, AssessmentView> _outcomes = new Dictionary<Guid, AssessmentView>();
     private SignalView? _selected;
     private IReadOnlyList<RejectionView>? _rejections;
     private string? _error;
@@ -226,12 +233,15 @@ else
                 Skip: _skip,
                 Take: PageSize);
             _page = await SignalQuery.HandleAsync(new GetSignals(filter), CancellationToken.None);
+            _outcomes = await OutcomeQuery.HandleAsync(new GetSignalOutcomes(_page.Signals.Select(signal => signal.SignalId).ToArray()), CancellationToken.None);
         }
         catch (Microsoft.Data.Sqlite.SqliteException exception)
         {
             _error = exception.Message;
         }
     }
+
+    private AssessmentView? Outcome(SignalView signal) => _outcomes.GetValueOrDefault(signal.SignalId);
 
     private static DateTimeOffset? Utc(DateTime? value) =>
         value is { } local ? new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), TimeSpan.Zero) : null;

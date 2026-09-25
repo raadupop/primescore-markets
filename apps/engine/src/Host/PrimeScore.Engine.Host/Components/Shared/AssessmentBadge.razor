@@ -1,0 +1,59 @@
+@using PrimeScore.Modules.Classification.Contracts
+
+@* One signal's classification outcome in a table cell: severity and certainty, or why there is none. *@
+@if (Outcome is null)
+{
+    <span class="status status-muted" title="Not classified yet; the next classification run picks it up.">pending</span>
+}
+else if (!Outcome.Available)
+{
+    <span class="status @(Outcome.Reason is UnavailableReason.ClassifierUnreachable or UnavailableReason.InvalidResponse ? "status-bad" : "status-muted")"
+          title="@Outcome.Detail">@Reason(Outcome.Reason)</span>
+}
+else
+{
+    <span class="mono" title="Signed severity in [−1, 1] and certainty in [0, 1]: a statistical classification of the observation, not a forecast.">
+        @Fmt.Signed(Outcome.Score, 2) · @Fmt.Number(Outcome.Certainty, 2)
+    </span>
+    @if (Outcome.IsFallback)
+    {
+        <span class="status status-warn" title="The classifier gave no valid answer; the last real assessment was reused (SRS CLS-004).">fallback · @Stale(Outcome.StalenessSeconds)</span>
+    }
+    @foreach (var flag in Outcome.Flags)
+    {
+        <span class="status status-warn" title="@FlagTitle(flag)">@flag.Replace('_', ' ')</span>
+    }
+}
+
+@code {
+    [Parameter]
+    public AssessmentView? Outcome { get; set; }
+
+    public static string Reason(UnavailableReason? reason) => reason switch
+    {
+        UnavailableReason.AwaitingConsensus => "awaiting consensus",
+        UnavailableReason.RouteNotImplemented => "route not in v1",
+        UnavailableReason.ClassifierUnreachable => "classifier unreachable",
+        UnavailableReason.InvalidResponse => "invalid classifier answer",
+        UnavailableReason.ClassifierRejected => "rejected by classifier",
+        UnavailableReason.UnknownIndicator => "not in the registry",
+        _ => "not classified",
+    };
+
+    private static string FlagTitle(string flag) => flag switch
+    {
+        "insufficient_history" => "Too little earlier history to rank against; severity and certainty are 0 (SRS CLS-009).",
+        "window_degenerate" => "The history window has a single distinct value; certainty is reduced (SRS CLS-009).",
+        "unknown_indicator" => "The instrument is not in the indicator registry; score 0 (SRS CLS-009).",
+        "fit_rejected" => "The parametric fit was rejected; certainty is reduced.",
+        _ => "Classifier flag",
+    };
+
+    public static string Stale(double? seconds) => seconds switch
+    {
+        null => "age unknown",
+        < 3600 => $"{seconds.Value / 60:0} min old",
+        < 172800 => $"{seconds.Value / 3600:0} h old",
+        _ => $"{seconds.Value / 86400:0} d old",
+    };
+}

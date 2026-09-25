@@ -70,6 +70,11 @@ Reference windows are process-local and `/classify` appends each observation.
 Independent replay runs must restore their snapshots. Multiple workers do not
 share history; restart discards it. Registry reload requires restart.
 
+The .NET engine does not use process windows: it owns history in its ledger and
+sends each request its own `reference_window`
+([ADR-0005](doc/adr/0005-caller-supplied-reference-window.md)). The classifier
+cannot verify that a supplied window is genuine or point in time.
+
 Historical anchors cover VIX, OVX, CPI and initial claims; the remaining registry
 symbols lack independent anchors. Shared class parameters do not demonstrate
 equivalent behavior across class members.

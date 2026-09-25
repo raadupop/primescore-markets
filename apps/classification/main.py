@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="PrimeScore AI Classification Service",
-    version="0.1.0",
+    version="0.2.0",
     description="HTTP classification engine for financial signal events.",
     lifespan=lifespan,
 )
@@ -105,8 +105,12 @@ async def health() -> JSONResponse:
 
 @app.post("/classify", response_model=ClassifyResponse)
 async def classify(request: ClassifyRequest) -> ClassifyResponse:
-    """Main classification endpoint."""
-    if not state.is_ready:
+    """Main classification endpoint.
+
+    Readiness concerns the process-local windows; a request that carries its own
+    reference window does not use them and is served while bootstrapping (ADR-0005).
+    """
+    if not state.is_ready and request.reference_window is None:
         return JSONResponse(  # type: ignore[return-value]
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"detail": "Service is bootstrapping — not ready yet."},

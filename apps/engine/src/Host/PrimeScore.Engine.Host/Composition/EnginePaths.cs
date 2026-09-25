@@ -27,6 +27,21 @@ internal static class EnginePaths
         configuration["Engine:DatabasePath"] = Path.Combine(engineRoot, "var", "engine.db");
     }
 
+    /// <summary><c>Consensus:Directory</c> when configured; otherwise <c>apps/engine/data/consensus</c> (brief §5).</summary>
+    public static void ApplyDefaultConsensusDirectory(IConfigurationManager configuration, string contentRoot)
+    {
+        if (!string.IsNullOrWhiteSpace(configuration["Consensus:Directory"]))
+        {
+            return;
+        }
+
+        var engineRoot = FindUpwards(contentRoot, SolutionFile) ?? FindUpwards(AppContext.BaseDirectory, SolutionFile);
+        if (engineRoot is not null)
+        {
+            configuration["Consensus:Directory"] = Path.Combine(engineRoot, "data", "consensus");
+        }
+    }
+
     private static string? FindUpwards(string start, string fileName)
     {
         for (var directory = new DirectoryInfo(start); directory is not null; directory = directory.Parent)

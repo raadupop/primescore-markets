@@ -31,6 +31,8 @@ public static class IngestionModule
         services.AddScoped<IQueryHandler<GetSignal, SignalView?>, GetSignalHandler>();
         services.AddScoped<IQueryHandler<GetObservationSeries, ObservationSeries>, GetObservationSeriesHandler>();
         services.AddScoped<IQueryHandler<GetSignalsInObservationOrder, SignalPage>, GetSignalsInObservationOrderHandler>();
+        services.AddScoped<IQueryHandler<GetSignalsById, SignalPage>, GetSignalsByIdHandler>();
+        services.AddScoped<IQueryHandler<GetSignalKeysInObservationOrder, IReadOnlyList<SignalKey>>, GetSignalKeysInObservationOrderHandler>();
         services.AddScoped<IQueryHandler<GetRejections, IReadOnlyList<RejectionView>>, GetRejectionsHandler>();
         services.AddScoped<IQueryHandler<GetSourceStatus, IReadOnlyList<SourceStatus>>, GetSourceStatusHandler>();
 

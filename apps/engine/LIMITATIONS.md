@@ -29,3 +29,15 @@ Limits that hold even when every check passes. Architecture and ledger limits ar
 - The `fred:` source prefix is reserved for the engine's FRED adapter; API submissions using it are rejected. A macro print names its registry symbol directly (`CPI_YOY`) or after a source name (`econ:CPI_YOY`).
 - A classifier reference window is one instrument, one category and one variant, with one point per New York date: where sources overlap on a date, the first recorded wins.
 - Incremental FRED pulls always ask FRED; only a backfill reuses a cached response (up to `Fred:CacheHours`), and its provenance carries the time the response was fetched.
+
+## Classification (M2)
+
+- Only MARKET_DATA signals and macro prints with a sourced consensus row are classified. Geopolitical events and cross-asset flows (including the basket prices) are recorded as **route not in v1**: the classifier answers 501 for those categories, and change #2 (cross-asset) is an open operator decision.
+- No consensus source has been chosen yet, so `data/consensus/*.csv` hold headers only and every macro print is **awaiting consensus**. A row needs its consensus source, URL and retrieval time; rows without them are rejected and listed on Sources and health.
+- A signal is classified against the values recorded when it was classified. A value that arrives later for an earlier date does not change assessments already recorded.
+- CPI YoY is derived from the seasonally adjusted index; most published consensus figures refer to the unadjusted headline, so a consensus row can differ from the print's basis by about 0.1 percentage point.
+- Date-time query parameters without an offset (`as_of=2026-02-27T21:15:00`) are read as UTC.
+- A date-time query parameter that cannot be read (`as_of=yesterday`) is a 400 with the parameter named, where it would otherwise have been ignored and current data returned. The published contract does not list this 400 yet; the amendment is an open operator question.
+- `GET /classification/assessments` returns every match in one response, newest observation first, without paging. At v1 volumes (a few thousand signals) that is a few megabytes at most; paging is a contract change.
+- Free text (`UNSTRUCTURED`) and macro prints without a numeric value need the language-model route (SRS CLS-003), which is not in v1. They are recorded as **route not in v1** without calling the classifier.
+- The classifier is called one signal at a time. After three consecutive failures (no answer or an invalid one) it is not called again in that run; the remaining signals get their CLS-004 outcome locally and are retried on the next run.

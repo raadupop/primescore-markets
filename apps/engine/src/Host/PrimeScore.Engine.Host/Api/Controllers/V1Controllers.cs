@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PrimeScore.Engine.Host.Security;
+using PrimeScore.Modules.Classification.Contracts;
+using PrimeScore.SharedKernel.Cqrs;
 using PrimeScore.Modules.Decision.Contracts;
 using PrimeScore.Modules.Exits.Contracts;
 using PrimeScore.Modules.Positions.Contracts;
@@ -12,7 +14,8 @@ namespace PrimeScore.Engine.Host.Api.Controllers;
 // v1 endpoints are implemented milestone by milestone; until then each states which one.
 
 [Authorize(Policy = ApiPolicies.Read)]
-public sealed class ClassificationController : Dto.ClassificationControllerBase
+public sealed class ClassificationController(
+    IQueryHandler<GetAssessments, IReadOnlyList<AssessmentView>> assessments) : Dto.ClassificationControllerBase
 {
     public override Task<ActionResult<Dto.CompositeScore>> GetCompositeScore(
         DateTimeOffset? as_of,
@@ -20,11 +23,20 @@ public sealed class ClassificationController : Dto.ClassificationControllerBase
         CancellationToken cancellationToken = default) =>
         Task.FromResult<ActionResult<Dto.CompositeScore>>(ApiResults.NotYetBuilt("M3", "CLS-002"));
 
-    public override Task<ActionResult<ICollection<Dto.SignalAssessment>>> GetAssessments(
+    /// <summary>
+    /// The latest assessment of each signal; <c>as_of</c> filters on the signal's observation time
+    /// (SRS SIG-004). Signals without an assessment (awaiting consensus, route not implemented,
+    /// classifier unavailable without a fallback) are not listed.
+    /// </summary>
+    public override async Task<ActionResult<ICollection<Dto.SignalAssessment>>> GetAssessments(
         Guid? signal_id,
         DateTimeOffset? as_of,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult<ActionResult<ICollection<Dto.SignalAssessment>>>(ApiResults.NotYetBuilt("M2", "CLS-001"));
+        CancellationToken cancellationToken = default)
+    {
+        // The contract has no paging: every matching assessment is returned, filtered in the database.
+        var views = await assessments.HandleAsync(new GetAssessments(signal_id, as_of, Take: null, AvailableOnly: true), cancellationToken).ConfigureAwait(false);
+        return views.Select(AssessmentDtos.From).ToList();
+    }
 
     public override Task<ActionResult<Dto.IvDislocation>> GetDislocation(
         DateTimeOffset? as_of,
