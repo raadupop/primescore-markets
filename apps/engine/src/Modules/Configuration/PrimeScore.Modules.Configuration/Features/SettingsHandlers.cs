@@ -132,6 +132,61 @@ internal sealed class SetDislocationSettingsHandler(SettingsWriter settings) : I
     }
 }
 
+/// <summary>The contract's <c>PUT /config/deploy-conditions</c> (SRS DEC-001, NFR-003).</summary>
+internal sealed class SetDeployConditionsHandler(SettingsWriter settings) : ICommandHandler<SetDeployConditions, SettingsChangeAck>
+{
+    public Task<SettingsChangeAck> HandleAsync(SetDeployConditions command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        return settings.ChangeAsync(
+            current =>
+            {
+                var errors = new List<string>();
+                if (command.Conditions.Count == 0)
+                {
+                    errors.Add("conditions: at least one condition is required");
+                }
+
+                foreach (var condition in command.Conditions)
+                {
+                    var message = (condition.Name ?? "").Trim() switch
+                    {
+                        DeployConditionNames.Dislocation =>
+                            "the dislocation threshold is set per context through PUT /config/dislocation-threshold",
+                        DeployConditionNames.Cooldown or "risk_budget" or "cooldown" =>
+                            "cooldowns and risk budgets are Milestone B (SRS RSK-001); v1 always evaluates no active cooldown",
+                        _ => null,
+                    };
+                    if (message is not null)
+                    {
+                        errors.Add($"conditions.{condition.Name}: {message}");
+                    }
+                }
+
+                if (errors.Count > 0)
+                {
+                    return (null, errors);
+                }
+
+                var updated = (current.DeployConditions ?? []).ToList();
+                foreach (var condition in command.Conditions)
+                {
+                    var trimmed = condition with { Name = (condition.Name ?? "").Trim(), Operator = (condition.Operator ?? "").Trim() };
+                    updated.RemoveAll(existing => existing.Name == trimmed.Name);
+                    updated.Add(trimmed);
+                }
+
+                var ordered = updated
+                    .OrderBy(condition => DeployConditionNames.Configurable.ToList().IndexOf(condition.Name) is var index and >= 0 ? index : int.MaxValue)
+                    .ToArray();
+                return (current with { DeployConditions = ordered }, errors);
+            },
+            "Deploy conditions set through the API",
+            command.ChangedBy,
+            cancellationToken);
+    }
+}
+
 internal sealed class ReplaceSettingsHandler(SettingsWriter settings) : ICommandHandler<ReplaceSettings, SettingsChangeAck>
 {
     public Task<SettingsChangeAck> HandleAsync(ReplaceSettings command, CancellationToken cancellationToken)

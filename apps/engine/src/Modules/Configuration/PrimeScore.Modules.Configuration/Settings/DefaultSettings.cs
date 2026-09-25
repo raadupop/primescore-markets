@@ -64,5 +64,15 @@ internal static class DefaultSettings
                 new SensitivityMap(1.0, 0.75, 0.5),
                 new RegimeRule(RegimeMode.Percentile, 0.30, 0.70, null, null)),
         ],
-        Calibration: Uncalibrated);
+        Calibration: Uncalibrated,
+        DeployConditions: Conditions());
+
+    /// <summary>Brief §9.6: |composite| ≥ 0.5, at least one contributing category, top signal certainty ≥ 0.5, newest contributing observation at most 2 trading days old.</summary>
+    public static IReadOnlyList<DeployCondition> Conditions() =>
+    [
+        new(DeployConditionNames.CompositeScore, ">=", 0.5),
+        new(DeployConditionNames.ContributingSources, ">=", 1),
+        new(DeployConditionNames.TopSignalCertainty, ">=", 0.5),
+        new(DeployConditionNames.NewestObservationAge, "<=", 2),
+    ];
 }

@@ -1,10 +1,12 @@
 @page "/history"
 @using PrimeScore.Modules.Classification.Contracts
 @using PrimeScore.Modules.Configuration.Contracts
+@using PrimeScore.Modules.Decision.Contracts
 @using PrimeScore.SharedKernel
 @using PrimeScore.SharedKernel.Cqrs
 @inject IQueryHandler<GetCompositeHistory, IReadOnlyList<DailyAggregate>> HistoryQuery
 @inject IQueryHandler<GetActiveSettings, SettingsVersion> SettingsQuery
+@inject IQueryHandler<GetDecisionOutcomes, IReadOnlyList<DecisionOutcomePoint>> DecisionQuery
 @inject IClock Clock
 
 <PageTitle>History · PrimeScore Markets</PageTitle>
@@ -63,9 +65,9 @@ else
                 <div class="kicker">@Context context · @Fmt.Count(_days.Count) trading days · @_days[0].Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) to @_days[^1].Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</div>
                 <h2>Composite score and dislocation</h2>
             </div>
-            <span class="status status-muted" title="Decisions are recorded from milestone M4.">no decision markers yet</span>
+            <span class="status" title="Days whose last decision was DEPLOY.">@_markers.Count DEPLOY day(s)</span>
         </div>
-        <SeriesChart Dates="_dates" Panels="_panels" Runs="_runs" Extras="_extras"
+        <SeriesChart Dates="_dates" Panels="_panels" Runs="_runs" Extras="_extras" Markers="_markers" MarkerLabel="DEPLOY decision"
                      AriaLabel="@($"Daily composite score and dislocation for the {Context} context")"
                      Footnote="@_footnote" />
     </section>
@@ -78,6 +80,7 @@ else
     private IReadOnlyList<SeriesPanel> _panels = [];
     private IReadOnlyList<ShadedRun> _runs = [];
     private IReadOnlyList<ExtraColumn> _extras = [];
+    private IReadOnlyList<int> _markers = [];
     private string? _footnote;
     private string? _error;
 
@@ -113,8 +116,9 @@ else
             var years = int.Parse(Range, CultureInfo.InvariantCulture);
             var from = years > 0 ? Clock.UtcNow.AddYears(-years) : (DateTimeOffset?)null;
             var days = await HistoryQuery.HandleAsync(new GetCompositeHistory(Context, from), CancellationToken.None);
+            var decisions = await DecisionQuery.HandleAsync(new GetDecisionOutcomes(Context, from), CancellationToken.None);
             var threshold = _contexts.FirstOrDefault(context => context.Name == Context)?.DislocationThreshold;
-            Build(days, threshold);
+            Build(days, threshold, decisions);
             _days = days;
         }
         catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException or FormatException)
@@ -123,8 +127,12 @@ else
         }
     }
 
-    private void Build(IReadOnlyList<DailyAggregate> days, double? threshold)
+    private void Build(IReadOnlyList<DailyAggregate> days, double? threshold, IReadOnlyList<DecisionOutcomePoint> decisions)
     {
+        // The day's last decision, matching the day's last composite shown on the chart.
+        var lastDecision = decisions
+            .GroupBy(decision => SharedKernel.MarketTime.NewYorkDate(decision.AsOf))
+            .ToDictionary(day => day.Key, day => day.MaxBy(decision => (decision.AsOf, decision.LedgerSequence))!);
         _dates = days.Select(day => day.Date).ToArray();
         var references = threshold is { } active
             ? new[] { new ReferenceLine(active, $"active threshold ±{Fmt.Number(active, 2)}"), new ReferenceLine(-active, "") }
@@ -140,8 +148,12 @@ else
             new ExtraColumn("IV observed", index => days[index].MarketObservedIv is { } iv ? Fmt.Number(iv, 2) : "—"),
             new ExtraColumn("Regime · k", index => days[index].Regime is { } regime ? $"{regime.Replace('_', ' ')} · {Fmt.Number(days[index].SensitivityFactor, 2)}" : "—"),
             new ExtraColumn("Breached", index => days[index].ThresholdBreached switch { true => "yes", false => "no", null => "—" }),
+            new ExtraColumn("Decision", index => lastDecision.TryGetValue(days[index].Date, out var decision) ? (decision.Outcome == DecisionOutcome.Deploy ? "DEPLOY" : "IDLE") : "—"),
             new ExtraColumn("Config", index => $"v{days[index].ConfigVersion} · {days[index].WeightingSchemeId}"),
         ];
+        _markers = Enumerable.Range(0, days.Count)
+            .Where(index => lastDecision.TryGetValue(days[index].Date, out var decision) && decision.Outcome == DecisionOutcome.Deploy)
+            .ToArray();
         var versions = days.Select(day => day.ConfigVersion).Distinct().Count();
         _footnote = versions > 1
             ? $"{versions} configuration versions over this range; each point used the version in force when it was recorded. Dashed lines: the active threshold (breached by magnitude)."

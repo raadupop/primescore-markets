@@ -32,7 +32,7 @@ internal sealed class ClassificationGate : IDisposable
 /// <item>Three consecutive failures (no answer or an invalid one) stop calls for the rest of the run; the remaining
 /// signals still get their CLS-004 outcome locally. An unchanged outcome is not recorded again.</item>
 /// <item>The scheduled pass takes the gate one page at a time, so a newly recorded batch never waits for a whole pass.</item>
-/// <item>Composites and dislocations follow, also a page at a time (ADR-0004 §7).</item>
+/// <item>Composites and dislocations follow, also a page at a time (ADR-0004 §7); then <see cref="AggregatesRecorded"/> starts the decision stage.</item>
 /// </list>
 /// </summary>
 internal sealed partial class ClassificationRunner(
@@ -43,6 +43,7 @@ internal sealed partial class ClassificationRunner(
     ClassificationReadStore reads,
     ILedger ledger,
     ClassificationGate gate,
+    SharedKernel.Messaging.IIntegrationEventPublisher publisher,
     IClock clock,
     ILogger<ClassificationRunner> logger)
 {
@@ -95,6 +96,10 @@ internal sealed partial class ClassificationRunner(
         }
 
         gate.LastRun = new ClassificationRunView(clock.UtcNow, only is null, tally.Classified, tally.Fallbacks, tally.Unavailable, tally.NotSent, tally.Breaker, recorded);
+
+        // The decision stage follows (brief §6); it catches up from its own cursor, so a pass
+        // without new composites still lets it record anything left pending.
+        await publisher.PublishAsync(new AggregatesRecorded(recorded, CorrelationId.New()), cancellationToken).ConfigureAwait(false);
         return new ClassifyPendingAck(tally.Classified, tally.Fallbacks, tally.Unavailable, tally.NotSent, recorded);
     }
 

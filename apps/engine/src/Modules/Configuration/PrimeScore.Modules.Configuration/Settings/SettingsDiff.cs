@@ -48,7 +48,8 @@ internal static class SettingsDiff
             case null:
                 break;
             default:
-                leaves[path] = node.ToJsonString();
+                // The canonical encoder keeps operators such as ">=" readable (the default escapes them).
+                leaves[path] = node.ToJsonString(CanonicalJson.SerializerOptions);
                 break;
         }
     }

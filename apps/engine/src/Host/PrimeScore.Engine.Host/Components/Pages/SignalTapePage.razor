@@ -1,11 +1,14 @@
 @page "/tape"
 @using PrimeScore.Modules.Classification.Contracts
+@using PrimeScore.Modules.Decision.Contracts
 @using PrimeScore.Modules.Ingestion.Contracts
 @using PrimeScore.SharedKernel
 @using PrimeScore.SharedKernel.Cqrs
 @inject IQueryHandler<GetSignals, SignalPage> SignalQuery
 @inject IQueryHandler<GetRejections, IReadOnlyList<RejectionView>> RejectionQuery
 @inject IQueryHandler<GetSignalOutcomes, IReadOnlyDictionary<Guid, AssessmentView>> OutcomeQuery
+@inject IQueryHandler<GetSignal, SignalView?> SignalByIdQuery
+@inject IQueryHandler<GetDecisions, IReadOnlyList<DecisionView>> DecisionQuery
 
 <PageTitle>Signal tape · PrimeScore Markets</PageTitle>
 
@@ -86,7 +89,7 @@ else
             <tbody>
                 @foreach (var signal in _page.Signals)
                 {
-                    <tr class="@(signal.SignalId == _selected?.SignalId ? "selected" : "")" @onclick="() => _selected = signal" style="cursor:pointer">
+                    <tr class="@(signal.SignalId == _selected?.SignalId ? "selected" : "")" @onclick="() => SelectAsync(signal)" style="cursor:pointer">
                         <td class="mono">@Fmt.Utc(signal.ObservedAt)</td>
                         <td>@Fmt.Category(signal.Category)</td>
                         <td class="mono">@signal.Instrument</td>
@@ -146,7 +149,49 @@ else
             </dl>
             <pre class="code">@Fmt.Json(detail.Payload)</pre>
         </section>
+        @if (Guid.TryParse(AssessmentParameter, out var used) && Outcome(detail) is { } latest && latest.AssessmentId != used)
+        {
+            <div class="degraded">
+                <strong>The decision used an earlier outcome of this signal.</strong>
+                It read assessment <span class="mono">@used</span>; shown below is the signal's latest outcome (for example a real
+                classification that replaced a CLS-004 fallback).
+            </div>
+        }
         <AssessmentDetail Outcome="@Outcome(detail)" />
+        <section class="panel" aria-label="Decisions this signal triggered">
+            <div class="panel-head">
+                <div>
+                    <div class="kicker">Same correlation id · SRS OBS-001</div>
+                    <h2>Decisions this signal triggered</h2>
+                </div>
+            </div>
+            @if (_selectedDecisions.Count == 0)
+            {
+                <p class="panel-note">
+                    None. A decision follows a dislocation, which needs a classified signal of a context member and an observed reference level.
+                </p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Context</th><th>Outcome</th><th>Composite</th><th>Dislocation</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var decision in _selectedDecisions)
+                            {
+                                <tr>
+                                    <td>@decision.Context</td>
+                                    <td><DecisionBadge Outcome="decision.Outcome" /></td>
+                                    <td class="num">@Fmt.Signed(decision.CompositeScore, 4)</td>
+                                    <td class="num">@Fmt.Signed(decision.DislocationValue, 2)</td>
+                                    <td><a href="decisions/@decision.DecisionId">Explore</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
     }
 }
 
@@ -189,6 +234,15 @@ else
     private SignalPage? _page;
     private IReadOnlyDictionary<Guid, AssessmentView> _outcomes = new Dictionary<Guid, AssessmentView>();
     private SignalView? _selected;
+    private IReadOnlyList<DecisionView> _selectedDecisions = [];
+
+    /// <summary>Opens one signal's detail, e.g. from a decision's contributing signals.</summary>
+    [SupplyParameterFromQuery(Name = "signal")]
+    public string? SignalParameter { get; set; }
+
+    /// <summary>The assessment a decision used, to say when the signal's outcome has changed since.</summary>
+    [SupplyParameterFromQuery(Name = "assessment")]
+    public string? AssessmentParameter { get; set; }
     private IReadOnlyList<RejectionView>? _rejections;
     private string? _error;
 
@@ -198,6 +252,38 @@ else
     {
         await LoadAsync();
         _rejections = await RejectionQuery.HandleAsync(new GetRejections(20), CancellationToken.None);
+        if (Guid.TryParse(SignalParameter, out var id))
+        {
+            if (await SignalByIdQuery.HandleAsync(new GetSignal(id), CancellationToken.None) is { } signal)
+            {
+                await SelectAsync(signal);
+            }
+            else
+            {
+                _error = $"No signal {id} is recorded.";
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(SignalParameter))
+        {
+            _error = "The signal id in the address is not a UUID.";
+        }
+    }
+
+    private async Task SelectAsync(SignalView signal)
+    {
+        _selected = signal;
+        if (!_outcomes.ContainsKey(signal.SignalId))
+        {
+            var merged = new Dictionary<Guid, AssessmentView>(_outcomes);
+            foreach (var (id, outcome) in await OutcomeQuery.HandleAsync(new GetSignalOutcomes([signal.SignalId]), CancellationToken.None))
+            {
+                merged[id] = outcome;
+            }
+
+            _outcomes = merged;
+        }
+
+        _selectedDecisions = await DecisionQuery.HandleAsync(new GetDecisions(CorrelationId: signal.CorrelationId, Take: null), CancellationToken.None);
     }
 
     private Task ApplyAsync()

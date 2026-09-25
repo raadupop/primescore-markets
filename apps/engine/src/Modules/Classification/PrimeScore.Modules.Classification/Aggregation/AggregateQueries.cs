@@ -96,6 +96,53 @@ internal sealed class GetCompositeHistoryHandler(ClassificationReadStore reads) 
     }
 }
 
+internal sealed class GetAggregatesAfterHandler(ClassificationReadStore reads) : IQueryHandler<GetAggregatesAfter, IReadOnlyList<AggregateRecord>>
+{
+    public async Task<IReadOnlyList<AggregateRecord>> HandleAsync(GetAggregatesAfter query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        await using var db = reads.Open();
+        var dislocations = await db.Dislocations
+            .Where(dislocation => dislocation.Sequence > query.AfterSequence)
+            .OrderBy(dislocation => dislocation.Sequence)
+            .Take(Math.Clamp(query.Take, 1, 1000))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        if (dislocations.Count == 0)
+        {
+            return [];
+        }
+
+        var compositeIds = dislocations.Select(dislocation => dislocation.CompositeId).Distinct(StringComparer.Ordinal).ToArray();
+        var composites = (await db.Composites.Where(composite => compositeIds.Contains(composite.CompositeId))
+                .ToListAsync(cancellationToken).ConfigureAwait(false))
+            .ToDictionary(composite => composite.CompositeId, AggregateViews.From, StringComparer.Ordinal);
+        var assessmentIds = composites.Values
+            .SelectMany(composite => composite.Contributing.SelectMany(category => category.ConfirmedAssessments))
+            .Select(id => id.ToString("D"))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var assessments = (await db.Assessments.Where(assessment => assessmentIds.Contains(assessment.AssessmentId))
+                .ToListAsync(cancellationToken).ConfigureAwait(false))
+            .ToDictionary(assessment => Guid.Parse(assessment.AssessmentId));
+        return dislocations
+            .Where(dislocation => composites.ContainsKey(dislocation.CompositeId))
+            .Select(dislocation =>
+            {
+                var composite = composites[dislocation.CompositeId];
+                var confirmed = composite.Contributing
+                    .SelectMany(category => category.ConfirmedAssessments)
+                    .Select(id => assessments.GetValueOrDefault(id))
+                    .OfType<AssessmentRow>()
+                    .Select(row => new ConfirmedAssessment(
+                        Guid.Parse(row.AssessmentId), Guid.Parse(row.SignalId), row.Sequence, Enum.Parse<SourceCategory>(row.Category),
+                        row.Instrument, DateTimeOffset.FromUnixTimeMilliseconds(row.ObservedAtMs), row.Score ?? 0, row.Certainty ?? 0, row.IsFallback))
+                    .ToArray();
+                return new AggregateRecord(composite, AggregateViews.From(dislocation), confirmed);
+            })
+            .ToArray();
+    }
+}
+
 internal sealed class GetAggregateContextsHandler(ClassificationReadStore reads) : IQueryHandler<GetAggregateContexts, IReadOnlyList<AggregateContextView>>
 {
     public async Task<IReadOnlyList<AggregateContextView>> HandleAsync(GetAggregateContexts query, CancellationToken cancellationToken)

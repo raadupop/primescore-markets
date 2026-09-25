@@ -1,4 +1,9 @@
 @page "/decisions"
+@using PrimeScore.Modules.Configuration.Contracts
+@using PrimeScore.Modules.Decision.Contracts
+@using PrimeScore.SharedKernel.Cqrs
+@inject IQueryHandler<GetDecisions, IReadOnlyList<DecisionView>> DecisionQuery
+@inject IQueryHandler<GetActiveSettings, SettingsVersion> SettingsQuery
 
 <PageTitle>Decisions · PrimeScore Markets</PageTitle>
 
@@ -6,10 +11,131 @@
     <div>
         <div class="eyebrow">Decision explorer</div>
         <h1>Decisions</h1>
-        <p>Each recorded deploy or idle decision with every condition's required and actual value, the contributing and dissenting signals, and its audit chain segment.</p>
+        <p>
+            What the rules would have decided for each context, one decision per new assessment of a context member, newest first.
+            DEPLOY means every condition held; no order is placed and no position is opened in v1.
+        </p>
     </div>
 </div>
 
-<EmptyState Title="No decisions recorded">
-    Decisions arrive in milestone M4 (SRS DEC-001 to DEC-003). A decision records what the rules would have done; no order is placed.
-</EmptyState>
+<div class="filters" role="group" aria-label="Decision filters">
+    <label>
+        Context
+        <select @bind="_context" @bind:after="LoadAsync">
+            <option value="">All contexts</option>
+            @foreach (var context in _contexts)
+            {
+                <option value="@context.Name">@context.Name · @context.ReferenceInstrument</option>
+            }
+        </select>
+    </label>
+    <label>
+        Outcome
+        <select @bind="_outcome" @bind:after="LoadAsync">
+            <option value="">DEPLOY and IDLE</option>
+            <option value="Deploy">DEPLOY only</option>
+            <option value="Idle">IDLE only</option>
+        </select>
+    </label>
+    <label>
+        Observed from
+        <input type="date" @bind="_from" @bind:after="LoadAsync" />
+    </label>
+    <label>
+        Observed to
+        <input type="date" @bind="_to" @bind:after="LoadAsync" />
+    </label>
+</div>
+
+@if (_error is not null)
+{
+    <div class="degraded"><strong>The decisions could not be read.</strong> @_error</div>
+}
+else if (_decisions is null)
+{
+    <div class="loading">Loading decisions…</div>
+}
+else if (_decisions.Count == 0)
+{
+    <EmptyState Title="No decision matches">
+        A decision is recorded for every dislocation, which needs a classified close of a context member and a reference level.
+        Load history on Sources and health or through <span class="mono">POST /api/admin/signals</span>; nothing is estimated in its place.
+    </EmptyState>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Observed</th><th>Context</th><th>Outcome</th><th>Scenario</th><th>Composite</th><th>Dislocation</th><th>Failed conditions</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var decision in _decisions)
+                {
+                    <tr>
+                        <td class="mono">@Fmt.Utc(decision.AsOf)</td>
+                        <td>@decision.Context</td>
+                        <td><DecisionBadge Outcome="decision.Outcome" /></td>
+                        <td>@decision.Scenario</td>
+                        <td class="num">@Fmt.Signed(decision.CompositeScore, 4)</td>
+                        <td class="num">@Fmt.Signed(decision.DislocationValue, 2) / ±@Fmt.Number(decision.DislocationThreshold, 2)</td>
+                        <td>@string.Join(", ", decision.Conditions.Where(condition => !condition.Passed).Select(condition => condition.Name))</td>
+                        <td><a href="decisions/@decision.DecisionId">Explore</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    @if (_decisions.Count == Limit)
+    {
+        <p class="panel-note">Showing the newest @Limit; narrow the dates to see earlier ones.</p>
+    }
+}
+
+@code {
+    private const int Limit = 300;
+
+    private IReadOnlyList<ContextSettings> _contexts = [];
+    private IReadOnlyList<DecisionView>? _decisions;
+    private string _context = "";
+    private string _outcome = "";
+    private DateTime? _from;
+    private DateTime? _to;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _contexts = (await SettingsQuery.HandleAsync(new GetActiveSettings(), CancellationToken.None)).Settings.Contexts;
+        }
+        catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            _error = exception.Message;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        try
+        {
+            var from = _from is { } start ? new DateTimeOffset(DateTime.SpecifyKind(start.Date, DateTimeKind.Unspecified), TimeSpan.Zero) : (DateTimeOffset?)null;
+            var to = _to is { } end ? new DateTimeOffset(DateTime.SpecifyKind(end.Date.AddDays(1).AddTicks(-1), DateTimeKind.Unspecified), TimeSpan.Zero) : (DateTimeOffset?)null;
+            _decisions = await DecisionQuery.HandleAsync(new GetDecisions(
+                from, to,
+                _context.Length == 0 ? null : _context,
+                Enum.TryParse<DecisionOutcome>(_outcome, out var outcome) ? outcome : null,
+                Take: Limit), CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            _error = exception.Message;
+        }
+    }
+}

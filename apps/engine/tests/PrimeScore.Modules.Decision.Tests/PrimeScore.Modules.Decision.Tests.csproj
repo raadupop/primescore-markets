@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit tests for deploy conditions, explanations and the decision stage over a real ledger. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Decision\PrimeScore.Modules.Decision\PrimeScore.Modules.Decision.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Decision\PrimeScore.Modules.Decision.Contracts\PrimeScore.Modules.Decision.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Classification\PrimeScore.Modules.Classification.Contracts\PrimeScore.Modules.Classification.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Configuration\PrimeScore.Modules.Configuration\PrimeScore.Modules.Configuration.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Configuration\PrimeScore.Modules.Configuration.Contracts\PrimeScore.Modules.Configuration.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+    <ProjectReference Include="..\..\src\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>

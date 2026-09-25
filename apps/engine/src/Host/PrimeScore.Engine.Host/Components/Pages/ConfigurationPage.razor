@@ -11,8 +11,8 @@
         <div class="eyebrow">Configuration</div>
         <h1>Parameters</h1>
         <p>
-            Every parameter the composite and the dislocation read (ADR-0004), as one versioned value. Each composite and
-            dislocation names the version it used; each change is a ledger entry with who, when and the diff.
+            Every parameter the composite, the dislocation and the decisions read (ADR-0004, ADR-0005), as one versioned value.
+            Each composite, dislocation and decision names the version it used; each change is a ledger entry with who, when and the diff.
         </p>
     </div>
 </div>
@@ -38,7 +38,8 @@ else
         </div>
         <p class="panel-note">
             Changing parameters from this screen arrives with the operator sign-in (milestone M6). Until then an ADMIN token changes them
-            through <span class="mono">PUT /api/config/weighting-scheme</span> and <span class="mono">PUT /api/config/dislocation-threshold</span>;
+            through <span class="mono">PUT /api/config/weighting-scheme</span>, <span class="mono">PUT /api/config/dislocation-threshold</span>
+            and <span class="mono">PUT /api/config/deploy-conditions</span>;
             a change takes effect from the next composite, without a restart.
         </p>
         <div class="settings-grid">
@@ -52,6 +53,12 @@ else
                 <dt>Dropout d(Δt)</dt><dd>@string.Join(" · ", settings.DropoutSchedule.Select(Tier))</dd>
             </dl>
             <dl class="kv">
+                @foreach (var condition in settings.DeployConditions ?? [])
+                {
+                    <dt>Deploy · @condition.Name</dt><dd>@condition.Operator @Fmt.Number(condition.Threshold, 2)</dd>
+                }
+                <dt>Deploy · dislocation</dt><dd>|dislocation| ≥ the context's threshold (below)</dd>
+                <dt>Deploy · cooldown</dt><dd>no active cooldown: always held in v1 (cooldowns are Milestone B)</dd>
                 @foreach (var (category, window) in settings.CorroborationWindows.OrderBy(pair => pair.Key, StringComparer.Ordinal))
                 {
                     <dt>Window · @category</dt>

@@ -1,0 +1,35 @@
+@using PrimeScore.Modules.Decision.Contracts
+
+@* Signals named in a decision's explanation, each linked to its entry on the signal tape. *@
+@if (Signals.Count == 0)
+{
+    <p class="panel-note">@Empty</p>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="data">
+            <thead><tr><th>Signal</th><th>Observed</th><th>Severity</th><th>Certainty</th><th>Conviction</th></tr></thead>
+            <tbody>
+                @foreach (var signal in Signals)
+                {
+                    <tr>
+                        <td><a href="tape?signal=@signal.SignalId&assessment=@signal.AssessmentId">@Fmt.Category(signal.Category) · @signal.Instrument</a></td>
+                        <td class="mono">@Fmt.Utc(signal.ObservedAt)</td>
+                        <td class="num">@Fmt.Signed(signal.Score, 4)</td>
+                        <td class="num">@Fmt.Number(signal.Certainty, 4)</td>
+                        <td class="num">@Fmt.Signed(signal.Conviction, 4)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<DecisionSignal> Signals { get; set; } = [];
+
+    [Parameter]
+    public string Empty { get; set; } = "None.";
+}

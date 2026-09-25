@@ -25,6 +25,7 @@ public static class ConfigurationModule
         services.AddScoped<IQueryHandler<GetSettingsHistory, IReadOnlyList<SettingsVersion>>, GetSettingsHistoryHandler>();
         services.AddScoped<ICommandHandler<SetWeightingScheme, SettingsChangeAck>, SetWeightingSchemeHandler>();
         services.AddScoped<ICommandHandler<SetDislocationSettings, SettingsChangeAck>, SetDislocationSettingsHandler>();
+        services.AddScoped<ICommandHandler<SetDeployConditions, SettingsChangeAck>, SetDeployConditionsHandler>();
         services.AddScoped<ICommandHandler<ReplaceSettings, SettingsChangeAck>, ReplaceSettingsHandler>();
         return services;
     }

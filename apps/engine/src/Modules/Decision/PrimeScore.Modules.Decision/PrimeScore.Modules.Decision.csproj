@@ -6,6 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\PrimeScore.Modules.Decision.Contracts\PrimeScore.Modules.Decision.Contracts.csproj" />
+    <ProjectReference Include="..\..\Classification\PrimeScore.Modules.Classification.Contracts\PrimeScore.Modules.Classification.Contracts.csproj" />
+    <ProjectReference Include="..\..\Configuration\PrimeScore.Modules.Configuration.Contracts\PrimeScore.Modules.Configuration.Contracts.csproj" />
     <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
     <ProjectReference Include="..\..\..\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
   </ItemGroup>

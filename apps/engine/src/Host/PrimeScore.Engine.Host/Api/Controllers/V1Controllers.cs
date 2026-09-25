@@ -3,8 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using PrimeScore.Engine.Host.Security;
 using PrimeScore.Modules.Classification.Contracts;
 using PrimeScore.Modules.Configuration.Contracts;
-using PrimeScore.SharedKernel.Cqrs;
 using PrimeScore.Modules.Decision.Contracts;
+using PrimeScore.SharedKernel.Cqrs;
 using PrimeScore.Modules.Exits.Contracts;
 using PrimeScore.Modules.Positions.Contracts;
 using PrimeScore.Modules.Risk.Contracts;
@@ -77,29 +77,61 @@ public sealed class ClassificationController(
     }
 }
 
+/// <summary>
+/// Deploy and idle decisions of every context (SRS DEC-001 to DEC-003). <c>from</c> and <c>to</c>
+/// bound the observation time each decision refers to, its <c>decided_at</c>.
+/// </summary>
 [Authorize(Policy = ApiPolicies.Read)]
-public sealed class DecisionsController : Dto.DecisionsControllerBase
+public sealed class DecisionsController(
+    IQueryHandler<GetDecisions, IReadOnlyList<DecisionView>> decisions,
+    IQueryHandler<GetDecision, DecisionView?> decision) : Dto.DecisionsControllerBase
 {
-    public override Task<ActionResult<ICollection<Dto.DecisionRecord>>> ListDecisions(
+    public override async Task<ActionResult<ICollection<Dto.DecisionRecord>>> ListDecisions(
         DateTimeOffset? from,
         DateTimeOffset? to,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult<ActionResult<ICollection<Dto.DecisionRecord>>>(ApiResults.NotYetBuilt("M4", "DEC-001 to DEC-003"));
+        CancellationToken cancellationToken = default)
+    {
+        // The contract has no paging: every matching decision is returned.
+        var views = await decisions.HandleAsync(new GetDecisions(from, to, Take: null), cancellationToken).ConfigureAwait(false);
+        return views.Select(DecisionDtos.From).ToList();
+    }
 
-    public override Task<ActionResult<Dto.DecisionRecord>> GetDecision(Guid decision_id, CancellationToken cancellationToken = default) =>
-        Task.FromResult<ActionResult<Dto.DecisionRecord>>(ApiResults.NotYetBuilt("M4", "DEC-001 to DEC-003"));
+    public override async Task<ActionResult<Dto.DecisionRecord>> GetDecision(Guid decision_id, CancellationToken cancellationToken = default)
+    {
+        var view = await decision.HandleAsync(new GetDecision(decision_id), cancellationToken).ConfigureAwait(false);
+        return view is null ? ApiResults.NotFound($"No decision {decision_id}.") : DecisionDtos.From(view);
+    }
 }
 
+/// <summary>
+/// The decision audit trail (SRS AUD-001) in ledger order; <c>from</c> and <c>to</c> bound the
+/// recording time. Approval and position events are Milestone B, so filtering on them returns
+/// an empty list.
+/// </summary>
 [Authorize(Policy = ApiPolicies.Read)]
-public sealed class AuditController : Dto.AuditControllerBase
+public sealed class AuditController(IQueryHandler<GetAuditEntries, IReadOnlyList<AuditEntryView>> audit) : Dto.AuditControllerBase
 {
-    public override Task<ActionResult<ICollection<Dto.AuditEntry>>> ListAuditEntries(
+    public override async Task<ActionResult<ICollection<Dto.AuditEntry>>> ListAuditEntries(
         Guid? entity_id,
         Dto.AuditEventType? event_type,
         DateTimeOffset? from,
         DateTimeOffset? to,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult<ActionResult<ICollection<Dto.AuditEntry>>>(ApiResults.NotYetBuilt("M4", "AUD-001"));
+        CancellationToken cancellationToken = default)
+    {
+        Modules.Decision.Contracts.AuditEventType? type = null;
+        if (event_type is { } requested)
+        {
+            if (DecisionDtos.ToModule(requested) is not { } recorded)
+            {
+                return new List<Dto.AuditEntry>();
+            }
+
+            type = recorded;
+        }
+
+        var entries = await audit.HandleAsync(new GetAuditEntries(entity_id, type, from, to), cancellationToken).ConfigureAwait(false);
+        return entries.Select(DecisionDtos.From).ToList();
+    }
 
     public override Task<IActionResult> AuditPut(CancellationToken cancellationToken = default) => AppendOnly();
 
@@ -123,7 +155,8 @@ public sealed class AuditController : Dto.AuditControllerBase
 [Authorize(Policy = ApiPolicies.Admin)]
 public sealed class ConfigurationController(
     ICommandHandler<SetWeightingScheme, SettingsChangeAck> setScheme,
-    ICommandHandler<SetDislocationSettings, SettingsChangeAck> setDislocation) : Dto.ConfigurationControllerBase
+    ICommandHandler<SetDislocationSettings, SettingsChangeAck> setDislocation,
+    ICommandHandler<SetDeployConditions, SettingsChangeAck> setConditions) : Dto.ConfigurationControllerBase
 {
     public override async Task<IActionResult> SetWeightingScheme(Dto.WeightingScheme body, CancellationToken cancellationToken = default)
     {
@@ -139,8 +172,24 @@ public sealed class ConfigurationController(
         return Result(ack, "The weighting scheme was not changed.");
     }
 
-    public override Task<IActionResult> SetDeployConditions(Dto.DeployConditionsConfig body, CancellationToken cancellationToken = default) =>
-        Task.FromResult<IActionResult>(ApiResults.NotYetBuilt("M4", "DEC-001, NFR-003"));
+    /// <summary>
+    /// Each listed condition replaces the one of the same name (composite_score, contributing_sources,
+    /// top_signal_certainty, newest_observation_age_trading_days); unlisted ones keep their values.
+    /// </summary>
+    public override async Task<IActionResult> SetDeployConditions(Dto.DeployConditionsConfig body, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        var conditions = body.Conditions ?? [];
+        if (conditions.Any(condition => condition is null))
+        {
+            return ApiResults.BadRequest("The deploy conditions were not changed.", ["conditions: an element is null"]);
+        }
+
+        var ack = await setConditions.HandleAsync(
+            new SetDeployConditions(conditions.Select(DecisionDtos.ToSettings).ToArray(), User.Identity?.Name ?? "unknown"),
+            cancellationToken).ConfigureAwait(false);
+        return Result(ack, "The deploy conditions were not changed.");
+    }
 
     public override async Task<IActionResult> SetDislocationThreshold(Dto.Body body, CancellationToken cancellationToken = default)
     {

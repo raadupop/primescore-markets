@@ -50,6 +50,7 @@ public static class ClassificationModule
         services.AddScoped<IQueryHandler<GetDislocation, DislocationView?>, GetDislocationHandler>();
         services.AddScoped<IQueryHandler<GetCompositeHistory, IReadOnlyList<DailyAggregate>>, GetCompositeHistoryHandler>();
         services.AddScoped<IQueryHandler<GetAggregateContexts, IReadOnlyList<AggregateContextView>>, GetAggregateContextsHandler>();
+        services.AddScoped<IQueryHandler<GetAggregatesAfter, IReadOnlyList<AggregateRecord>>, GetAggregatesAfterHandler>();
         services.AddScoped<IIntegrationEventHandler<SignalBatchAccepted>, SignalBatchAcceptedHandler>();
         services.AddHostedService<ClassificationScheduler>();
         return services;

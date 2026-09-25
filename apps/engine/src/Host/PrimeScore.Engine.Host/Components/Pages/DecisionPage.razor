@@ -1,0 +1,203 @@
+@page "/decisions/{DecisionId:guid}"
+@using PrimeScore.Ledger
+@using PrimeScore.Modules.Decision.Contracts
+@using PrimeScore.SharedKernel.Cqrs
+@inject IQueryHandler<GetDecision, DecisionView?> DecisionQuery
+@inject IPipelineLogQuery Logs
+@inject ILedgerAuditQuery Audit
+
+<PageTitle>Decision · PrimeScore Markets</PageTitle>
+
+@if (_error is not null)
+{
+    <div class="degraded"><strong>The decision could not be read.</strong> @_error</div>
+}
+else if (_loading)
+{
+    <div class="loading">Loading the decision…</div>
+}
+else if (_decision is not { } decision)
+{
+    <EmptyState Title="No such decision">No decision @DecisionId is recorded. <a href="decisions">All decisions</a></EmptyState>
+}
+else
+{
+    <div class="page-head">
+        <div>
+            <div class="eyebrow">Decision · @decision.Context context</div>
+            <h1>@(decision.Outcome == DecisionOutcome.Deploy ? "DEPLOY" : "IDLE") as of @Fmt.Utc(decision.AsOf)</h1>
+            <p>@decision.Explanation</p>
+        </div>
+        <div class="filter-actions">
+            <DecisionBadge Outcome="decision.Outcome" />
+            @if (decision.Scenario != "none")
+            {
+                <span class="status @(decision.Scenario == "vol-compression" ? "status-blue" : "")">@decision.Scenario scenario</span>
+            }
+        </div>
+    </div>
+
+    <section class="panel" aria-label="Conditions">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">SRS DEC-001 · @decision.Conditions.Count(condition => condition.Passed) of @decision.Conditions.Count held</div>
+                <h2>Conditions, required against actual</h2>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Condition</th><th>Required</th><th>Actual</th><th>Result</th><th>What the actual value is</th></tr></thead>
+                <tbody>
+                    @foreach (var condition in decision.Conditions)
+                    {
+                        <tr>
+                            <td class="mono">@condition.Name</td>
+                            <td class="num">@condition.Operator @Fmt.Number(condition.Required, 4)</td>
+                            <td class="num">@Fmt.Number(condition.Actual, 4)</td>
+                            <td>
+                                <span class="status @(condition.Passed ? "" : "status-bad")">@(condition.Passed ? "held" : "failed")</span>
+                            </td>
+                            <td>@condition.Detail</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="grid grid-2">
+        <section class="panel" aria-label="Contributing signals">
+            <div class="panel-head">
+                <div>
+                    <div class="kicker">SRS DEC-003</div>
+                    <h2>Top contributing signals</h2>
+                </div>
+            </div>
+            <SignalTable Signals="decision.TopContributing" Empty="No signal on the composite's side: the composite is 0." />
+        </section>
+        <section class="panel" aria-label="Dissenting signals">
+            <div class="panel-head">
+                <div>
+                    <div class="kicker">SRS DEC-003</div>
+                    <h2>Dissenting signals</h2>
+                </div>
+            </div>
+            <SignalTable Signals="decision.Dissenting" Empty="No confirmed assessment pointed the other way." />
+        </section>
+    </div>
+
+    <section class="panel" aria-label="Inputs">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">What the decision read</div>
+                <h2>Composite and dislocation</h2>
+            </div>
+        </div>
+        <dl class="kv">
+            <dt>Composite</dt><dd>@Fmt.Signed(decision.CompositeScore, 4)</dd>
+            <dt>Dislocation</dt>
+            <dd>
+                @Fmt.Signed(decision.DislocationValue, 4) = scenario IV @Fmt.Number(decision.SignalImpliedIv, 4) − observed @decision.ReferenceInstrument @Fmt.Number(decision.MarketObservedIv, 2);
+                threshold ±@Fmt.Number(decision.DislocationThreshold, 2) (magnitude). An uncalibrated multiplier, not an independent volatility forecast.
+            </dd>
+            <dt>Configuration</dt><dd><a href="configuration">version @decision.ConfigVersion.Value</a></dd>
+            <dt>Correlation id</dt><dd>@decision.CorrelationId</dd>
+            <dt>Triggered by</dt><dd><a href="tape?signal=@decision.TriggerSignalId">signal @decision.TriggerSignalId</a></dd>
+            <dt>Recorded</dt><dd>@Fmt.Utc(decision.RecordedAt) · <a href="ledger/@decision.LedgerSequence">ledger #@decision.LedgerSequence</a></dd>
+        </dl>
+    </section>
+
+    <section class="panel" aria-label="Trace">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">SRS OBS-001 · one correlation id from ingestion to decision</div>
+                <h2>Trace</h2>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Stage</th><th>Recorded</th><th>What happened</th><th>Ledger</th></tr></thead>
+                <tbody>
+                    @foreach (var entry in _trace)
+                    {
+                        <tr>
+                            <td>@entry.Stage</td>
+                            <td class="mono">@Fmt.Utc(entry.Timestamp)</td>
+                            <td>@entry.Message</td>
+                            <td><a href="ledger/@entry.Sequence">#@entry.Sequence</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="panel" aria-label="Audit chain">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">SRS AUD-001, AUD-002</div>
+                <h2>Audit chain segment</h2>
+            </div>
+            <span class="status @(_chainIntact ? "" : "status-bad")">@(_chainIntact ? "links intact" : "link broken")</span>
+        </div>
+        <p class="panel-note">
+            Each entry's hash covers the previous entry's hash, so changing any earlier entry breaks every later link.
+            The full chain is recomputed by the scheduled verification and by <span class="mono">verify-ledger</span> (Sources and health).
+        </p>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Sequence</th><th>Kind</th><th>Previous hash</th><th>Hash</th><th>Link</th></tr></thead>
+                <tbody>
+                    @for (var index = 0; index < _segment.Count; index++)
+                    {
+                        var entry = _segment[index];
+                        var linked = index == 0 || entry.PrevHash == _segment[index - 1].Hash;
+                        <tr class="@(entry.Sequence == decision.LedgerSequence ? "selected" : "")">
+                            <td class="num"><a href="ledger/@entry.Sequence">#@entry.Sequence</a></td>
+                            <td>@entry.Kind</td>
+                            <td class="mono">@Short(entry.PrevHash)</td>
+                            <td class="mono">@Short(entry.Hash)</td>
+                            <td>@(index == 0 ? "" : linked ? "✓ matches #" + _segment[index - 1].Sequence : "✗ does not match")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter]
+    public Guid DecisionId { get; set; }
+
+    private DecisionView? _decision;
+    private IReadOnlyList<PipelineLogEntry> _trace = [];
+    private IReadOnlyList<LedgerRecord> _segment = [];
+    private bool _chainIntact = true;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _decision = await DecisionQuery.HandleAsync(new GetDecision(DecisionId), CancellationToken.None);
+            if (_decision is { } decision)
+            {
+                _trace = await Logs.ByCorrelationAsync(decision.CorrelationId.Value, CancellationToken.None);
+                _segment = await Audit.SegmentAsync(Math.Max(1, decision.LedgerSequence - 3), decision.LedgerSequence, CancellationToken.None);
+                _chainIntact = _segment.Zip(_segment.Skip(1)).All(pair => pair.Second.PrevHash == pair.First.Hash);
+            }
+        }
+        catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            _error = exception.Message;
+        }
+
+        _loading = false;
+    }
+
+    private static string Short(string hash) => hash.Length > 16 ? hash[..16] + "…" : hash;
+}

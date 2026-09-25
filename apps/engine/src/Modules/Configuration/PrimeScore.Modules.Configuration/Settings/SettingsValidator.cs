@@ -65,6 +65,8 @@ internal static class SettingsValidator
             Context(context, settings, errors);
         }
 
+        DeployConditions(settings.DeployConditions, errors);
+
         if (string.IsNullOrWhiteSpace(settings.Calibration))
         {
             errors.Add("calibration: required (e.g. 'uncalibrated default', 'in-sample')");
@@ -189,6 +191,52 @@ internal static class SettingsValidator
             }
 
             previous = tier.BelowSeconds ?? previous;
+        }
+    }
+
+    private static void DeployConditions(IReadOnlyList<DeployCondition>? conditions, List<string> errors)
+    {
+        if (conditions is null)
+        {
+            errors.Add("deploy_conditions: required");
+            return;
+        }
+
+        foreach (var name in DeployConditionNames.Configurable.Where(name => !conditions.Any(condition => condition.Name == name)))
+        {
+            errors.Add($"deploy_conditions.{name}: missing");
+        }
+
+        foreach (var group in conditions.GroupBy(condition => condition.Name, StringComparer.Ordinal))
+        {
+            var path = $"deploy_conditions.{group.Key}";
+            var condition = group.First();
+            if (group.Count() > 1)
+            {
+                errors.Add($"{path}: defined more than once");
+            }
+
+            if (!DeployConditionNames.Configurable.Contains(group.Key, StringComparer.Ordinal))
+            {
+                errors.Add($"{path}: unknown condition; expected {string.Join(", ", DeployConditionNames.Configurable)}");
+                continue;
+            }
+
+            if (!DeployConditionNames.Operators.Contains(condition.Operator, StringComparer.Ordinal))
+            {
+                errors.Add($"{path}.operator: must be one of {string.Join(" ", DeployConditionNames.Operators)}");
+            }
+
+            var (min, max) = group.Key switch
+            {
+                DeployConditionNames.CompositeScore or DeployConditionNames.TopSignalCertainty => (0.0, 1.0),
+                DeployConditionNames.ContributingSources => (0.0, 4.0),
+                _ => (0.0, 260.0),
+            };
+            if (!double.IsFinite(condition.Threshold) || condition.Threshold < min || condition.Threshold > max)
+            {
+                errors.Add(string.Create(CultureInfo.InvariantCulture, $"{path}.threshold: {condition.Threshold} is outside [{min}, {max}]"));
+            }
         }
     }
 

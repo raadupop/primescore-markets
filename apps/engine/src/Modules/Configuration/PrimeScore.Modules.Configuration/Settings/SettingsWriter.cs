@@ -44,7 +44,11 @@ internal sealed class SettingsWriter(ILedger ledger, ConfigurationReadStore read
         {
             if (await LoadLatestAsync(cancellationToken).ConfigureAwait(false) is { } existing)
             {
-                _active = existing;
+                // Versions recorded before deploy conditions existed (M4) gain the defaults as a new, audited version.
+                _active = existing.Settings.DeployConditions is null
+                    ? await AppendAsync(existing, existing.Settings with { DeployConditions = defaults.DeployConditions },
+                        "Deploy conditions added with their uncalibrated defaults (brief §9.6)", "engine", cancellationToken).ConfigureAwait(false)
+                    : existing;
                 return;
             }
 

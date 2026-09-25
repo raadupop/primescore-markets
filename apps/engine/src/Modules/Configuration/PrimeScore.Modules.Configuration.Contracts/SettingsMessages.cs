@@ -31,6 +31,12 @@ public sealed record SetDislocationSettings(
     IReadOnlyDictionary<string, double>? RegimeBoundaries,
     string ChangedBy) : ICommand<SettingsChangeAck>;
 
+/// <summary>
+/// The contract's <c>PUT /config/deploy-conditions</c>: each listed condition replaces the one of
+/// the same name; conditions not listed keep their values.
+/// </summary>
+public sealed record SetDeployConditions(IReadOnlyList<DeployCondition> Conditions, string ChangedBy) : ICommand<SettingsChangeAck>;
+
 /// <summary>Replaces the whole settings value (configuration screen); validated like every change.</summary>
 public sealed record ReplaceSettings(EngineSettings Settings, string Reason, string ChangedBy) : ICommand<SettingsChangeAck>;
 

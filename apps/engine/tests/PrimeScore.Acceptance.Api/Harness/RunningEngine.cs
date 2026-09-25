@@ -26,6 +26,7 @@ public sealed class RunningEngine : IAsyncDisposable
     private readonly string _workDirectory;
     private readonly List<Process> _processes = [];
     private Process? _classifier;
+    private Process? _engine;
     private readonly Dictionary<Role, string> _tokens = new()
     {
         [Role.Read] = RandomToken(),
@@ -42,6 +43,9 @@ public sealed class RunningEngine : IAsyncDisposable
     public Uri ClassifierBase { get; private set; } = null!;
 
     public string EngineLogPath => Path.Combine(_workDirectory, "engine.log");
+
+    /// <summary>The engine's SQLite file, for storage-level tests (SRS AUD-002).</summary>
+    public string DatabasePath => Path.Combine(_workDirectory, "engine.db");
 
     public static async Task<RunningEngine> StartAsync(IReadOnlyDictionary<string, string>? engineSettings = null)
     {
@@ -188,8 +192,77 @@ public sealed class RunningEngine : IAsyncDisposable
             start.Environment[key] = value;
         }
 
-        Launch(start, EngineLogPath);
+        _engine = Launch(start, EngineLogPath);
         await WaitAsync(ApiBase, "health", _tokens[Role.Read], accept: status => status == HttpStatusCode.OK, EngineLogPath).ConfigureAwait(false);
+    }
+
+    /// <summary>Stops the engine process and leaves its database in place.</summary>
+    public async Task StopEngineAsync()
+    {
+        if (_engine is { HasExited: false } engine)
+        {
+            engine.Kill(entireProcessTree: true);
+            await engine.WaitForExitAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Runs an engine CLI command (e.g. <c>verify-ledger</c>) against this engine's database.</summary>
+    public async Task<(int ExitCode, string Output)> RunEngineCommandAsync(params string[] arguments)
+    {
+        var start = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = _workDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        start.ArgumentList.Add(RepositoryPaths.EngineHost);
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        foreach (var key in start.Environment.Keys.Where(IsEngineSetting).ToArray())
+        {
+            start.Environment.Remove(key);
+        }
+
+        start.Environment["DOTNET_ENVIRONMENT"] = "Testing";
+        start.Environment["Engine__DatabasePath"] = DatabasePath;
+        start.Environment["Registry__Path"] = RepositoryPaths.Registry;
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the engine command.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var errors = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync(new CancellationTokenSource(TimeSpan.FromSeconds(60)).Token).ConfigureAwait(false);
+        return (process.ExitCode, await output.ConfigureAwait(false) + await errors.ConfigureAwait(false));
+    }
+
+    /// <summary>Runs a short Python script with the classifier's interpreter (used to reach the database at storage level).</summary>
+    public static async Task<string> RunPythonAsync(string script, params string[] arguments)
+    {
+        var start = new ProcessStartInfo(RepositoryPaths.Python)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        start.ArgumentList.Add("-c");
+        start.ArgumentList.Add(script);
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Python.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var errors = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync(new CancellationTokenSource(TimeSpan.FromSeconds(60)).Token).ConfigureAwait(false);
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Python exited {process.ExitCode}: {await errors.ConfigureAwait(false)}");
+        }
+
+        return await output.ConfigureAwait(false);
     }
 
     private static bool IsEngineSetting(string key) =>

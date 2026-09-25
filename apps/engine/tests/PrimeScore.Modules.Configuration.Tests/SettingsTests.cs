@@ -201,6 +201,63 @@ public sealed class SettingsTests : IAsyncLifetime
         Assert.Contains("contexts: equity and oil share the reference instrument ovx", errors);
     }
 
+    [Fact]
+    public async Task Deploy_conditions_merge_by_name_and_keep_the_unlisted_ones()
+    {
+        var ack = await Command<SetDeployConditions, SettingsChangeAck>(new SetDeployConditions(
+            [new DeployCondition(DeployConditionNames.CompositeScore, ">", 0.6)], "operator"));
+        var conditions = (await Query<GetActiveSettings, SettingsVersion>(new GetActiveSettings())).Settings.DeployConditions!;
+
+        Assert.True(ack.Accepted, string.Join("; ", ack.Errors));
+        Assert.Equal(
+            [("composite_score", ">", 0.6), ("contributing_sources", ">=", 1.0), ("top_signal_certainty", ">=", 0.5), ("newest_observation_age_trading_days", "<=", 2.0)],
+            conditions.Select(condition => (condition.Name, condition.Operator, condition.Threshold)));
+    }
+
+    [Fact]
+    public async Task The_audit_diff_writes_operators_as_typed()
+    {
+        await Command<SetDeployConditions, SettingsChangeAck>(new SetDeployConditions([new DeployCondition(DeployConditionNames.CompositeScore, ">", 0.5)], "operator"));
+
+        var active = await Query<GetActiveSettings, SettingsVersion>(new GetActiveSettings());
+
+        Assert.Equal(["deploy_conditions[composite_score].operator: \">=\" → \">\""], active.Changes);
+    }
+
+    [Theory]
+    [InlineData("dislocation", ">=", 2.0, "set per context through PUT /config/dislocation-threshold")]
+    [InlineData("risk_budget", ">=", 1.0, "Milestone B")]
+    [InlineData("vibes", ">=", 1.0, "unknown condition")]
+    [InlineData("composite_score", "=>", 0.5, "operator: must be one of")]
+    [InlineData("top_signal_certainty", ">=", 1.5, "outside [0, 1]")]
+    public async Task Deploy_conditions_the_rules_cannot_use_are_refused_with_the_reason(string name, string @operator, double threshold, string reason)
+    {
+        var ack = await Command<SetDeployConditions, SettingsChangeAck>(new SetDeployConditions([new DeployCondition(name, @operator, threshold)], "operator"));
+
+        Assert.False(ack.Accepted);
+        Assert.Contains(ack.Errors, error => error.Contains(reason, StringComparison.Ordinal));
+        Assert.Equal(1, (await Query<GetActiveSettings, SettingsVersion>(new GetActiveSettings())).Version.Value);
+    }
+
+    [Fact]
+    public async Task A_version_recorded_before_deploy_conditions_existed_gains_the_defaults_as_a_new_audited_version()
+    {
+        // As on a database from M3: the newest version has no deploy conditions.
+        var ledger = _services.GetRequiredService<ILedger>();
+        await ledger.AppendAsync(
+            [LedgerAppend.Create(LedgerKinds.ConfigurationChanged, Guid.NewGuid(), CorrelationId.New(), new ConfigVersion(2), "M3 settings",
+                new Storage.SettingsChangedPayload(2, "engine", "M3 settings", DefaultSettings.Create() with { DeployConditions = null }, []))],
+            Token);
+        var writer = new SettingsWriter(ledger, _services.GetRequiredService<Storage.ConfigurationReadStore>());
+
+        await writer.SeedAsync(DefaultSettings.Create(), Token);
+        var active = await writer.ActiveAsync(Token);
+
+        Assert.Equal((3, "engine"), (active.Version.Value, active.ChangedBy));
+        Assert.Equal(DefaultSettings.Conditions(), active.Settings.DeployConditions);
+        Assert.Contains("deploy_conditions[composite_score].operator: (none) → \">=\"", active.Changes);
+    }
+
     private static EngineSettings WithEquity(Func<ContextSettings, ContextSettings> change)
     {
         var defaults = DefaultSettings.Create();

@@ -15,6 +15,10 @@
             {
                 <span class="legend-item"><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="@panel.Color" stroke-width="2" stroke-linecap="round" /></svg>@panel.Name</span>
             }
+            @if (Markers.Count > 0)
+            {
+                <span class="legend-item"><svg width="10" height="10"><circle cx="5" cy="5" r="4" class="marker" /></svg>@MarkerLabel</span>
+            }
             @if (Runs.Any(run => run.Kind == "high"))
             {
                 <span class="legend-item"><span class="legend-swatch band-high"></span>high-vol regime</span>
@@ -73,6 +77,13 @@
                     <line x1="@F(Left)" x2="@F(Width - Right)" y1="@F(y)" y2="@F(y)" class="ref-line" />
                 }
                 <path d="@LinePath(panel, min, max, top)" fill="none" stroke="@panel.Color" stroke-width="@(Compact ? 1.5 : 2)" stroke-linejoin="round" stroke-linecap="round" />
+                @if (p == 0)
+                {
+                    foreach (var index in Markers.Where(index => index >= 0 && index < Dates.Count && panel.Values[index] is not null))
+                    {
+                        <circle cx="@F(X(index))" cy="@F(Y(panel.Values[index]!.Value, min, max, top))" r="@(Compact ? 2.5 : 3.5)" class="marker" />
+                    }
+                }
             </g>
         }
         @if (!Compact)
@@ -201,6 +212,13 @@
 
     [Parameter]
     public IReadOnlyList<ExtraColumn>? Extras { get; set; }
+
+    /// <summary>Dates marked on the first panel (decision markers in lime, brief §10).</summary>
+    [Parameter]
+    public IReadOnlyList<int> Markers { get; set; } = [];
+
+    [Parameter]
+    public string MarkerLabel { get; set; } = "marker";
 
     /// <summary>Small multiples without axes or table, for the overview.</summary>
     [Parameter]

@@ -1,5 +1,6 @@
 using PrimeScore.SharedKernel;
 using PrimeScore.SharedKernel.Cqrs;
+using PrimeScore.SharedKernel.Messaging;
 
 namespace PrimeScore.Modules.Classification.Contracts;
 
@@ -18,6 +19,33 @@ public sealed record GetDislocation(string Context, DateTimeOffset? AsOf = null)
 /// observation time.
 /// </summary>
 public sealed record GetCompositeHistory(string Context, DateTimeOffset? From = null, DateTimeOffset? To = null) : IQuery<IReadOnlyList<DailyAggregate>>;
+
+/// <summary>
+/// Dislocations recorded after a ledger sequence, in recording order, each with its composite
+/// and the assessments that composite confirmed: the decision stage's input (brief §6).
+/// </summary>
+public sealed record GetAggregatesAfter(long AfterSequence, int Take) : IQuery<IReadOnlyList<AggregateRecord>>;
+
+public sealed record AggregateRecord(CompositeView Composite, DislocationView Dislocation, IReadOnlyList<ConfirmedAssessment> Confirmed);
+
+/// <summary>An assessment that entered a composite's net conviction.</summary>
+public sealed record ConfirmedAssessment(
+    Guid AssessmentId,
+    Guid SignalId,
+    long LedgerSequence,
+    SourceCategory Category,
+    string Instrument,
+    DateTimeOffset ObservedAt,
+    double Score,
+    double Certainty,
+    bool IsFallback)
+{
+    /// <summary>Signed severity × certainty.</summary>
+    public double Conviction => Score * Certainty;
+}
+
+/// <summary>Published after each classification pass, once its composites and dislocations are recorded.</summary>
+public sealed record AggregatesRecorded(int Composites, CorrelationId CorrelationId) : IIntegrationEvent;
 
 /// <summary>The contexts that have at least one composite, with their newest observation time.</summary>
 public sealed record GetAggregateContexts : IQuery<IReadOnlyList<AggregateContextView>>;

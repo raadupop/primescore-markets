@@ -1,6 +1,7 @@
 @page "/"
 @using PrimeScore.Modules.Classification.Contracts
 @using PrimeScore.Modules.Configuration.Contracts
+@using PrimeScore.Modules.Decision.Contracts
 @using PrimeScore.Modules.Ingestion.Contracts
 @using PrimeScore.SharedKernel
 @using PrimeScore.SharedKernel.Cqrs
@@ -11,6 +12,7 @@
 @inject IQueryHandler<GetComposite, CompositeView?> CompositeQuery
 @inject IQueryHandler<GetDislocation, DislocationView?> DislocationQuery
 @inject IQueryHandler<GetCompositeHistory, IReadOnlyList<DailyAggregate>> HistoryQuery
+@inject IQueryHandler<GetDecisions, IReadOnlyList<DecisionView>> DecisionQuery
 @inject IClock Clock
 
 <PageTitle>Overview · PrimeScore Markets</PageTitle>
@@ -127,8 +129,24 @@ else
                             <dt>@Fmt.Category(absent.Category)</dt>
                             <dd class="muted-cell">absent: @absent.Reason</dd>
                         }
-                        <dt>Decision</dt>
-                        <dd class="muted-cell">decisions are recorded from milestone M4; none is shown in their place</dd>
+                        <dt>Latest decision</dt>
+                        <dd class="muted-cell">
+                            @if (card.Decision is { } decision)
+                            {
+                                <DecisionBadge Outcome="decision.Outcome" />
+                                <span> @FirstSentence(decision.Explanation) · as of @Fmt.Utc(decision.AsOf) ·
+                                    <a href="ledger/@decision.LedgerSequence">ledger #@decision.LedgerSequence</a> ·
+                                    <a href="decisions/@decision.DecisionId">explore</a></span>
+                                @if (card.Dislocation is { } current && decision.DislocationId != current.DislocationId)
+                                {
+                                    <span class="status status-warn">decision pending for the newest dislocation</span>
+                                }
+                            }
+                            else
+                            {
+                                <span>none recorded yet</span>
+                            }
+                        </dd>
                     </dl>
                     @if (card.History.Count > 1)
                     {
@@ -160,7 +178,8 @@ else
         SignalView? Latest,
         CompositeView? Composite,
         DislocationView? Dislocation,
-        IReadOnlyList<DailyAggregate> History);
+        IReadOnlyList<DailyAggregate> History,
+        DecisionView? Decision);
 
     private List<Card>? _cards;
     private IReadOnlyDictionary<Guid, AssessmentView> _outcomes = new Dictionary<Guid, AssessmentView>();
@@ -172,6 +191,8 @@ else
         "oil" => "Crude oil implied volatility",
         _ => $"{context.ReferenceInstrument} implied volatility",
     };
+
+    private static string FirstSentence(string text) => text.IndexOf(". ", StringComparison.Ordinal) is var end and > 0 ? text[..end] : text;
 
     /// <summary>Lime for expansion, blue for compression (brief §9.7); a zero dislocation is neither.</summary>
     private static (string Css, string Label) Scenario(double dislocation) => dislocation switch
@@ -211,7 +232,8 @@ else
                 var history = composite is null
                     ? []
                     : await HistoryQuery.HandleAsync(new GetCompositeHistory(context.Name, composite.AsOf.AddYears(-5)), CancellationToken.None);
-                cards.Add(new Card(context, latest, composite, dislocation, history));
+                var decision = (await DecisionQuery.HandleAsync(new GetDecisions(Context: context.Name, Take: 1), CancellationToken.None)).FirstOrDefault();
+                cards.Add(new Card(context, latest, composite, dislocation, history, decision));
             }
 
             var ids = cards.Select(card => card.Latest).OfType<SignalView>().Select(signal => signal.SignalId).ToArray();

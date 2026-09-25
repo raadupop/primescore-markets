@@ -12,6 +12,7 @@ namespace PrimeScore.Modules.Configuration.Contracts;
 /// <param name="ReportingIntervals">Per category: how long after its newest observation a category is still fresh (ADR-0004 §5).</param>
 /// <param name="DropoutSchedule">CLS-002 <c>d_c(Δt)</c> tiers, ascending; the last has no upper bound.</param>
 /// <param name="Calibration">How the values were obtained: <c>uncalibrated default</c>, <c>in-sample</c>, ...</param>
+/// <param name="DeployConditions">DEC-001 conditions besides the context's dislocation threshold; null only in versions recorded before M4.</param>
 public sealed record EngineSettings(
     WeightingSettings Weighting,
     double BypassPercentile,
@@ -19,7 +20,8 @@ public sealed record EngineSettings(
     IReadOnlyDictionary<string, WindowSpan> ReportingIntervals,
     IReadOnlyList<DropoutTier> DropoutSchedule,
     IReadOnlyList<ContextSettings> Contexts,
-    string Calibration)
+    string Calibration,
+    IReadOnlyList<DeployCondition>? DeployConditions = null)
 {
     public ContextSettings? Context(string name) =>
         Contexts.FirstOrDefault(context => string.Equals(context.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -83,6 +85,40 @@ public enum RegimeMode
 /// <param name="LowVolUpper">Level mode: low regime below this level.</param>
 /// <param name="HighVolLower">Level mode: high regime above this level.</param>
 public sealed record RegimeRule(RegimeMode Mode, double LowBelow, double HighAbove, double? LowVolUpper, double? HighVolLower);
+
+/// <summary>
+/// One DEC-001 condition: <c>actual operator threshold</c> must hold for a DEPLOY decision
+/// (brief §9.6). The dislocation condition is per context (its threshold, compared by
+/// magnitude) and the cooldown condition is fixed until Milestone B; neither is listed here.
+/// </summary>
+/// <param name="Name">One of <see cref="DeployConditionNames"/>.</param>
+/// <param name="Operator">One of <c>&gt;=</c>, <c>&gt;</c>, <c>&lt;=</c>, <c>&lt;</c>, <c>==</c>.</param>
+public sealed record DeployCondition(string Name, string Operator, double Threshold);
+
+public static class DeployConditionNames
+{
+    /// <summary>|composite score|.</summary>
+    public const string CompositeScore = "composite_score";
+
+    /// <summary>Categories that contributed to the composite.</summary>
+    public const string ContributingSources = "contributing_sources";
+
+    /// <summary>Certainty of the strongest contributing assessment.</summary>
+    public const string TopSignalCertainty = "top_signal_certainty";
+
+    /// <summary>NYSE trading days between the newest contributing observation and the decision.</summary>
+    public const string NewestObservationAge = "newest_observation_age_trading_days";
+
+    /// <summary>|dislocation| against the context's threshold (set through the dislocation settings).</summary>
+    public const string Dislocation = "dislocation";
+
+    /// <summary>Active cooldowns; always 0 in v1 (RSK-001 is Milestone B).</summary>
+    public const string Cooldown = "active_cooldowns";
+
+    public static readonly IReadOnlyList<string> Configurable = Array.AsReadOnly(new[] { CompositeScore, ContributingSources, TopSignalCertainty, NewestObservationAge });
+
+    public static readonly IReadOnlyList<string> Operators = Array.AsReadOnly(new[] { ">=", ">", "<=", "<", "==" });
+}
 
 /// <summary>One stored version of the settings.</summary>
 /// <param name="Changes">What differs from the previous version, one <c>path: old → new</c> line each.</param>
