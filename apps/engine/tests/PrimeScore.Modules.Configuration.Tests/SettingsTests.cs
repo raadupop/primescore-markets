@@ -59,6 +59,21 @@ public sealed class SettingsTests : IAsyncLifetime
         Assert.Equal("uncalibrated default", defaults.Calibration);
     }
 
+    [Fact]
+    public async Task An_editor_loaded_before_another_change_cannot_overwrite_the_newer_version()
+    {
+        var query = _services.GetRequiredService<IQueryHandler<GetActiveSettings, SettingsVersion>>();
+        var original = await query.HandleAsync(new GetActiveSettings(), Token);
+        var command = _services.GetRequiredService<ICommandHandler<ReplaceSettings, SettingsChangeAck>>();
+        var accepted = await command.HandleAsync(new ReplaceSettings(original.Settings with { BypassPercentile = 0.998 },
+            "first edit", "first", original.Version.Value), Token);
+        Assert.True(accepted.Accepted);
+        var stale = await command.HandleAsync(new ReplaceSettings(original.Settings with { BypassPercentile = 0.997 },
+            "stale edit", "second", original.Version.Value), Token);
+        Assert.False(stale.Accepted);
+        Assert.Equal(0.998, (await query.HandleAsync(new GetActiveSettings(), Token)).Settings.BypassPercentile);
+    }
+
     [Theory]
     [InlineData(1.5)]
     [InlineData(0.0)]

@@ -46,7 +46,7 @@ internal sealed class ResolveReplaySettingsHandler(IQueryHandler<GetSettingsVers
             if (query.OverridesJson is { } json && JsonNode.Parse(json) is { } patch)
             {
                 Merge(node, patch.AsObject());
-                if (patch.AsObject().Count > 0)
+                if (query.MarkInSample && patch.AsObject().Count > 0)
                 {
                     node["calibration"] = "in-sample";
                 }

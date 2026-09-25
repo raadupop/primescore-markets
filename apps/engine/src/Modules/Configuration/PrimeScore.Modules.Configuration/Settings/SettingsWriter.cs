@@ -64,7 +64,8 @@ internal sealed class SettingsWriter(ILedger ledger, ConfigurationReadStore read
         Func<EngineSettings, (EngineSettings? Settings, IReadOnlyList<string> Errors)> change,
         string reason,
         string changedBy,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? expectedVersion = null)
     {
         ArgumentNullException.ThrowIfNull(change);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -72,6 +73,10 @@ internal sealed class SettingsWriter(ILedger ledger, ConfigurationReadStore read
         {
             var current = _active ??= await LoadLatestAsync(cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException("No configuration version exists.");
+            if (expectedVersion is { } expected && current.Version.Value != expected)
+            {
+                return new SettingsChangeAck(false, null, ["The configuration changed after this page was loaded. Reload before saving."]);
+            }
             var (next, errors) = change(current.Settings);
             if (next is null || errors.Count > 0)
             {

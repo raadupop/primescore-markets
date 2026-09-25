@@ -14,7 +14,7 @@ public sealed record GetSettingsAtSequence(long MaxSequence) : IQuery<SettingsVe
 public sealed record GetSettingsHistory(int Take = 50) : IQuery<IReadOnlyList<SettingsVersion>>;
 
 /// <summary>Validate temporary settings against a fixed stored version, without recording a change.</summary>
-public sealed record ResolveReplaySettings(int Version, string? OverridesJson) : IQuery<ReplaySettingsResult>;
+public sealed record ResolveReplaySettings(int Version, string? OverridesJson, bool MarkInSample = true) : IQuery<ReplaySettingsResult>;
 
 public sealed record ReplaySettingsResult(EngineSettings? Settings, IReadOnlyList<string> Errors);
 
@@ -45,7 +45,7 @@ public sealed record SetDislocationSettings(
 public sealed record SetDeployConditions(IReadOnlyList<DeployCondition> Conditions, string ChangedBy) : ICommand<SettingsChangeAck>;
 
 /// <summary>Replaces the whole settings value (configuration screen); validated like every change.</summary>
-public sealed record ReplaceSettings(EngineSettings Settings, string Reason, string ChangedBy) : ICommand<SettingsChangeAck>;
+public sealed record ReplaceSettings(EngineSettings Settings, string Reason, string ChangedBy, int? ExpectedVersion = null) : ICommand<SettingsChangeAck>;
 
 /// <param name="Version">The new version when accepted; unchanged settings record no version.</param>
 public sealed record SettingsChangeAck(bool Accepted, int? Version, IReadOnlyList<string> Errors) : ICommandAck;

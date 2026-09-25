@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using PrimeScore.Modules.Analytics.Contracts;
 using PrimeScore.Modules.Analytics.Storage;
@@ -82,8 +83,20 @@ internal sealed class GetValidationReportHandler(
 
         var held = item.ExpectDeploy ? decisions.Any(decision => decision.Outcome == DecisionOutcome.Deploy)
             : decisions.All(decision => Math.Abs(decision.DislocationValue) < decision.DislocationThreshold);
-        var deploy = decisions.FirstOrDefault(decision => decision.Outcome == DecisionOutcome.Deploy);
-        var detail = deploy is null ? "No DEPLOY in target window." : $"First DEPLOY: {MarketTime.NewYorkDate(deploy.AsOf):yyyy-MM-dd}.";
-        return new(item, replay.ReplayId, held ? "Matches target" : "Misses target", detail + " Equity/VIX market-data proxy; geopolitical and unsourced macro routes absent.");
+        string detail;
+        if (!item.ExpectDeploy)
+        {
+            var breach = decisions.FirstOrDefault(decision => Math.Abs(decision.DislocationValue) >= decision.DislocationThreshold);
+            detail = breach is null ? "Every observed dislocation stayed below threshold on the target date."
+                : string.Create(CultureInfo.InvariantCulture, $"Dislocation {breach.DislocationValue:+0.00;-0.00;0} breached ±{breach.DislocationThreshold:0.00} on {MarketTime.NewYorkDate(breach.AsOf):yyyy-MM-dd}.");
+        }
+        else
+        {
+            var deploy = decisions.FirstOrDefault(decision => decision.Outcome == DecisionOutcome.Deploy);
+            detail = deploy is null ? "No DEPLOY; last decision failed " + string.Join(", ", decisions[^1].Conditions.Where(condition => !condition.Passed).Select(condition => condition.Name)) + "."
+                : $"First DEPLOY: {MarketTime.NewYorkDate(deploy.AsOf):yyyy-MM-dd}.";
+        }
+
+        return new(item, replay.ReplayId, held ? "Matches target" : "Misses target", detail);
     }
 }

@@ -1,14 +1,15 @@
 # PrimeScore AI — repository status
 
-**22 September 2026.** The repository contains a Python classifier, a local historical replay dashboard, an agent harness and static website assets. The .NET engine and independently validated volatility forecast remain unbuilt.
+**25 September 2026.** PrimeScore Markets records sourced observations, statistical classifications, volatility scenarios and simulation decisions in a local .NET application. No independent volatility forecast or order execution is implemented. [Setup and operation](ENGINE.md).
 
 | Component | Current state | Evidence / remaining work |
 | --- | --- | --- |
 | Python classifier | Partial product; two executable routes | Signed market/macro scores, explicit fit rejection, horizon-based confidence and readiness checks. Cross-asset and both geopolitical routes remain HTTP 501; [calibration and provider gaps](../apps/classification/LIMITATIONS.md). |
 | Replay dashboard | Built | Eight historical VIX/OVX snapshots through real HTTP classification and a labeled scenario; three views, repeat/reset and degraded/error handling. Run `python scripts/demo.py`; [setup](DEMO.md). |
-| Agent harness and CI | Built | Both OpenAPI contracts, six dependency contracts, fitness tools and pytest share one gate. Validation: **85 passed, 4 intentionally skipped**. [Hosted checks](https://github.com/raadupop/primescore-ai/actions/workflows/checks.yml); [remaining harness limits](../apps/classification/HARNESS.md). |
+| Agent harness and CI | Built | Both OpenAPI contracts, Python dependency and fitness checks, .NET structural tests and HTTP acceptance tests share [one gate](../harness/ORACLE.md). [Remaining harness limits](../apps/classification/HARNESS.md). |
 | Brand and Markets pages | Built | Static HTML, CSS and JavaScript checked at desktop and mobile widths. [Brand source](../sites/brand/); [Markets source](../sites/markets/). |
-| Engine, live feeds, positions and risk | Designed | No .NET implementation, independent forecast, broker execution, persistence or live dashboard. [Design limits](../LIMITATIONS.md). |
+| Markets engine | Implemented through M6 | FRED ingestion, ledger, classifications, composites, decisions, replay, versioned settings, Blazor UI and sign-in. [Operational and data limits](../apps/engine/LIMITATIONS.md). |
+| Positions, exits and risk | Deferred | API slots return 501; no options-price source or broker execution. |
 | Contract and credit optimisation | Direction only | No implementation or product specification. |
 
 The four skips are three macro anchors awaiting sourced history and one explicitly opt-in live FRED integration. Passing checks establish the tested software behavior, not predictive accuracy. The detailed audit below records the **starting state**, before these repairs.

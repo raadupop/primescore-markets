@@ -17,7 +17,7 @@ internal static class EngineCli
 {
     private static readonly JsonSerializerOptions Output = new() { WriteIndented = true };
 
-    public static bool IsCommand(string[] args) => args is ["verify-ledger", ..] or ["new-api-token", ..] or ["evaluate-validation", ..];
+    public static bool IsCommand(string[] args) => args is ["verify-ledger", ..] or ["new-api-token", ..] or ["evaluate-validation", ..] or ["set-operator-password", ..];
 
     public static async Task<int> RunAsync(string[] args)
     {
@@ -27,6 +27,7 @@ internal static class EngineCli
             {
                 "verify-ledger" => await VerifyLedgerAsync(args[1..]).ConfigureAwait(false),
                 "evaluate-validation" => await EvaluateValidationAsync(args[1..]).ConfigureAwait(false),
+                "set-operator-password" => OperatorSetup.Run(args[1..]),
                 _ => NewApiToken(args[1..]),
             };
         }
@@ -115,6 +116,7 @@ internal static class EngineCli
         {
             "# Validation targets", "",
             "Equity/VIX market-data proxy under uncalibrated rules. These are SRS targets, not predictive performance or returns.",
+            "Geopolitical classifications and unsourced macro inputs are absent. Each replay records its configuration and source ledger boundary.",
             "Deploy by D checks D and its preceding NYSE trading day; FOMC checks the dislocation threshold. Iran Feb 2026 is a calibration target.", "",
             "| Event | SRS expectation | Result | Evidence | Replay |", "| --- | --- | --- | --- | --- |",
         };

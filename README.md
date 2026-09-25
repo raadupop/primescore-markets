@@ -2,36 +2,36 @@
 
 [![Checks](https://github.com/raadupop/primescore-ai/actions/workflows/checks.yml/badge.svg)](https://github.com/raadupop/primescore-ai/actions/workflows/checks.yml)
 
-PrimeScore AI is developing event-driven volatility intelligence for options research: classify events, estimate their relevance, and investigate gaps between a volatility scenario and observed implied volatility. This repository contains the Python classification prototype, its agent harness (instructions, hooks and code checks), the engine's design contracts, and a historical replay demonstration.
+PrimeScore AI is developing event-driven volatility intelligence for options research. This repository contains the .NET Markets engine, Python classifier, local replay demo and agent harness (instructions, hooks and code checks).
 
 The first product is **PrimeScore Markets**, intended for **markets.primescore.ai**. The umbrella brand at **primescore.ai** also has contract and credit optimisation as a future direction.
 
 ```mermaid
 flowchart LR
-    R[Historical market snapshots] --> D[Replay demo adapter]
-    D -->|HTTP POST /classify| C[Python classifier]
-    C --> S[Signed severity + certainty + reasoning]
-    S --> V[Experimental volatility scenario]
-    V --> U[Local research dashboard]
-    E[Planned live market / macro / geopolitical feeds] -.-> N[Planned .NET engine]
-    N -.-> C
-    N -.-> F[Planned composite / forecast / dislocation]
-    F -.-> P[Planned decisions / positions / risk]
-    H[Agent constraints + validation oracles] --- C
+    R[FRED observations / API submissions] --> N[.NET engine and ledger]
+    N -->|HTTP POST /classify with prior history| C[Python classifier]
+    C --> S[Signed severity / certainty / reasoning]
+    S --> V[Composite / volatility scenario / decision]
+    V --> U[Blazor dashboard and historical replay]
+    V -.-> P[Future positions / exits / risk]
 ```
 
-Solid arrows describe the demonstration; dotted arrows describe the planned engine. The demo's single-event scenario does not implement the engine's composite score or establish predictive accuracy.
+The engine records simulation decisions; it places no orders. Its volatility scenario uses an uncalibrated multiplier, not an independent forecast.
 
 ## Available and planned
 
 | Available in this repository | Planned or incomplete |
 | --- | --- |
 | Market-data and macroeconomic classification behind an OpenAPI contract | Cross-asset and geopolitical classification; model/RAG integration |
-| Historical replay, signed severity, certainty dimensions and reasoning traces | Live ingestion, independent volatility forecasting and calibrated signals |
-| Local three-view demo dashboard | .NET engine, persistence, portfolio risk and position management |
+| Daily FRED ingestion, append-only ledger, composite and simulation decisions | Independent volatility forecasting and calibrated signals |
+| Blazor dashboard, historical replay, configuration editing and operator sign-in | Options prices, positions, exits, portfolio risk and broker execution |
 | Agent hooks, bounded steering, tests and architecture contracts | Independent market-outcome validation and six-architecture benchmark results |
 
 [Status and audit](docs/STATUS.md) · [Known limitations](apps/classification/LIMITATIONS.md) · [Requirements](doc/srs/PrimeScore-SRS.md) · [Engine API design](doc/PrimeScore-API-v1.yaml)
+
+## Run PrimeScore Markets
+
+[Install, set the operator password and run the engine](docs/ENGINE.md). [Engine limits](apps/engine/LIMITATIONS.md).
 
 ## Run the replay demo
 

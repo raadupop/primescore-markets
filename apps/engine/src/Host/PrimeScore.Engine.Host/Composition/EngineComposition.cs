@@ -30,7 +30,8 @@ internal static class EngineComposition
         var services = builder.Services;
         services.AddEngineCore(builder.Configuration);
         services.AddApiSecurity(builder.Configuration);
-        services.AddControllers(options =>
+        services.AddOperatorSecurity(builder.Configuration, builder.Environment);
+        services.AddControllersWithViews(options =>
             {
                 options.ModelBinderProviders.Insert(0, new UtcDateTimeOffsetModelBinderProvider());
                 options.Filters.Add<RejectUnreadableParametersFilter>();
@@ -69,7 +70,20 @@ internal static class EngineComposition
         app.UseApiExceptionHandler();
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseRateLimiter();
         app.UseAntiforgery();
+        app.Use(async (context, next) =>
+        {
+            context.Response.Headers.XContentTypeOptions = "nosniff";
+            context.Response.Headers.XFrameOptions = "DENY";
+            context.Response.Headers["Referrer-Policy"] = "no-referrer";
+            if (!context.Request.Path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase))
+            {
+                context.Response.Headers.CacheControl = "no-store";
+            }
+
+            await next(context).ConfigureAwait(false);
+        });
         app.MapStaticAssets();
         app.MapControllers();
         app.MapRazorComponents<App>().AddInteractiveServerRenderMode();

@@ -12,6 +12,7 @@
 @inject IQueryHandler<GetSourceStatus, IReadOnlyList<SourceStatus>> SourceStatusQuery
 @inject ICommandHandler<RequestSourcePull, SourcePullAck> PullCommand
 @inject IClock Clock
+@inject PrimeScore.Engine.Host.Security.UiAccess Access
 @inject IQueryHandler<GetClassificationSummary, ClassificationSummary> SummaryQuery
 @inject IQueryHandler<GetSignals, SignalPage> SignalQuery
 @inject IQueryHandler<GetConsensusStatus, ConsensusStatus> ConsensusQuery
@@ -38,7 +39,7 @@
         </div>
         <p>Recomputes every entry's SHA-256 link from the first entry to the head and checks the head recorded by the last verification. Edits, removals and reordering at or below that recorded head are detected; entries appended since the last verification can be truncated or rewritten undetected, so verify regularly.</p>
         <p class="panel-note">
-            <button class="button button-primary" @onclick="VerifyAsync" disabled="@_verifying">@(_verifying ? "Verifying…" : "Verify ledger now")</button>
+            @if (_canAdmin) { <button class="button button-primary" @onclick="VerifyAsync" disabled="@_verifying">@(_verifying ? "Verifying…" : "Verify ledger now")</button> }
         </p>
         @if (_verifyError is not null)
         {
@@ -144,7 +145,7 @@
                 }
             </dl>
             <p class="panel-note">
-                <button class="button button-primary" @onclick="() => PullAsync(source.Source)" disabled="@(!source.Enabled || source.Running)">Pull now</button>
+                @if (_canAdmin) { <button class="button button-primary" @onclick="() => PullAsync(source.Source)" disabled="@(!source.Enabled || source.Running)">Pull now</button> }
                 @if (_pullMessage is not null)
                 {
                     <span> @_pullMessage</span>
@@ -371,9 +372,11 @@
     private LedgerVerification? _verification;
     private string? _verifyError;
     private bool _verifying;
+    private bool _canAdmin;
 
     protected override async Task OnInitializedAsync()
     {
+        _canAdmin = await Access.AdministratorAsync() is not null;
         await LoadSourcesAsync();
         _refresh = new Timer(_ => _ = InvokeAsync(async () => { await LoadSourcesAsync(); StateHasChanged(); }), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
         try
@@ -388,6 +391,7 @@
 
     private async Task VerifyAsync()
     {
+        if (await Access.AdministratorAsync() is null) { _verifyError = "Administrator sign-in is required."; return; }
         _verifying = true;
         _verifyError = null;
         try
@@ -452,6 +456,7 @@
 
     private async Task PullAsync(string source)
     {
+        if (await Access.AdministratorAsync() is null) { _pullMessage = "Administrator sign-in is required."; return; }
         var ack = await PullCommand.HandleAsync(new RequestSourcePull(source), CancellationToken.None);
         _pullMessage = ack.Queued ? ack.Reason ?? "Pull queued; progress appears here." : ack.Reason;
         await LoadSourcesAsync();

@@ -1,8 +1,12 @@
 @page "/configuration"
 @using PrimeScore.Modules.Configuration.Contracts
 @using PrimeScore.SharedKernel.Cqrs
+@using PrimeScore.SharedKernel.Json
 @inject IQueryHandler<GetActiveSettings, SettingsVersion> ActiveQuery
 @inject IQueryHandler<GetSettingsHistory, IReadOnlyList<SettingsVersion>> HistoryQuery
+@inject IQueryHandler<ResolveReplaySettings, ReplaySettingsResult> PreviewQuery
+@inject ICommandHandler<ReplaceSettings, SettingsChangeAck> SaveCommand
+@inject PrimeScore.Engine.Host.Security.UiAccess Access
 
 <PageTitle>Configuration · PrimeScore Markets</PageTitle>
 
@@ -37,11 +41,18 @@ else
             <span class="status @(settings.Calibration == "uncalibrated default" ? "status-warn" : "status-muted")">@settings.Calibration</span>
         </div>
         <p class="panel-note">
-            Changing parameters from this screen arrives with the operator sign-in (milestone M6). Until then an ADMIN token changes them
-            through <span class="mono">PUT /api/config/weighting-scheme</span>, <span class="mono">PUT /api/config/dislocation-threshold</span>
-            and <span class="mono">PUT /api/config/deploy-conditions</span>;
-            a change takes effect from the next composite, without a restart.
+            Administrator edits record a new version and its diff. Changes take effect from the next computation, without a restart.
         </p>
+        @if (_canAdmin)
+        {
+            <details><summary>Edit parameters</summary>
+                <p>Edit the configuration below. Values tuned against the validation set must use calibration "in-sample".</p>
+                <label class="form-field">Configuration JSON<textarea rows="24" class="mono" @bind="_settingsJson"></textarea></label>
+                <label class="form-field">Reason<input @bind="_reason" maxlength="500" /></label>
+                <button class="button button-primary" disabled="@_saving" @onclick="SaveAsync">Save configuration</button>
+                @if (_saveMessage is not null) { <p role="status">@_saveMessage</p> }
+            </details>
+        }
         <div class="settings-grid">
             <dl class="kv">
                 <dt>Weighting scheme</dt><dd>@settings.Weighting.SchemeId · @Aggregation(settings.Weighting.Aggregation)</dd>
@@ -140,18 +151,41 @@ else
     private SettingsVersion? _active;
     private IReadOnlyList<SettingsVersion> _history = [];
     private string? _error;
+    private bool _canAdmin, _saving;
+    private string _settingsJson = "", _reason = "";
+    private string? _saveMessage;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
+            _canAdmin = await Access.AdministratorAsync() is not null;
             _active = await ActiveQuery.HandleAsync(new GetActiveSettings(), CancellationToken.None);
+            _settingsJson = Fmt.Json(CanonicalJson.Serialize(_active.Settings));
             _history = await HistoryQuery.HandleAsync(new GetSettingsHistory(), CancellationToken.None);
         }
         catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
         {
             _error = exception.Message;
         }
+    }
+
+    private async Task SaveAsync()
+    {
+        var actor = await Access.AdministratorAsync();
+        if (actor is null || _active is null) { _saveMessage = "Administrator sign-in is required."; return; }
+        if (string.IsNullOrWhiteSpace(_reason)) { _saveMessage = "Enter a reason for the change."; return; }
+        _saving = true;
+        try
+        {
+            var preview = await PreviewQuery.HandleAsync(new ResolveReplaySettings(_active.Version.Value, _settingsJson, MarkInSample: false), CancellationToken.None);
+            if (preview.Settings is null) { _saveMessage = string.Join("; ", preview.Errors); return; }
+            var ack = await SaveCommand.HandleAsync(new ReplaceSettings(preview.Settings, _reason.Trim(), actor, _active.Version.Value), CancellationToken.None);
+            _saveMessage = ack.Accepted ? ack.Version is { } version ? $"Saved version {version}." : "No values changed." : string.Join("; ", ack.Errors);
+            if (ack.Accepted) { await OnInitializedAsync(); }
+        }
+        catch (Exception) { _saveMessage = "The configuration could not be saved. Check the engine log."; }
+        finally { _saving = false; }
     }
 
     private static string Aggregation(Aggregation aggregation) => aggregation switch

@@ -12,6 +12,7 @@
 @inject ICommandHandler<EvaluateValidationEvents, ValidationEvaluationAck> Evaluator
 @inject NavigationManager Navigation
 @inject PrimeScore.Ledger.ILedgerStatusQuery LedgerStatus
+@inject PrimeScore.Engine.Host.Security.UiAccess Access
 <PageTitle>Replay · PrimeScore Markets</PageTitle>
 <div class="page-head"><div>
     <div class="eyebrow">Point-in-time replay</div><h1>Replay</h1>
@@ -29,12 +30,15 @@
 </div>
 <details><summary>Temporary configuration overrides (JSON)</summary>
     <p>Use configuration field names; contexts may be keyed by name. Every changed run is labelled in-sample.</p>
-    <label>Overrides<textarea rows="7" @bind="_overrides" placeholder='{"contexts":{"equity":{"dislocation_threshold":10}}}'></textarea></label>
+    <label class="form-field">Overrides<textarea rows="7" @bind="_overrides" placeholder='{"contexts":{"equity":{"dislocation_threshold":10}}}'></textarea></label>
 </details>
+@if (_canAdmin)
+{
 <div class="actions">
-    <button class="button primary" disabled="@_busy" @onclick="RunAsync">@(_busy ? "Running…" : "Run replay")</button>
+    <button class="button button-primary" disabled="@_busy" @onclick="RunAsync">@(_busy ? "Running…" : "Run replay")</button>
     <button class="button" disabled="@_busy" @onclick="EvaluateAsync">Evaluate ten events</button>
 </div>
+}
 @if (_error is not null) { <div class="degraded" role="alert">@_error</div> }
 @if (_busy) { <div class="loading" role="status">Recalculating from recorded inputs…</div> }
 @if (_run is { } selectedRun)
@@ -57,7 +61,7 @@
                         <td class="num">@Fmt.Signed(decision.CompositeScore, 4)</td><td class="num">@Fmt.Signed(decision.DislocationValue, 2) / ±@Fmt.Number(decision.DislocationThreshold, 2)</td>
                         <td><details><summary>@decision.Scenario · @decision.Conditions.Count(c => !c.Passed) failed conditions</summary><p>@decision.Explanation</p>
                             @foreach (var signal in decision.TopContributing.Concat(decision.Dissenting))
-                            { <p><a href="signals?assessment=@signal.AssessmentId">@signal.Instrument · @Fmt.Utc(signal.ObservedAt) · assessment</a></p> }
+                            { <p><a href="tape?assessment=@signal.AssessmentId">@signal.Instrument · @Fmt.Utc(signal.ObservedAt) · assessment</a></p> }
                         </details></td></tr>
                 }</tbody>
             </table></div>
@@ -90,10 +94,12 @@
     private string _eventId = "iran-strikes", _label = "Iran Strikes", _overrides = "";
     private DateTime _from = new(2026, 2, 26), _to = new(2026, 2, 28);
     private bool _busy;
+    private bool _canAdmin;
     private string? _error;
 
     protected override async Task OnParametersSetAsync()
     {
+        _canAdmin = await Access.AdministratorAsync() is not null;
         _events = await EventsQuery.HandleAsync(new GetValidationEvents(), CancellationToken.None);
         await RefreshAsync();
         if (ReplayId is { } id)
@@ -116,6 +122,8 @@
 
     private async Task RunAsync()
     {
+        var actor = await Access.AdministratorAsync();
+        if (actor is null) { _error = "Administrator sign-in is required."; return; }
         _busy = true;
         _error = null;
         try
@@ -124,7 +132,7 @@
             var ack = await Runner.HandleAsync(new RunReplay(_label,
                 MarketTime.AtNewYork(DateOnly.FromDateTime(_from), TimeOnly.MinValue),
                 MarketTime.AtNewYork(DateOnly.FromDateTime(_to), TimeOnly.MaxValue),
-                string.IsNullOrWhiteSpace(_overrides) ? null : _overrides, "local-ui", input.HeadSequence, input.HeadHash), CancellationToken.None);
+                string.IsNullOrWhiteSpace(_overrides) ? null : _overrides, actor, input.HeadSequence, input.HeadHash), CancellationToken.None);
             if (ack.ReplayId is { } id) { Navigation.NavigateTo("replay?id=" + id); }
             else { _error = string.Join("; ", ack.Errors); }
         }
@@ -134,12 +142,14 @@
 
     private async Task EvaluateAsync()
     {
+        var actor = await Access.AdministratorAsync();
+        if (actor is null) { _error = "Administrator sign-in is required."; return; }
         _busy = true;
         _error = null;
         try
         {
             var input = await LedgerStatus.GetAsync(CancellationToken.None);
-            await Evaluator.HandleAsync(new EvaluateValidationEvents("local-ui", input.HeadSequence, input.HeadHash), CancellationToken.None);
+            await Evaluator.HandleAsync(new EvaluateValidationEvents(actor, input.HeadSequence, input.HeadHash), CancellationToken.None);
             await RefreshAsync();
         }
         catch (Exception) { _error = "Validation did not finish. Check the engine log."; }

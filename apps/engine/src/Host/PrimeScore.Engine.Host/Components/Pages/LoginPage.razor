@@ -1,0 +1,26 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@inject Microsoft.Extensions.Options.IOptionsMonitor<PrimeScore.Engine.Host.Security.OperatorOptions> Account
+<PageTitle>Sign in · PrimeScore Markets</PageTitle>
+<section class="panel">
+    <div class="eyebrow">Operator access</div><h1>Sign in</h1>
+    @if (!Account.CurrentValue.Configured)
+    {
+        <p class="degraded">No operator password is configured. Run the password setup command in docs/ENGINE.md, then restart the application.</p>
+    }
+    else
+    {
+        @if (Error is not null) { <p class="degraded" role="alert">Sign-in failed. Check your username and password.</p> }
+        <form method="post" action="account/login" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+            <label class="form-field">Username<input name="username" autocomplete="username" required maxlength="100" /></label>
+            <label class="form-field">Password<input type="password" name="password" autocomplete="current-password" required maxlength="1024" /></label>
+            <button class="button button-primary" type="submit">Sign in</button>
+        </form>
+    }
+</section>
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+}

@@ -8,6 +8,9 @@
             </span>PrimeScore<span class="wordmark-product">Markets</span>
         </a>
         <div class="topbar-meta">
+            <Microsoft.AspNetCore.Components.Authorization.AuthorizeView>
+                <Authorized><form method="post" action="account/logout" data-enhance="false"><AntiforgeryToken /><button class="button" type="submit">Sign out</button></form></Authorized>
+            </Microsoft.AspNetCore.Components.Authorization.AuthorizeView>
             <span class="status" title="SRS POS-003: no orders are placed; decisions are recorded, not executed.">Simulation mode</span>
         </div>
     </header>

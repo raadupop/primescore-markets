@@ -203,6 +203,6 @@ internal sealed class ReplaceSettingsHandler(SettingsWriter settings) : ICommand
     public Task<SettingsChangeAck> HandleAsync(ReplaceSettings command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
-        return settings.ChangeAsync(_ => (command.Settings, []), command.Reason, command.ChangedBy, cancellationToken);
+        return settings.ChangeAsync(_ => (command.Settings, []), command.Reason, command.ChangedBy, cancellationToken, command.ExpectedVersion);
     }
 }

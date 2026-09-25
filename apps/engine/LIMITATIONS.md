@@ -12,6 +12,12 @@ Limits that hold even when every check passes. Architecture and ledger limits ar
 - `config_overrides` uses configuration field names in snake_case. Objects merge, arrays replace; `contexts` also accepts an object keyed by existing context name. Unknown fields, null values and invalid parameter values are refused. Classifier formulas and registry values cannot be overridden.
 - The API returns all replay decisions in one response; long ranges produce large payloads. The UI and report use the same stored run.
 
+## Operator access (M6)
+
+- One ADMIN account signs into the browser with a password hash from user-secrets or environment variables. READ and ADMIN API tokens remain separate. There is no account recovery service; reset the password locally with the [setup command](../../docs/ENGINE.md#install-and-sign-in).
+- Configuration editing uses JSON with validation and rejects saves based on an older version. It does not calibrate parameters or validate an operator's claim that settings were estimated independently.
+- Local Development uses HTTP on loopback; HTTPS and service supervision for a hosted installation require operator setup. Passwords, token hashes and ASP.NET data-protection keys are outside the repository and must be protected with the service account's filesystem permissions.
+
 ## Data coverage (FRED)
 
 - **VVIX has no FRED series.** The registry maps VVIX to `VVIXCLS` (`verified: false`); FRED answers "series does not exist". Every pull reports it as not pulled; no VVIX value exists in the engine.
@@ -61,7 +67,7 @@ Limits that hold even when every check passes. Architecture and ledger limits ar
 - `PUT /config/dislocation-threshold` answers 400 with one error per invalid field (a threshold not above 0, a sensitivity factor outside (0, 1], regime boundaries out of order, or an unknown key); the contract lists only 200 for it. The SRS example sensitivity map (1.5 / 1.0 / 0.6) is refused because 1.5 lies outside (0, 1].
 - The regime percentile ranks the reference level among its previous `N_L` (1260) closes; the history starts in 2011, so until about 2016 it ranks against fewer closes (the count is on each dislocation record).
 - `component_scores[].assessment_count` counts the confirmed assessments that entered the category's net conviction.
-- Settings can be changed through the API with an ADMIN token; editing from the Configuration screen arrives with the operator sign-in (M6).
+- Settings can be changed through the API with an ADMIN token or through the Configuration screen after operator sign-in. An editor opened before another saved change must reload before saving.
 
 ## Decisions (M4)
 
