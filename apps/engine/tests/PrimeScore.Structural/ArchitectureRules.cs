@@ -38,7 +38,7 @@ public sealed class ArchitectureRules
                 $"{project.Name} depends on another module's implementation type"));
         }
 
-        Assert.Empty(violations);
+        Assert.True(violations.Count == 0, "Violations:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public sealed class ArchitectureRules
             Assert.All(types, type => Assert.StartsWith(ownNamespace, type.Namespace ?? "", StringComparison.Ordinal));
         }
 
-        Assert.Empty(violations);
+        Assert.True(violations.Count == 0, "Violations:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class ArchitectureRules
                 $"{name} depends on a module, the API contract or the host"));
         }
 
-        Assert.Empty(violations);
+        Assert.True(violations.Count == 0, "Violations:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class ArchitectureRules
             }
         }
 
-        Assert.Empty(violations);
+        Assert.True(violations.Count == 0, "Violations:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public sealed class ArchitectureRules
             }
         }
 
-        Assert.Empty(violations);
+        Assert.True(violations.Count == 0, "Violations:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
     [Fact]
@@ -196,7 +196,7 @@ public sealed class ArchitectureRules
             }
         }
 
-        Assert.Empty(violations);
+        Assert.True(violations.Count == 0, "Violations:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
     [Fact]

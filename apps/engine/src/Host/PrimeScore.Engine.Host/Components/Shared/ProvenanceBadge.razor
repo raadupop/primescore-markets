@@ -1,0 +1,22 @@
+@using PrimeScore.Modules.Ingestion.Contracts
+
+<span class="status @(Provenance.Provider == "HUMAN_CURATED" ? "status-blue" : Provenance.Provider == "FRED" ? "" : "status-muted")"
+      title="@Title">@Provenance.Provider@(Provenance.SeriesId is { } id ? $" {id}" : "")</span>
+@if (Provenance.MappingVerified == false)
+{
+    <span class="status status-warn" title="The registry marks this provider series id as unconfirmed.">provider mapping unverified</span>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public SignalProvenance Provenance { get; set; } = null!;
+
+    private string Title => string.Join(" · ", new[]
+    {
+        Provenance.Url,
+        Provenance.RetrievedAt is { } retrieved ? $"retrieved {Fmt.Utc(retrieved)}" : null,
+        Provenance.FirstReleased is { } released ? $"first released {released:yyyy-MM-dd}" : null,
+        Provenance.SubmittedBy is { } by ? $"submitted by {by}" : null,
+        Provenance.Note,
+    }.Where(part => !string.IsNullOrEmpty(part)));
+}

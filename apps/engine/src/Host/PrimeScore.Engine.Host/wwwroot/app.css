@@ -121,6 +121,21 @@ table.data tr:last-child td { border-bottom: 0; }
 table.data td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 table.data td.mono { font-family: var(--mono); font-size: 12px; }
 
+/* Forms and detail */
+.filters { display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: end; }
+.filters label { display: flex; flex-direction: column; gap: 6px; font: 10px/1.5 var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.filters input, .filters select { background: var(--bg); border: 1px solid var(--line-strong); border-radius: 6px; padding: 8px 10px; min-width: 150px; font: 13px/1.4 var(--sans); text-transform: none; letter-spacing: 0; color: var(--text); color-scheme: dark; }
+.filter-actions { display: flex; gap: 10px; }
+table.data tr.selected td { background: #c5f56a0a; }
+table.data tbody tr:hover td { background: #ffffff05; }
+pre.code { background: #070b11; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: 12px/1.6 var(--mono); color: #cfd8e3; margin: 16px 0 0; }
+pre.code-raw { white-space: pre-wrap; word-break: break-all; }
+details > summary { cursor: pointer; color: var(--muted, #8b98a8); margin-top: 12px; font-size: 13px; }
+details.panel > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+details.panel[open] > summary { margin-bottom: 14px; }
+.content a:not(.button) { color: var(--blue); text-underline-offset: 3px; }
+.content a:not(.button):hover { text-decoration: underline; }
+
 /* Blazor runtime UI */
 #blazor-error-ui { display: none; position: fixed; inset: auto 0 0 0; padding: 12px 20px; background: #2a1414; color: var(--text); border-top: 1px solid var(--bad); z-index: 100; font-size: 13px; }
 #blazor-error-ui .dismiss { cursor: pointer; margin-left: 16px; color: var(--muted); }

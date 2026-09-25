@@ -5,7 +5,7 @@
 namespace PrimeScore.Ledger.Storage.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialLedger : Migration
+    internal partial class InitialLedger : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

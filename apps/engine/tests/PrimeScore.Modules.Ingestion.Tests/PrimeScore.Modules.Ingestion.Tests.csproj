@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit tests for signal validation, FRED timing and derivation, and idempotent recording. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Ingestion\PrimeScore.Modules.Ingestion\PrimeScore.Modules.Ingestion.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Ingestion\PrimeScore.Modules.Ingestion.Contracts\PrimeScore.Modules.Ingestion.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+    <ProjectReference Include="..\..\src\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>

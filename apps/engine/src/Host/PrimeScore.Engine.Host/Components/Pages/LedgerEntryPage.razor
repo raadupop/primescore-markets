@@ -1,0 +1,71 @@
+@page "/ledger/{Sequence:long}"
+@using PrimeScore.Ledger
+@inject ILedgerAuditQuery Audit
+
+<PageTitle>Ledger entry #@Sequence · PrimeScore Markets</PageTitle>
+
+<div class="page-head">
+    <div>
+        <div class="eyebrow">Audit · append-only ledger</div>
+        <h1>Ledger entry #@Sequence</h1>
+        <p>The stored record. Its hash covers the previous entry's hash and every field below, with the payload exactly as shown under "Payload as hashed" (ADR-0003).</p>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="loading">Loading entry…</div>
+}
+else if (_entry is null)
+{
+    <EmptyState Title="No such entry">The ledger has no entry #@Sequence.</EmptyState>
+}
+else
+{
+    <section class="panel">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">@_entry.Kind</div>
+                <h2>@_entry.Summary</h2>
+            </div>
+        </div>
+        <dl class="kv">
+            <dt>Sequence</dt><dd>@_entry.Sequence</dd>
+            <dt>Recorded</dt><dd>@_entry.RecordedAt.UtcDateTime.ToString("O", CultureInfo.InvariantCulture)</dd>
+            <dt>Entity id</dt><dd>@_entry.EntityId</dd>
+            <dt>Correlation id</dt><dd>@_entry.CorrelationId</dd>
+            <dt>Configuration version</dt><dd>@_entry.ConfigVersion.Value@(_entry.ConfigVersion.Value == 0 ? " (none)" : "")</dd>
+            <dt>Previous hash</dt><dd>@_entry.PrevHash</dd>
+            <dt>Hash</dt><dd>@_entry.Hash</dd>
+        </dl>
+        <h3>Payload as hashed</h3>
+        <pre class="code code-raw">@_entry.Payload</pre>
+        <details>
+            <summary>Indented for reading (re-formatted; not the hashed bytes)</summary>
+            <pre class="code">@Fmt.Json(_entry.Payload)</pre>
+        </details>
+        <p class="panel-note">
+            @if (Sequence > 1)
+            {
+                <a class="button button-ghost" href="ledger/@(Sequence - 1)">Previous entry</a>
+            }
+            <a class="button button-ghost" href="ledger/@(Sequence + 1)">Next entry</a>
+            <a class="button button-ghost" href="sources">Verify the chain</a>
+        </p>
+    </section>
+}
+
+@code {
+    [Parameter]
+    public long Sequence { get; set; }
+
+    private LedgerRecord? _entry;
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _entry = await Audit.BySequenceAsync(Sequence, CancellationToken.None);
+        _loading = false;
+    }
+}

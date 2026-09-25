@@ -25,4 +25,4 @@
 
 ## Commands
 
-From the repository root: `bash harness/check-suite.sh` is the single gate; `bash harness/check-engine.sh` runs the engine stage alone. Migrations: `dotnet ef migrations add <Name> --project <project> --startup-project <project>` from `apps/engine` (tool manifest in `.config/`). Setup and operation: `docs/ENGINE.md` (milestone M6).
+From the repository root: `bash harness/check-suite.sh` is the single gate; `bash harness/check-engine.sh` runs the engine stage alone. Migrations: `dotnet ef migrations add <Name> --project <project> --startup-project <project>` from `apps/engine` (tool manifest in `.config/`). FRED key: `Fred:ApiKey` in user-secrets (Development) or `Fred__ApiKey`. Data limits: [LIMITATIONS.md](LIMITATIONS.md). Setup and operation: `docs/ENGINE.md` (milestone M6).

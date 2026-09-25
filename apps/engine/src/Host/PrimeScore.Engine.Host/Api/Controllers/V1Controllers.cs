@@ -12,16 +12,6 @@ namespace PrimeScore.Engine.Host.Api.Controllers;
 // v1 endpoints are implemented milestone by milestone; until then each states which one.
 
 [Authorize(Policy = ApiPolicies.Read)]
-public sealed class AdminIngestionController : Dto.Admin_IngestionControllerBase
-{
-    [Authorize(Policy = ApiPolicies.Admin)]
-    public override Task<ActionResult<Dto.IngestSignalsResponse>> IngestSignals(
-        Dto.IngestSignalsRequest body,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult<ActionResult<Dto.IngestSignalsResponse>>(ApiResults.NotYetBuilt("M1", "SIG-001 to SIG-004"));
-}
-
-[Authorize(Policy = ApiPolicies.Read)]
 public sealed class ClassificationController : Dto.ClassificationControllerBase
 {
     public override Task<ActionResult<Dto.CompositeScore>> GetCompositeScore(

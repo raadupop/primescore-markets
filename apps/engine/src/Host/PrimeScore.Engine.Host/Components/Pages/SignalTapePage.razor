@@ -1,4 +1,9 @@
 @page "/tape"
+@using PrimeScore.Modules.Ingestion.Contracts
+@using PrimeScore.SharedKernel
+@using PrimeScore.SharedKernel.Cqrs
+@inject IQueryHandler<GetSignals, SignalPage> SignalQuery
+@inject IQueryHandler<GetRejections, IReadOnlyList<RejectionView>> RejectionQuery
 
 <PageTitle>Signal tape · PrimeScore Markets</PageTitle>
 
@@ -6,10 +11,228 @@
     <div>
         <div class="eyebrow">Signal tape</div>
         <h1>Observed signals</h1>
-        <p>Every signal in all four source categories, with validation status, classifier assessment, provenance and reasoning trace.</p>
+        <p>
+            Every recorded signal in the four source categories, newest observation first, with its provenance and ledger entry.
+            <strong>As of</strong> shows only what had been observed at that moment (SRS SIG-004).
+        </p>
     </div>
 </div>
 
-<EmptyState Title="No signals ingested">
-    Ingestion arrives in milestone M1 (SRS SIG-001 to SIG-004); classification of stored signals in M2.
-</EmptyState>
+<section class="panel" aria-label="Filters">
+    <form class="filters" @onsubmit="ApplyAsync">
+        <label>Category
+            <select @bind="_category">
+                <option value="">All</option>
+                @foreach (var category in Enum.GetValues<SourceCategory>())
+                {
+                    <option value="@category">@Fmt.Category(category)</option>
+                }
+            </select>
+        </label>
+        <label>Instrument <input @bind="_instrument" placeholder="VIX" /></label>
+        <label>From (UTC) <input type="date" @bind="_from" /></label>
+        <label>To (UTC) <input type="date" @bind="_to" /></label>
+        <label>As of (UTC) <input type="datetime-local" @bind="_asOf" /></label>
+        <div class="filter-actions">
+            <button class="button button-primary" type="submit">Apply</button>
+            <button class="button button-ghost" type="button" @onclick="ResetAsync">Reset</button>
+        </div>
+    </form>
+</section>
+
+@if (_error is not null)
+{
+    <div class="degraded"><strong>The tape could not be loaded.</strong> @_error</div>
+}
+else if (_page is null)
+{
+    <div class="loading">Loading signals…</div>
+}
+else if (_page.Total == 0)
+{
+    <EmptyState Title="@(HasFilters ? "No signals match these filters" : "No signals recorded yet")">
+        @if (HasFilters)
+        {
+            <span>Widen the date range or clear the instrument and category.</span>
+        }
+        else
+        {
+            <span>Run the FRED pull from Sources and health, or submit signals through POST /api/admin/signals. Nothing is shown until something is observed.</span>
+        }
+    </EmptyState>
+}
+else
+{
+    <p class="panel-note">
+        @Fmt.Count(_page.Total) signal(s) · showing @(_skip + 1)–@(_skip + _page.Signals.Count).
+        Classification of recorded signals arrives in milestone M2; until then no assessment is shown.
+    </p>
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th scope="col">Observed</th>
+                    <th scope="col">Category</th>
+                    <th scope="col">Instrument</th>
+                    <th scope="col">Value</th>
+                    <th scope="col">Source</th>
+                    <th scope="col">Recorded</th>
+                    <th scope="col">Ledger</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var signal in _page.Signals)
+                {
+                    <tr class="@(signal.SignalId == _selected?.SignalId ? "selected" : "")" @onclick="() => _selected = signal" style="cursor:pointer">
+                        <td class="mono">@Fmt.Utc(signal.ObservedAt)</td>
+                        <td>@Fmt.Category(signal.Category)</td>
+                        <td class="mono">@signal.Instrument</td>
+                        <td class="num">@Fmt.Number(signal.Value, 4)</td>
+                        <td><ProvenanceBadge Provenance="signal.Provenance" /></td>
+                        <td class="mono">@Fmt.Utc(signal.RecordedAt)</td>
+                        <td class="mono"><a href="ledger/@signal.LedgerSequence">#@signal.LedgerSequence</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="panel-note">
+        <button class="button button-ghost" disabled="@(_skip == 0)" @onclick="() => PageAsync(-PageSize)">Newer</button>
+        <button class="button button-ghost" disabled="@(_skip + PageSize >= _page.Total)" @onclick="() => PageAsync(PageSize)">Older</button>
+    </p>
+
+    @if (_selected is { } detail)
+    {
+        <section class="panel" aria-label="Signal detail">
+            <div class="panel-head">
+                <div>
+                    <div class="kicker">@Fmt.Category(detail.Category) · observed event</div>
+                    <h2>@detail.Instrument at @Fmt.Utc(detail.ObservedAt)</h2>
+                </div>
+                <ProvenanceBadge Provenance="detail.Provenance" />
+            </div>
+            <dl class="kv">
+                <dt>Signal id</dt><dd>@detail.SignalId</dd>
+                <dt>Correlation id</dt><dd>@detail.CorrelationId</dd>
+                <dt>Source identifier</dt><dd>@detail.SourceIdentifier</dd>
+                <dt>Payload type</dt><dd>@detail.PayloadType</dd>
+                <dt>Provider</dt><dd>@detail.Provenance.Provider</dd>
+                @if (detail.Provenance.Url is { } url)
+                {
+                    <dt>Source URL</dt><dd><a href="@url" target="_blank" rel="noopener noreferrer">@url</a></dd>
+                }
+                @if (detail.Provenance.RetrievedAt is { } retrieved)
+                {
+                    <dt>Retrieved</dt><dd>@Fmt.Utc(retrieved)</dd>
+                }
+                @if (detail.Provenance.FirstReleased is { } released)
+                {
+                    <dt>First released</dt><dd>@released.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</dd>
+                }
+                @if (detail.Provenance.Derivation is { } derivation)
+                {
+                    <dt>Derivation</dt><dd>@derivation</dd>
+                }
+                @if (detail.Provenance.Note is { } note)
+                {
+                    <dt>Timing</dt><dd>@note</dd>
+                }
+                <dt>Ledger entry</dt><dd><a href="ledger/@detail.LedgerSequence">#@detail.LedgerSequence</a></dd>
+            </dl>
+            <pre class="code">@Fmt.Json(detail.Payload)</pre>
+        </section>
+    }
+}
+
+<details class="panel">
+    <summary>Rejected submissions (SRS SIG-002)</summary>
+    @if (_rejections is null || _rejections.Count == 0)
+    {
+        <p class="panel-note">No submission has been rejected.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th scope="col">Recorded</th><th scope="col">Source</th><th scope="col">Errors</th><th scope="col">Ledger</th></tr></thead>
+                <tbody>
+                    @foreach (var rejection in _rejections)
+                    {
+                        <tr>
+                            <td class="mono">@Fmt.Utc(rejection.RecordedAt)</td>
+                            <td class="mono">@(rejection.SourceIdentifier ?? "—")</td>
+                            <td>@string.Join("; ", rejection.Errors)</td>
+                            <td class="mono"><a href="ledger/@rejection.LedgerSequence">#@rejection.LedgerSequence</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</details>
+
+@code {
+    private const int PageSize = 100;
+
+    private string _category = "";
+    private string? _instrument;
+    private DateTime? _from;
+    private DateTime? _to;
+    private DateTime? _asOf;
+    private int _skip;
+    private SignalPage? _page;
+    private SignalView? _selected;
+    private IReadOnlyList<RejectionView>? _rejections;
+    private string? _error;
+
+    private bool HasFilters => _category.Length > 0 || !string.IsNullOrWhiteSpace(_instrument) || _from is not null || _to is not null || _asOf is not null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _rejections = await RejectionQuery.HandleAsync(new GetRejections(20), CancellationToken.None);
+    }
+
+    private Task ApplyAsync()
+    {
+        _skip = 0;
+        return LoadAsync();
+    }
+
+    private Task ResetAsync()
+    {
+        (_category, _instrument, _from, _to, _asOf, _skip) = ("", null, null, null, null, 0);
+        return LoadAsync();
+    }
+
+    private Task PageAsync(int delta)
+    {
+        _skip = Math.Max(0, _skip + delta);
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        _selected = null;
+        try
+        {
+            var filter = new SignalFilter(
+                AsOf: Utc(_asOf),
+                From: Utc(_from),
+                To: _to is { } to ? Utc(to.Date.AddDays(1).AddTicks(-1)) : null,
+                Category: Enum.TryParse<SourceCategory>(_category, out var category) ? category : null,
+                Instrument: string.IsNullOrWhiteSpace(_instrument) ? null : _instrument.Trim(),
+                Skip: _skip,
+                Take: PageSize);
+            _page = await SignalQuery.HandleAsync(new GetSignals(filter), CancellationToken.None);
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException exception)
+        {
+            _error = exception.Message;
+        }
+    }
+
+    private static DateTimeOffset? Utc(DateTime? value) =>
+        value is { } local ? new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), TimeSpan.Zero) : null;
+}

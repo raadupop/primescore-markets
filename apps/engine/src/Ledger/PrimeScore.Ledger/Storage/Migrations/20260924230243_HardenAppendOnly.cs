@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace PrimeScore.Ledger.Storage.Migrations
 {
     /// <inheritdoc />
-    public partial class HardenAppendOnly : Migration
+    internal partial class HardenAppendOnly : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

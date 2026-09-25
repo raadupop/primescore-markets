@@ -32,6 +32,7 @@ internal static class EngineComposition
         services.AddControllers().AddJsonOptions(options => ApiJson.Configure(options.JsonSerializerOptions));
         services.AddRazorComponents().AddInteractiveServerComponents();
         services.AddScoped<EngineHealthService>();
+        services.AddHostedService<LedgerVerificationScheduler>();
         return builder;
     }
 

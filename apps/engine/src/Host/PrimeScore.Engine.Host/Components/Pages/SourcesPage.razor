@@ -1,10 +1,16 @@
 @page "/sources"
 @using PrimeScore.Ledger
+@using PrimeScore.Modules.Ingestion.Contracts
 @using PrimeScore.SharedKernel
+@using PrimeScore.SharedKernel.Cqrs
 @using PrimeScore.SharedKernel.Registry
+@implements IDisposable
 @inject ILedgerVerifier Verifier
 @inject ILedgerStatusQuery LedgerStatus
 @inject IndicatorRegistry Registry
+@inject IQueryHandler<GetSourceStatus, IReadOnlyList<SourceStatus>> SourceStatusQuery
+@inject ICommandHandler<RequestSourcePull, SourcePullAck> PullCommand
+@inject IClock Clock
 
 <PageTitle>Sources and health · PrimeScore Markets</PageTitle>
 
@@ -68,9 +74,110 @@
             <h2 id="adapters-title">Source adapters</h2>
         </div>
     </div>
-    <EmptyState Title="No adapters running">
-        The FRED adapter (daily schedule and backfill) arrives in milestone M1. Until then no observation is pulled.
-    </EmptyState>
+    @if (_sourcesError is not null)
+    {
+        <div class="degraded">
+            <strong>Adapter status could not be read.</strong> @_sourcesError
+            @if (_sourcesAsOf is { } asOf)
+            {
+                <span> Showing the status as of @Fmt.Utc(asOf).</span>
+            }
+        </div>
+    }
+    @if (_sources is null)
+    {
+        @if (_sourcesError is null)
+        {
+            <div class="loading">Loading adapter status…</div>
+        }
+    }
+    else
+    {
+        @foreach (var source in _sources)
+        {
+            <div class="panel-head">
+                <div>
+                    <h3>@source.Source</h3>
+                    <p class="panel-note">Daily pull and backfill from 2011. Values FRED reports as missing are skipped, never filled.</p>
+                </div>
+                @if (!source.Enabled)
+                {
+                    <span class="status status-muted">disabled</span>
+                }
+                else if (source.Running)
+                {
+                    <span class="status status-blue">pulling</span>
+                }
+                else if (source.LastRunPartial)
+                {
+                    <span class="status status-warn">last run partial</span>
+                }
+                else if (source.LastError is not null)
+                {
+                    <span class="status status-bad">last run failed</span>
+                }
+                else
+                {
+                    <span class="status">enabled</span>
+                }
+            </div>
+            @if (source.DisabledReason is { } reason)
+            {
+                <div class="degraded"><strong>Not pulling.</strong> @reason</div>
+            }
+            <dl class="kv">
+                <dt>Last attempt</dt><dd>@Fmt.Utc(source.LastAttemptAt) (@Fmt.Age(source.LastAttemptAt, Clock.UtcNow))</dd>
+                <dt>Last success</dt><dd>@Fmt.Utc(source.LastSuccessAt)</dd>
+                <dt>Next scheduled run</dt><dd>@Fmt.Utc(source.NextRunAt)</dd>
+                @if (source.LastError is { } error)
+                {
+                    <dt>Last error</dt><dd>@error</dd>
+                }
+                @if (source.LastRun is { } counts)
+                {
+                    <dt>Last run</dt>
+                    <dd>@counts.Accepted recorded · @counts.Duplicates already recorded · @counts.Revised revised values kept as first recorded · @counts.Missing missing skipped</dd>
+                }
+            </dl>
+            <p class="panel-note">
+                <button class="button button-primary" @onclick="() => PullAsync(source.Source)" disabled="@(!source.Enabled || source.Running)">Pull now</button>
+                @if (_pullMessage is not null)
+                {
+                    <span> @_pullMessage</span>
+                }
+            </p>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr><th scope="col">Series</th><th scope="col">Instrument</th><th scope="col">Category</th><th scope="col">Recorded</th><th scope="col">Latest observation</th><th scope="col">Timing</th><th scope="col">Mapping</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var series in source.Series)
+                        {
+                            <tr>
+                                <td class="mono"><a href="https://fred.stlouisfed.org/series/@series.SeriesId" target="_blank" rel="noopener noreferrer">@series.SeriesId</a></td>
+                                <td class="mono">@series.Instrument</td>
+                                <td>@Fmt.Category(series.Category)</td>
+                                <td class="num">@Fmt.Count(series.Recorded)</td>
+                                <td class="mono">@Fmt.Utc(series.LatestObservedAt)</td>
+                                <td>@series.Timing</td>
+                                <td>
+                                    @if (series.MappingVerified)
+                                    {
+                                        <span class="status">verified</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status status-warn">provider mapping unverified</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
 </section>
 
 <section class="panel" aria-labelledby="registry-title">
@@ -128,12 +235,19 @@
 </section>
 
 @code {
+    private IReadOnlyList<SourceStatus>? _sources;
+    private DateTimeOffset? _sourcesAsOf;
+    private string? _sourcesError;
+    private string? _pullMessage;
+    private Timer? _refresh;
     private LedgerVerification? _verification;
     private string? _verifyError;
     private bool _verifying;
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadSourcesAsync();
+        _refresh = new Timer(_ => _ = InvokeAsync(async () => { await LoadSourcesAsync(); StateHasChanged(); }), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
         try
         {
             _verification = (await LedgerStatus.GetAsync(CancellationToken.None)).LastVerification;
@@ -161,4 +275,28 @@
             _verifying = false;
         }
     }
+
+    /// <summary>A failed refresh keeps the last status on screen, flagged with its age; it never breaks the circuit.</summary>
+    private async Task LoadSourcesAsync()
+    {
+        try
+        {
+            _sources = await SourceStatusQuery.HandleAsync(new GetSourceStatus(), CancellationToken.None);
+            _sourcesAsOf = Clock.UtcNow;
+            _sourcesError = null;
+        }
+        catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException or IOException)
+        {
+            _sourcesError = exception.Message;
+        }
+    }
+
+    private async Task PullAsync(string source)
+    {
+        var ack = await PullCommand.HandleAsync(new RequestSourcePull(source), CancellationToken.None);
+        _pullMessage = ack.Queued ? ack.Reason ?? "Pull queued; progress appears here." : ack.Reason;
+        await LoadSourcesAsync();
+    }
+
+    public void Dispose() => _refresh?.Dispose();
 }

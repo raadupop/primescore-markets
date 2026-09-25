@@ -46,8 +46,8 @@ internal static partial class ModuleIl
         return definition is null
             ? []
             : ReachableCalls(module, [.. WithNestedAndBases(definition, module)])
-                .Where(IsWrite)
-                .Select(Describe)
+                .Where(call => IsWrite(call.Target))
+                .Select(call => $"{Describe(call.Target)} (from {call.Caller.DeclaringType.Name}::{call.Caller.Name})")
                 .Distinct()
                 .ToArray();
     }
@@ -77,7 +77,12 @@ internal static partial class ModuleIl
         return findings;
     }
 
-    private static IEnumerable<MethodReference> ReachableCalls(ModuleDefinition module, IEnumerable<TypeDefinition> roots)
+    /// <summary>
+    /// Calls reachable from the roots within the module. Reaching a method also reaches its
+    /// compiler-generated bodies: the async state machine named after it and the lambda
+    /// closure classes of its declaring type.
+    /// </summary>
+    private static IEnumerable<(MethodDefinition Caller, MethodReference Target)> ReachableCalls(ModuleDefinition module, IEnumerable<TypeDefinition> roots)
     {
         var pending = new Stack<MethodDefinition>(roots.SelectMany(type => type.Methods).Where(method => method.HasBody));
         var visited = new HashSet<MethodDefinition>();
@@ -96,11 +101,14 @@ internal static partial class ModuleIl
                     continue;
                 }
 
-                yield return target;
+                yield return (method, target);
                 if (target.Module == module && target.Resolve() is { HasBody: true } local)
                 {
                     pending.Push(local);
-                    foreach (var nested in WithNested(local.DeclaringType).SelectMany(type => type.Methods).Where(candidate => candidate.HasBody))
+                    var generated = local.DeclaringType.NestedTypes
+                        .Where(type => type.Name.StartsWith($"<{local.Name}>", StringComparison.Ordinal) || type.Name.StartsWith("<>c", StringComparison.Ordinal))
+                        .SelectMany(WithNested);
+                    foreach (var nested in generated.SelectMany(type => type.Methods).Where(candidate => candidate.HasBody))
                     {
                         pending.Push(nested);
                     }
