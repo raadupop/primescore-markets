@@ -15,7 +15,7 @@ Limits that hold even when every check passes. Architecture and ledger limits ar
 - Daily index closes are stamped 16:15 America/New_York on the observation date. FRED publishes them the next morning, but the value was public at the close.
 - CPI and initial claims use each value as **first released** (FRED `output_type=4`) and are stamped 08:30 America/New_York on the first release date. CPI YoY is `100 × (index_t / index_t−12 − 1)` from first releases of the **seasonally adjusted** `CPIAUCSL`; published headline YoY and most consensus figures use the unadjusted index, which can differ by about 0.1 percentage point.
 - Basket prices (SP500, DGS10, DCOILWTICO, DEXUSEU) are stamped 16:00 America/New_York on the observation date. FRED may publish them days later (DCOILWTICO about a week, DEXUSEU weekly), so they were not necessarily public at that stamp. They are not classified in v1.
-- The classifier's `business_day` cadence counts Monday to Friday and ignores exchange holidays. The engine's composite windows and reporting intervals count NYSE trading days: the rule-based holidays plus the one-off closures since 2001 (ADR-0004 §4, §5). A future one-off closure is not known in advance and reads as a trading day without data.
+- The classifier's `business_day` cadence counts Monday to Friday and ignores exchange holidays. The engine's composite windows and reporting intervals count NYSE trading days, excluding the rule-based holidays and the one-off closures since 2001 (ADR-0004 §4, §5). A future one-off closure is not known in advance and reads as a trading day without data.
 
 ## Contract gaps
 
@@ -46,10 +46,10 @@ Limits that hold even when every check passes. Architecture and ledger limits ar
 ## Composite and dislocation (M3)
 
 - Every parameter is an uncalibrated default (ADR-0004): weights, windows, the bypass percentile, the sensitivity map and the thresholds (equity 1.5, oil 3.0 index points). The two contexts and their thresholds await operator confirmation.
-- In daily data only market data and cross-asset flows can corroborate each other; a macro print counts for 30 minutes after its release, so a composite recorded at the close does not include the morning's print. Geopolitical events are never classified in v1, so that category is always absent.
-- A composite is recorded when a member's assessment is recorded and is never recomputed: a configuration change applies from the next composite, and a late value for an earlier date adds a composite at that date without changing later ones.
+- In daily data an assessment can be confirmed only by another market-data assessment (cross-asset flows would qualify but are not classified in v1); a macro print counts for 30 minutes after its release, so a composite recorded at the close does not include the morning's print. Geopolitical events are never classified in v1, so that category is always absent.
+- A composite is recorded each time an assessment of one of its context's instruments is recorded, and is never recomputed: a configuration change applies from the next composite, and a late value for an earlier date adds a composite at that date without changing later ones.
 - `threshold_breached` compares the dislocation's magnitude with the threshold, so a vol-compression dislocation can breach it (ADR-0004 §6); the contract's description says `dislocation_value >= threshold`.
-- `PUT /config/dislocation-threshold` answers 400 with the problems for a value the formulas cannot use; the contract lists only 200 for it. The SRS example sensitivity map (1.5 / 1.0 / 0.6) is refused.
+- `PUT /config/dislocation-threshold` answers 400 with one error per invalid field (a threshold not above 0, a sensitivity factor outside (0, 1], regime boundaries out of order, or an unknown key); the contract lists only 200 for it. The SRS example sensitivity map (1.5 / 1.0 / 0.6) is refused because 1.5 lies outside (0, 1].
 - The regime percentile ranks the reference level among its previous `N_L` (1260) closes; the history starts in 2011, so until about 2016 it ranks against fewer closes (the count is on each dislocation record).
 - `component_scores[].assessment_count` counts the confirmed assessments that entered the category's net conviction.
 - Settings can be changed through the API with an ADMIN token; editing from the Configuration screen arrives with the operator sign-in (M6).

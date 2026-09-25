@@ -22,7 +22,7 @@ as written in v2.3.3 cannot be implemented literally:
 
 The engine records daily observations from 2011 onward in two contexts: equity (reference
 VIX) and oil (reference OVX). Every parameter below is configuration: versioned, seeded
-labelled "uncalibrated default", and overridable in replay (NFR-003, ANA-001).
+with the label "uncalibrated default", and overridable in replay (NFR-003, ANA-001).
 
 ## Decision
 
@@ -55,9 +55,9 @@ labelled "uncalibrated default", and overridable in replay (NFR-003, ANA-001).
 6. **Dislocation.** `SignalImpliedIV = IV × (1 + CompositeScore × k)` with `k ∈ (0, 1]`,
    enforced by configuration validation, so the signal-implied IV is never negative. The
    regime is the ECDF percentile of the reference level among its own previous `N_L`
-   observations: low below 0.30, high above 0.70, otherwise normal; defaults
-   `low = 1.0, normal = 0.75, high = 0.5`. When level boundaries are configured through the
-   contract's `regime_boundaries`, the regime is read from the level instead. The
+   observations: low below 0.30, high above 0.70, otherwise normal. The default
+   sensitivity factors are k = 1.0 (low), 0.75 (normal) and 0.5 (high). When level
+   boundaries are configured through the contract's `regime_boundaries`, the regime is read from the level instead. The
    threshold compares the dislocation's magnitude, so a vol-compression dislocation can
    breach it.
 7. **Trigger.** A composite and its dislocation are recorded for every new assessment of a
@@ -72,12 +72,12 @@ labelled "uncalibrated default", and overridable in replay (NFR-003, ANA-001).
 - The contract's static `source_dropout_penalty` is honoured as a flat schedule when a
   weighting scheme supplies it; the SRS example sensitivity map (1.5 / 1.0 / 0.6) is
   rejected as invalid.
-- Macro prints contribute only within 30 minutes of release, so a daily decision computed
-  at the close does not see the morning's print. This matches the SRS window and is
+- Macro prints contribute only within 30 minutes of release, so a composite recorded at
+  the close does not include the morning's print. This matches the SRS window and is
   visible in the absent-category reasons.
-- Staleness never reaches a composite in normal daily operation (the window already
-  bounds age); it bites when a source stops delivering while its last closes are still in
-  the window.
+- In normal daily operation the discount `d_c` stays at 1, because the window already
+  bounds an assessment's age; `d_c` falls below 1 only when a source stops delivering while
+  its last closes are still in the window.
 
 ## Trade-offs
 
@@ -90,7 +90,7 @@ labelled "uncalibrated default", and overridable in replay (NFR-003, ANA-001).
 
 ## References
 
-- Build brief §9.1–9.7 (operator's working document).
+- Build brief §9.1–9.7 (the operator's working document; not published in this repository).
 - [SRS revision v2.3.4 proposal](../research/srs-revision-v2.3.4-proposal.md) collects these
   resolutions as proposed SRS text.
 - `doc/session-notes/2026-04-13-sensitivity-factor-risk-analysis.md` for realistic
