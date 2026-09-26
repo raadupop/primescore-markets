@@ -14,6 +14,9 @@ Limits that hold even when every check passes. Architecture and ledger limits ar
 
 ## Operator access (M6)
 
+- The header's brand link returns to the presentation website, including before sign-in. Local destinations use engine port 5080, the umbrella's brand preview on 8090 and Markets on 8091; start the umbrella launcher to serve all three. Other deployments use the public domains.
+- Navigation visibility is not an access-control boundary; routes and APIs enforce their own authorization. The anonymous sidebar reported on 2026-09-25 was an unconditional layout render; HTTP regression checks now cover navigation before sign-in, after sign-in and after sign-out.
+- HTTP acceptance checks do not exercise browser focus rendering. The heading outline reported on 2026-09-25 came from route-navigation focus; its CSS suppression preserves heading focus and control focus indicators. Browser checks remain necessary for focus styling changes.
 - One ADMIN account signs into the browser with a password hash from user-secrets or environment variables. READ and ADMIN API tokens remain separate. There is no account recovery service; reset the password locally with the [setup command](../../docs/ENGINE.md#install-and-sign-in).
 - Configuration editing uses JSON with validation and rejects saves based on an older version. It does not calibrate parameters or validate an operator's claim that settings were estimated independently.
 - Local Development uses HTTP on loopback; HTTPS and service supervision for a hosted installation require operator setup. Passwords, token hashes and ASP.NET data-protection keys are outside the repository and must be protected with the service account's filesystem permissions.

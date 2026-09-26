@@ -17,7 +17,18 @@ The last command prompts twice without echoing the password. It stores a salted 
 hash in .NET user-secrets outside the checkout and preserves other secrets. Run it again to
 change the password. No initial or fallback password exists.
 
-Start the classifier in one terminal:
+Start the engine, classifier and Markets presentation website from one terminal:
+
+```powershell
+.\scripts\start-markets.ps1
+```
+
+The [launcher](../scripts/start-markets.ps1) checks dependencies and ports, builds the engine,
+and starts the classifier and Markets website with the existing virtual environment.
+Ctrl+C stops all three services. Logs go to `apps/engine/var/local-run/`. Use `-CheckOnly` to check prerequisites
+without starting services. Configure the operator password above before signing in.
+
+To run them separately, start the classifier in one terminal:
 
 ```powershell
 $env:BOOTSTRAP_MODE = 'disabled'
@@ -36,14 +47,28 @@ Open `http://127.0.0.1:5080/login`. Development loads user-secrets; other enviro
 Development and Testing, session cookies require HTTPS. Terminate TLS before exposing the
 service; the launch profile binds only to loopback. No deployment is configured by these commands.
 
+Start with **How it works** (`/guide`), then choose a market on **Market overview**.
+Follow **Read this analysis** to inspect its conditions and supporting observations.
+**Conditions met** is a research result: it opens no position and sends no order.
+**Data & health** shows input coverage; **Historical replay** tests rules against recorded events.
+
 The classifier's health can be `503 not_ready` with bootstrap disabled. The engine supplies
 each classification request's reference history, so its calls do not require process-local
 classifier windows. Stop both processes with Ctrl+C before rebuilding on Windows.
 
+## Presentation websites
+
+The main launcher includes Markets at <http://127.0.0.1:8091>; its dashboard links open
+the engine at port 5080. To preview only the Markets presentation website, use
+`.\scripts\start-websites.ps1` instead; do not run both launchers together.
+The brand site belongs to the sibling [PrimeScore umbrella](../../primescore/README.md)
+at `D:\Work\primescore`. Its launcher can also start Markets from this checkout with
+`-MarketsRoot D:\Work\invex`.
+
 ## Load observations
 
 Configure `Fred:ApiKey` in the Host's user-secrets with `dotnet user-secrets set`, or supply
-`Fred__ApiKey` in the environment. Restart, then use **Sources and health → Pull now**.
+`Fred__ApiKey` in the environment. Restart, then use **Data & health → Import latest data**.
 The adapter backfills from 2011 on an empty database and subsequently pulls daily at
 13:30 UTC. `Fred__DailyRunUtc` changes that schedule; `Fred__Enabled=false` disables pulls.
 
@@ -82,7 +107,7 @@ The command writes `apps/engine/var/validation-report.md` against the configured
 It does not fetch market data or require a running classifier. Results evaluate the equity/VIX
 proxy and the SRS timing targets, not returns or predictive performance.
 
-**Configuration → Edit parameters** accepts the displayed configuration as JSON and a reason.
+**Model settings → Advanced configuration → Edit parameters** accepts the displayed configuration as JSON and a reason.
 Every accepted change records the operator, version and diff. If another edit was saved after
 the page loaded, reload before saving. Values tuned against the validation set must be labelled
 `in-sample`. Temporary replay overrides use the same field names; see [replay limits](../apps/engine/LIMITATIONS.md#replay-m5).

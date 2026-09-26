@@ -9,21 +9,22 @@ else
 {
     <div class="table-wrap">
         <table class="data">
-            <thead><tr><th>Signal</th><th>Observed</th><th>Severity</th><th>Certainty</th><th>Conviction</th></tr></thead>
+            <thead><tr><th>Observation</th><th>Observed (UTC)</th><th>Directional score</th><th>Data confidence</th><th>Weighted signal</th></tr></thead>
             <tbody>
                 @foreach (var signal in Signals)
                 {
                     <tr>
-                        <td><a href="tape?signal=@signal.SignalId&assessment=@signal.AssessmentId">@Fmt.Category(signal.Category) · @signal.Instrument</a></td>
+                        <td><a href="tape?signal=@signal.SignalId&assessment=@signal.AssessmentId">@Fmt.Instrument(signal.Instrument)</a><div class="panel-note">@Fmt.Category(signal.Category)</div></td>
                         <td class="mono">@Fmt.Utc(signal.ObservedAt)</td>
                         <td class="num">@Fmt.Signed(signal.Score, 4)</td>
-                        <td class="num">@Fmt.Number(signal.Certainty, 4)</td>
+                        <td class="num">@Fmt.Percent(signal.Certainty)</td>
                         <td class="num">@Fmt.Signed(signal.Conviction, 4)</td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
+    <p class="panel-note">Weighted signal = directional score × data confidence. Positive scores support higher volatility; negative scores support lower volatility. Confidence measures history and recency, not the chance of a return.</p>
 }
 
 @code {

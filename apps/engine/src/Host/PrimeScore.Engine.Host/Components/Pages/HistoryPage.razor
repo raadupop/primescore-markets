@@ -13,11 +13,11 @@
 
 <div class="page-head">
     <div>
-        <div class="eyebrow">Composite and dislocation</div>
-        <h1>History</h1>
+        <div class="eyebrow">Explore the pattern</div>
+        <h1>Market history</h1>
         <p>
-            The last composite recorded each New York trading day and its signal-implied dislocation, as the ledger holds them:
-            each point used only what had been observed by then. Shading marks the reference instrument's volatility regime.
+            Follow the combined signal score and scenario gap through time. Each point is the last analysis recorded for that New York trading day.
+            The markers show when research conditions passed; they do not represent trades.
         </p>
     </div>
 </div>
@@ -32,11 +32,11 @@
         </select>
     </label>
     <label>
-        Context
+        Market
         <select @bind="Context" @bind:after="LoadAsync">
             @foreach (var context in _contexts)
             {
-                <option value="@context.Name">@context.Name · @context.ReferenceInstrument</option>
+                <option value="@context.Name">@Fmt.Context(context.Name) · @context.ReferenceInstrument</option>
             }
         </select>
     </label>
@@ -63,11 +63,12 @@ else
         <div class="panel-head">
             <div>
                 <div class="kicker">@Context context · @Fmt.Count(_days.Count) trading days · @_days[0].Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) to @_days[^1].Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</div>
-                <h2>Composite score and dislocation</h2>
+                <h2>Signal strength and scenario gap</h2>
             </div>
-            <span class="status" title="Days whose last decision was DEPLOY.">@_markers.Count DEPLOY day(s)</span>
+            <span class="status" title="Days whose final research result passed all configured checks.">@_markers.Count days with conditions met</span>
         </div>
-        <SeriesChart Dates="_dates" Panels="_panels" Runs="_runs" Extras="_extras" Markers="_markers" MarkerLabel="DEPLOY decision"
+        <p class="panel-note">Signal score: −1 to +1, indicating lower or higher volatility in the model. Scenario gap: model level minus observed level, in index points. Shading indicates periods of low or high observed volatility.</p>
+        <SeriesChart Dates="_dates" Panels="_panels" Runs="_runs" Extras="_extras" Markers="_markers" MarkerLabel="Conditions met"
                      AriaLabel="@($"Daily composite score and dislocation for the {Context} context")"
                      Footnote="@_footnote" />
     </section>
@@ -139,16 +140,16 @@ else
             : [];
         _panels =
         [
-            new SeriesPanel("Composite", "#5b8ef0", days.Select(day => (double?)day.Composite).ToArray(), value => Fmt.Signed(value, 2), -1, 1),
-            new SeriesPanel("Dislocation", "#d8692f", days.Select(day => day.DislocationValue).ToArray(), value => Fmt.Signed(value, 2), 0, 0, references),
+            new SeriesPanel("Signal score", "#5b8ef0", days.Select(day => (double?)day.Composite).ToArray(), value => Fmt.Signed(value, 2), -1, 1),
+            new SeriesPanel("Scenario gap (pts)", "#d8692f", days.Select(day => day.DislocationValue).ToArray(), value => Fmt.Signed(value, 2), 0, 0, references),
         ];
         _runs = Runs(days);
         _extras =
         [
-            new ExtraColumn("IV observed", index => days[index].MarketObservedIv is { } iv ? Fmt.Number(iv, 2) : "—"),
-            new ExtraColumn("Regime · k", index => days[index].Regime is { } regime ? $"{regime.Replace('_', ' ')} · {Fmt.Number(days[index].SensitivityFactor, 2)}" : "—"),
+            new ExtraColumn("Observed volatility", index => days[index].MarketObservedIv is { } iv ? Fmt.Number(iv, 2) : "—"),
+            new ExtraColumn("Regime · sensitivity", index => days[index].Regime is { } regime ? $"{regime.Replace('_', ' ')} · {Fmt.Number(days[index].SensitivityFactor, 2)}" : "—"),
             new ExtraColumn("Breached", index => days[index].ThresholdBreached switch { true => "yes", false => "no", null => "—" }),
-            new ExtraColumn("Decision", index => lastDecision.TryGetValue(days[index].Date, out var decision) ? (decision.Outcome == DecisionOutcome.Deploy ? "DEPLOY" : "IDLE") : "—"),
+            new ExtraColumn("Research result", index => lastDecision.TryGetValue(days[index].Date, out var decision) ? DecisionCopy.Outcome(decision.Outcome) : "—"),
             new ExtraColumn("Config", index => $"v{days[index].ConfigVersion} · {days[index].WeightingSchemeId}"),
         ];
         _markers = Enumerable.Range(0, days.Count)
@@ -157,8 +158,8 @@ else
         var versions = days.Select(day => day.ConfigVersion).Distinct().Count();
         _footnote = versions > 1
             ? $"{versions} configuration versions over this range; each point used the version in force when it was recorded. Dashed lines: the active threshold (breached by magnitude)."
-            : "Dashed lines: the active threshold (breached by magnitude, ADR-0004 §6).";
-        _footnote += " The dislocation is the scenario IV × (1 + composite × k) minus the observed IV: an uncalibrated multiplier, not an independent volatility forecast.";
+            : "Dashed lines: the currently configured gap threshold, checked in either direction.";
+        _footnote += " Scenario gap = observed volatility × signal score × sensitivity. Sensitivity is a model assumption, not a fitted forecast.";
     }
 
     /// <summary>Contiguous runs of the low and high regimes; normal is left unshaded.</summary>

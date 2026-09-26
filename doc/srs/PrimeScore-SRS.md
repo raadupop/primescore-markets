@@ -562,6 +562,8 @@ Each transition between iterations shall be documented with: (a) which component
 
 # 7. Iteration Plan
 
+**Deferred (2026-09-27):** Sections 7–8 describe a preserved research programme, not the active Markets delivery plan. Product development retains its existing validation controls and is not a comparative study run.
+
 Six iterations. Each implements Must requirements plus specific Should requirements introduced as controlled change tasks. The API acceptance test suite (EVO-001a) is the constant. The architecture pattern is the variable. CQRS (Command Query Responsibility Segregation) is a tactical pattern prescribed from Iteration 3 onward: command handlers shall not return domain state, query handlers shall not modify state. This separation is structurally enforced in Iteration 4 where Event Sourcing produces distinct write (event stream) and read (projection) models. DDD tactical patterns (aggregates, value objects, domain events, domain services) are applied from Iteration 3 onward within the domain layer. Event Sourcing is a persistence strategy introduced in Iteration 4. Pre-registered prediction per iteration: each iteration specifies its expected position in the functional correctness × architectural compliance matrix before data collection begins. Predictions that fail are reported as findings.
 
 ## 7.1 Iteration 1 — Transaction Script (Baseline)

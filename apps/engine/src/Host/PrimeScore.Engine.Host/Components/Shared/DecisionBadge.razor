@@ -1,9 +1,8 @@
 @using PrimeScore.Modules.Decision.Contracts
 
-@* A decision's outcome: DEPLOY in lime (brief §9.7 marks decisions in lime), IDLE muted. *@
 <span class="status @(Outcome == DecisionOutcome.Deploy ? "" : "status-muted")"
-      title="@(Outcome == DecisionOutcome.Deploy ? "Every condition held. Simulation only: no order is placed." : "At least one condition failed: zero exposure while signal processing continues (SRS DEC-002).")">
-    @(Outcome == DecisionOutcome.Deploy ? "DEPLOY" : "IDLE")
+      title="@(Outcome == DecisionOutcome.Deploy ? "All recorded checks passed. This is a research result; no position or order was created." : "One or more checks did not pass. No position or order was created.")">
+    @DecisionCopy.Outcome(Outcome)
 </span>
 
 @code {

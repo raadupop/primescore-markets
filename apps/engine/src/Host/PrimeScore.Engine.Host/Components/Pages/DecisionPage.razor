@@ -6,7 +6,7 @@
 @inject IPipelineLogQuery Logs
 @inject ILedgerAuditQuery Audit
 
-<PageTitle>Decision · PrimeScore Markets</PageTitle>
+<PageTitle>Decision analysis · PrimeScore Markets</PageTitle>
 
 @if (_error is not null)
 {
@@ -24,40 +24,53 @@ else
 {
     <div class="page-head">
         <div>
-            <div class="eyebrow">Decision · @decision.Context context</div>
-            <h1>@(decision.Outcome == DecisionOutcome.Deploy ? "DEPLOY" : "IDLE") as of @Fmt.Utc(decision.AsOf)</h1>
-            <p>@decision.Explanation</p>
+            <div class="eyebrow">Decision analysis · @Fmt.Context(decision.Context)</div>
+            <h1>@DecisionCopy.Scenario(decision.Scenario)</h1>
+            <p>Reference: @Fmt.Instrument(decision.ReferenceInstrument) · Observed @Fmt.Utc(decision.AsOf)</p>
         </div>
-        <div class="filter-actions">
+        <div class="action-bar">
             <DecisionBadge Outcome="decision.Outcome" />
-            @if (decision.Scenario != "none")
-            {
-                <span class="status @(decision.Scenario == "vol-compression" ? "status-blue" : "")">@decision.Scenario scenario</span>
-            }
+            <a class="button" href="decisions">All decisions</a>
         </div>
     </div>
+
+    <WorkflowGuide Current="conditions" />
+
+    <section class="panel analysis-summary" aria-label="Decision summary">
+        <h2>@DecisionCopy.Outcome(decision.Outcome)</h2>
+        <p>@DecisionCopy.Summary(decision)</p>
+        <div class="metric-grid">
+            <div class="metric"><span>Observed @decision.ReferenceInstrument</span><strong>@Fmt.Number(decision.MarketObservedIv, 2)</strong><small>Index level at this observation</small></div>
+            <div class="metric"><span>Model scenario</span><strong>@Fmt.Number(decision.SignalImpliedIv, 2)</strong><small>Calculated from signals and sensitivity</small></div>
+            <div class="metric"><span>Scenario gap</span><strong>@Fmt.Signed(decision.DislocationValue, 2)</strong><small>Index points · threshold ±@Fmt.Number(decision.DislocationThreshold, 2)</small></div>
+        </div>
+        <p class="panel-note">The scenario applies a configured sensitivity to the combined signal score. The scenario level is an assumption for research, not an independent volatility forecast.</p>
+        <div class="callout">
+            <strong>Position: none. Execution: none.</strong>
+            This record evaluates @decision.ReferenceInstrument as a reference index. No tradable instrument, contract, side, size or venue was selected, and no order was sent.
+        </div>
+    </section>
 
     <section class="panel" aria-label="Conditions">
         <div class="panel-head">
             <div>
-                <div class="kicker">SRS DEC-001 · @decision.Conditions.Count(condition => condition.Passed) of @decision.Conditions.Count held</div>
-                <h2>Conditions, required against actual</h2>
+                <div class="kicker">@decision.Conditions.Count(condition => condition.Passed) of @decision.Conditions.Count checks passed</div>
+                <h2>Why this result?</h2>
             </div>
         </div>
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>Condition</th><th>Required</th><th>Actual</th><th>Result</th><th>What the actual value is</th></tr></thead>
+                <thead><tr><th>Check</th><th>Recorded value</th><th>Requirement</th><th>Result</th></tr></thead>
                 <tbody>
                     @foreach (var condition in decision.Conditions)
                     {
                         <tr>
-                            <td class="mono">@condition.Name</td>
-                            <td class="num">@condition.Operator @Fmt.Number(condition.Required, 4)</td>
-                            <td class="num">@Fmt.Number(condition.Actual, 4)</td>
+                            <td><strong>@DecisionCopy.ConditionName(condition.Name)</strong><div class="panel-note">@DecisionCopy.ConditionMeaning(condition.Name)</div></td>
+                            <td>@DecisionCopy.ConditionActual(condition)</td>
+                            <td>@DecisionCopy.ConditionRequirement(condition)</td>
                             <td>
-                                <span class="status @(condition.Passed ? "" : "status-bad")">@(condition.Passed ? "held" : "failed")</span>
+                                <span class="status @(condition.Passed ? "" : "status-warn")">@(condition.Passed ? "Passed" : "Not met")</span>
                             </td>
-                            <td>@condition.Detail</td>
                         </tr>
                     }
                 </tbody>
@@ -68,50 +81,66 @@ else
     <div class="grid grid-2">
         <section class="panel" aria-label="Contributing signals">
             <div class="panel-head">
-                <div>
-                    <div class="kicker">SRS DEC-003</div>
-                    <h2>Top contributing signals</h2>
-                </div>
+                <div><div class="kicker">Evidence for the scenario</div><h2>Strongest supporting observations</h2></div>
             </div>
-            <SignalTable Signals="decision.TopContributing" Empty="No signal on the composite's side: the composite is 0." />
+            <p class="panel-note">Up to three confirmed signals pointing in the combined score's direction. Open an observation to inspect its source and classification.</p>
+            <SignalTable Signals="decision.TopContributing" Empty="No supporting confirmed observation was recorded." />
         </section>
         <section class="panel" aria-label="Dissenting signals">
             <div class="panel-head">
-                <div>
-                    <div class="kicker">SRS DEC-003</div>
-                    <h2>Dissenting signals</h2>
-                </div>
+                <div><div class="kicker">Evidence against the scenario</div><h2>Opposing observations</h2></div>
             </div>
-            <SignalTable Signals="decision.Dissenting" Empty="No confirmed assessment pointed the other way." />
+            <SignalTable Signals="decision.Dissenting" Empty="No confirmed observation pointed in the opposite direction." />
         </section>
     </div>
 
-    <section class="panel" aria-label="Inputs">
+    <section class="panel" aria-label="Next steps">
+        <h2>Continue the analysis</h2>
+        <p>Compare this result with the market's history, inspect the observation that triggered it, or test the settings against historical events.</p>
+        <div class="action-bar">
+            <a class="button" href="history?context=@Uri.EscapeDataString(decision.Context)">Market history</a>
+            <a class="button" href="tape?signal=@decision.TriggerSignalId">Triggering observation</a>
+            <a class="button" href="replay">Historical validation</a>
+        </div>
+    </section>
+
+    <details class="technical-details">
+        <summary>Calculation, recorded explanation and audit trail</summary>
+    <section class="panel" aria-label="Recorded calculation">
         <div class="panel-head">
             <div>
-                <div class="kicker">What the decision read</div>
-                <h2>Composite and dislocation</h2>
+                <div class="kicker">Stored inputs</div>
+                <h2>Calculation and provenance</h2>
             </div>
         </div>
         <dl class="kv">
-            <dt>Composite</dt><dd>@Fmt.Signed(decision.CompositeScore, 4)</dd>
-            <dt>Dislocation</dt>
+            <dt>Combined score</dt><dd>@Fmt.Signed(decision.CompositeScore, 4) · −1 to +1; positive supports higher volatility, negative supports lower volatility.</dd>
+            <dt>Scenario gap</dt>
             <dd>
-                @Fmt.Signed(decision.DislocationValue, 4) = scenario IV @Fmt.Number(decision.SignalImpliedIv, 4) − observed @decision.ReferenceInstrument @Fmt.Number(decision.MarketObservedIv, 2);
-                threshold ±@Fmt.Number(decision.DislocationThreshold, 2) (magnitude). An uncalibrated multiplier, not an independent volatility forecast.
+                @Fmt.Signed(decision.DislocationValue, 4) index points = model scenario @Fmt.Number(decision.SignalImpliedIv, 4) − observed @decision.ReferenceInstrument @Fmt.Number(decision.MarketObservedIv, 2).
             </dd>
             <dt>Configuration</dt><dd><a href="configuration">version @decision.ConfigVersion.Value</a></dd>
             <dt>Correlation id</dt><dd>@decision.CorrelationId</dd>
-            <dt>Triggered by</dt><dd><a href="tape?signal=@decision.TriggerSignalId">signal @decision.TriggerSignalId</a></dd>
+            <dt>Stored outcome</dt><dd>@decision.Outcome.ToString().ToUpperInvariant() · @decision.Scenario</dd>
+            <dt>Triggered by</dt><dd><a href="tape?signal=@decision.TriggerSignalId">@decision.TriggerSignalId</a></dd>
             <dt>Recorded</dt><dd>@Fmt.Utc(decision.RecordedAt) · <a href="ledger/@decision.LedgerSequence">ledger #@decision.LedgerSequence</a></dd>
         </dl>
+        <h3>Original engine explanation</h3>
+        <p>@decision.Explanation</p>
+        <div class="table-wrap"><table class="data">
+            <thead><tr><th>Stored condition</th><th>Recorded detail</th></tr></thead>
+            <tbody>@foreach (var condition in decision.Conditions)
+            {
+                <tr><td class="mono">@condition.Name</td><td>@condition.Detail</td></tr>
+            }</tbody>
+        </table></div>
     </section>
 
     <section class="panel" aria-label="Trace">
         <div class="panel-head">
             <div>
-                <div class="kicker">SRS OBS-001 · one correlation id from ingestion to decision</div>
-                <h2>Trace</h2>
+                <div class="kicker">From observation to decision</div>
+                <h2>Processing trace</h2>
             </div>
         </div>
         <div class="table-wrap">
@@ -135,7 +164,7 @@ else
     <section class="panel" aria-label="Audit chain">
         <div class="panel-head">
             <div>
-                <div class="kicker">SRS AUD-001, AUD-002</div>
+                <div class="kicker">Record integrity</div>
                 <h2>Audit chain segment</h2>
             </div>
             <span class="status @(_chainIntact ? "" : "status-bad")">@(_chainIntact ? "links intact" : "link broken")</span>
@@ -164,6 +193,7 @@ else
             </table>
         </div>
     </section>
+    </details>
 }
 
 @code {

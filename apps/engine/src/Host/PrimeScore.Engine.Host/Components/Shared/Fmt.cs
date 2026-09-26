@@ -21,7 +21,40 @@ internal static class Fmt
     public static string Signed(double? value, int decimals = 4) =>
         value is { } number ? number.ToString("+0." + new string('0', decimals) + ";-0." + new string('0', decimals) + ";0", CultureInfo.InvariantCulture) : "—";
 
-    public static string Category(SourceCategory category) => category.ToWireName();
+    public static string Category(SourceCategory category) => Category(category.ToWireName());
+
+    public static string Category(string category) => category switch
+    {
+        "MARKET_DATA" => "Market prices",
+        "MACROECONOMIC" => "Economic releases",
+        "CROSS_ASSET_FLOW" => "Cross-asset flows",
+        "GEOPOLITICAL" => "Geopolitical events",
+        _ => Humanize(category),
+    };
+
+    public static string Humanize(string value) => value.Replace('_', ' ').Replace('-', ' ');
+
+    public static string Context(string context) => context switch
+    {
+        "equity" => "US equities",
+        "oil" => "Crude oil",
+        _ => Humanize(context),
+    };
+
+    public static string Instrument(string symbol) => symbol switch
+    {
+        "VIX" => "VIX · US equity volatility",
+        "OVX" => "OVX · Oil volatility",
+        "VVIX" => "VVIX · Volatility of VIX",
+        "SPX" or "SP500" => symbol + " · S&P 500",
+        "WTI" => "WTI · Crude oil",
+        "CPI_YOY" => "CPI · Annual inflation",
+        "NFP" => "Payroll employment",
+        "FED_FUNDS" => "Federal funds rate",
+        _ => Humanize(symbol),
+    };
+
+    public static string Percent(double? value) => value is { } number ? Number(number * 100, 0) + "%" : "—";
 
     public static string Count(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
 

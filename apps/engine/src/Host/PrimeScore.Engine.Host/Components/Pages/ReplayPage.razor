@@ -13,75 +13,131 @@
 @inject NavigationManager Navigation
 @inject PrimeScore.Ledger.ILedgerStatusQuery LedgerStatus
 @inject PrimeScore.Engine.Host.Security.UiAccess Access
-<PageTitle>Replay · PrimeScore Markets</PageTitle>
+<PageTitle>Historical replay · PrimeScore Markets</PageTitle>
 <div class="page-head"><div>
-    <div class="eyebrow">Point-in-time replay</div><h1>Replay</h1>
-    <p>Recalculate decisions from recorded classifications and observations available by each observation time. Earlier history supplies the reference window. Temporary settings apply only to this run.</p>
+    <div class="eyebrow">Research checks</div><h1>Historical replay</h1>
+    <p>Choose a past event, recalculate its scenarios, then inspect which conditions passed. Each decision uses observations available by its observation time.</p>
 </div></div>
-<p class="degraded">Simulation only. Scenarios use an uncalibrated multiplier, not an independent volatility forecast. Validation targets are not evidence of profitability or predictive performance.</p>
-<div class="filters">
-    <label>Validation event<select @bind="_eventId" @bind:after="SelectEvent">
-        <option value="">Custom range</option>
-        @foreach (var item in _events) { <option value="@item.Id">@item.Label · @item.Date</option> }
-    </select></label>
-    <label>Label<input @bind="_label" maxlength="200" /></label>
-    <label>From (New York)<input type="date" @bind="_from" /></label>
-    <label>To (New York)<input type="date" @bind="_to" /></label>
-</div>
-<details><summary>Temporary configuration overrides (JSON)</summary>
-    <p>Use configuration field names; contexts may be keyed by name. Every changed run is labelled in-sample.</p>
-    <label class="form-field">Overrides<textarea rows="7" @bind="_overrides" placeholder='{"contexts":{"equity":{"dislocation_threshold":10}}}'></textarea></label>
-</details>
-@if (_canAdmin)
-{
-<div class="actions">
-    <button class="button button-primary" disabled="@_busy" @onclick="RunAsync">@(_busy ? "Running…" : "Run replay")</button>
-    <button class="button" disabled="@_busy" @onclick="EvaluateAsync">Evaluate ten events</button>
-</div>
-}
+<div class="callout"><strong>What a replay measures.</strong> Whether the configured research checks would have passed. It creates no orders or positions and measures no trade returns. Scenario sensitivity is a configured assumption.</div>
+
+<section class="panel" aria-label="Replay inputs">
+    <div class="panel-head"><div><div class="kicker">1 · Choose the question</div><h2>Run a historical scenario</h2></div></div>
+    <p class="panel-note">Select an event to fill its dates, or enter a custom period. A replay saves its own result and leaves current decisions and settings unchanged.</p>
+    <div class="filters">
+        <label>Historical event<select @bind="_eventId" @bind:after="SelectEvent">
+            <option value="">Custom range</option>
+            @foreach (var item in _events) { <option value="@item.Id">@item.Label · @item.Date</option> }
+        </select></label>
+        <label>Run name<input @bind="_label" maxlength="200" /></label>
+        <label>From (New York)<input type="date" @bind="_from" /></label>
+        <label>To (New York)<input type="date" @bind="_to" /></label>
+    </div>
+    <details class="technical-details"><summary>Advanced: temporary settings for this run</summary>
+        <p>Leave blank to use the current settings. JSON changes apply only to this replay. Changed runs are marked “in-sample”: they cannot establish performance on unseen events.</p>
+        <label class="form-field">Settings overrides (JSON)<textarea rows="7" @bind="_overrides" placeholder='{"contexts":{"equity":{"dislocation_threshold":10}}}'></textarea></label>
+        <p class="panel-note">Use the field names shown in <a href="configuration">Parameters</a>; markets may be keyed by their context name.</p>
+    </details>
+    @if (_canAdmin)
+    {
+        <div class="action-bar"><button class="button button-primary" disabled="@_busy" @onclick="RunAsync">@(_busy ? "Running…" : "Run replay")</button></div>
+    }
+    else
+    {
+        <p class="panel-note">An administrator can run a replay. Saved results are available below.</p>
+    }
+</section>
 @if (_error is not null) { <div class="degraded" role="alert">@_error</div> }
 @if (_busy) { <div class="loading" role="status">Recalculating from recorded inputs…</div> }
 @if (_run is { } selectedRun)
 {
-    <section class="panel">
-        <h2>@selectedRun.EventLabel</h2>
-        <p>@selectedRun.SignalCount observations · configuration @selectedRun.ConfigVersion.Value · input ledger through @selectedRun.InputSequence · <a href="ledger/@selectedRun.LedgerSequence">Replay ledger entry #@selectedRun.LedgerSequence</a></p>
-        @if (!string.IsNullOrWhiteSpace(selectedRun.OverridesJson)) { <p class="degraded">In-sample: this run used temporary overrides.</p> }
+    <section class="panel" aria-label="Selected replay result">
+        <div class="panel-head"><div><div class="kicker">2 · Inspect the recorded result</div><h2>@selectedRun.EventLabel</h2></div></div>
+        <p>@MarketTime.NewYorkDate(selectedRun.From) to @MarketTime.NewYorkDate(selectedRun.To) (New York) · saved @Fmt.Utc(selectedRun.RecordedAt)</p>
+        <div class="metric-grid">
+            <div class="metric"><span>Observations read</span><strong>@Fmt.Count(selectedRun.SignalCount)</strong></div>
+            <div class="metric"><span>Decision records</span><strong>@Fmt.Count(_timeline.Count)</strong></div>
+            <div class="metric"><span>Conditions met</span><strong>@Fmt.Count(_timeline.Count(decision => decision.Outcome == DecisionOutcome.Deploy))</strong></div>
+        </div>
+        <p class="panel-note">Counts describe records, not distinct opportunities. Each new assessment can produce a decision for its market.</p>
+        @if (!string.IsNullOrWhiteSpace(selectedRun.OverridesJson)) { <p class="degraded">In-sample: this run used temporary settings. The ten-event baseline report below excludes these runs.</p> }
         @if (_timeline.Count == 0)
         {
-            <EmptyState Title="Not evaluable">No classifiable context input and reference IV in this range. Missing consensus and unsupported routes remain absent.</EmptyState>
+            <EmptyState Title="Not enough input to evaluate">This period has no usable market classifications paired with a reference volatility index. Check <a href="sources">Data and health</a> for missing history.</EmptyState>
         }
         else
         {
             <div class="table-wrap"><table class="data">
-                <thead><tr><th>Observed (UTC)</th><th>Context</th><th>Decision</th><th>Composite</th><th>Dislocation</th><th>Explanation</th></tr></thead>
+                <thead><tr><th>Observed (UTC)</th><th>Market / reference</th><th>Outcome</th><th>Model scenario</th><th>Analysis</th></tr></thead>
                 <tbody>@foreach (var decision in _timeline)
                 {
-                    <tr><td>@Fmt.Utc(decision.AsOf)</td><td>@decision.Context</td><td><DecisionBadge Outcome="decision.Outcome" /></td>
-                        <td class="num">@Fmt.Signed(decision.CompositeScore, 4)</td><td class="num">@Fmt.Signed(decision.DislocationValue, 2) / ±@Fmt.Number(decision.DislocationThreshold, 2)</td>
-                        <td><details><summary>@decision.Scenario · @decision.Conditions.Count(c => !c.Passed) failed conditions</summary><p>@decision.Explanation</p>
-                            @foreach (var signal in decision.TopContributing.Concat(decision.Dissenting))
-                            { <p><a href="tape?assessment=@signal.AssessmentId">@signal.Instrument · @Fmt.Utc(signal.ObservedAt) · assessment</a></p> }
+                    <tr><td>@Fmt.Utc(decision.AsOf)</td><td>@Fmt.Context(decision.Context)<div class="panel-note">@decision.ReferenceInstrument</div></td><td><DecisionBadge Outcome="decision.Outcome" /></td>
+                        <td>@DecisionCopy.Scenario(decision.Scenario)</td>
+                        <td><details><summary>@decision.Conditions.Count(condition => condition.Passed) of @decision.Conditions.Count checks passed · View analysis</summary>
+                            <p>@DecisionCopy.Summary(decision)</p>
+                            <dl class="kv">
+                                <dt>Observed @decision.ReferenceInstrument</dt><dd>@Fmt.Number(decision.MarketObservedIv, 2) index points</dd>
+                                <dt>Model scenario</dt><dd>@Fmt.Number(decision.SignalImpliedIv, 2) index points</dd>
+                                <dt>Scenario gap</dt><dd>@Fmt.Signed(decision.DislocationValue, 2) index points · threshold ±@Fmt.Number(decision.DislocationThreshold, 2)</dd>
+                                <dt>Combined score</dt><dd>@Fmt.Signed(decision.CompositeScore, 4) · positive supports higher volatility; negative supports lower volatility.</dd>
+                            </dl>
+                            <div class="table-wrap"><table class="data">
+                                <thead><tr><th>Check</th><th>Recorded value</th><th>Requirement</th><th>Result</th></tr></thead>
+                                <tbody>@foreach (var condition in decision.Conditions)
+                                {
+                                    <tr><td>@DecisionCopy.ConditionName(condition.Name)<div class="panel-note">@DecisionCopy.ConditionMeaning(condition.Name)</div></td><td>@DecisionCopy.ConditionActual(condition)</td><td>@DecisionCopy.ConditionRequirement(condition)</td><td>@(condition.Passed ? "Passed" : "Not met")</td></tr>
+                                }</tbody>
+                            </table></div>
+                            <h3>Supporting observations</h3>
+                            <SignalTable Signals="decision.TopContributing" Empty="No supporting confirmed observation was recorded." />
+                            <h3>Opposing observations</h3>
+                            <SignalTable Signals="decision.Dissenting" Empty="No confirmed observation pointed in the opposite direction." />
+                            <details class="technical-details"><summary>Original engine explanation</summary><p>@decision.Explanation</p></details>
                         </details></td></tr>
                 }</tbody>
             </table></div>
         }
-        <details><summary>Effective configuration</summary><pre>@Fmt.Json(selectedRun.SettingsJson)</pre></details>
+        <details class="technical-details"><summary>Recorded configuration and audit reference</summary>
+            <p>Configuration version @selectedRun.ConfigVersion.Value · inputs recorded through ledger #@selectedRun.InputSequence · <a href="ledger/@selectedRun.LedgerSequence">Replay audit record #@selectedRun.LedgerSequence</a></p>
+            <pre>@Fmt.Json(selectedRun.SettingsJson)</pre>
+        </details>
     </section>
 }
-<section class="panel"><h2>Validation targets</h2>
-    <p>Equity/VIX proxy. “Deploy by D” checks D and the previous NYSE trading day. The FOMC target checks the dislocation threshold. SRS true/false-positive labels are expectations, not measured returns. Iran Feb 2026 is a calibration target.</p>
-    <div class="table-wrap"><table class="data"><thead><tr><th>Event</th><th>SRS expectation</th><th>Result</th><th>Evidence</th></tr></thead>
+<section class="panel" aria-label="Ten-event validation">
+    <div class="panel-head"><div><div class="kicker">3 · Compare with the research targets</div><h2>Ten-event baseline</h2></div>
+        @if (_canAdmin)
+        {
+            <button class="button" disabled="@_busy" @onclick="EvaluateAsync">Evaluate ten events</button>
+        }
+    </div>
+    <p>This report checks US equities using VIX. Each row uses its latest saved baseline run. “Matches target” measures agreement with the specified research check, not profitability or forecast accuracy.</p>
+    <div class="metric-grid">
+        <div class="metric"><span>Matches target</span><strong>@_report.Count(row => row.Verdict == "Matches target") / @_report.Count</strong></div>
+        <div class="metric"><span>Misses target</span><strong>@_report.Count(row => row.Verdict == "Misses target")</strong></div>
+        <div class="metric"><span>Missing evaluation or data</span><strong>@_report.Count(row => row.Verdict is "Not evaluated" or "Not evaluable")</strong></div>
+    </div>
+    <p class="panel-note">The full-set action uses current settings for all ten events; it does not use the custom dates or temporary settings above. Iran February 2026 is a calibration target.</p>
+    <div class="table-wrap"><table class="data"><thead><tr><th>Event</th><th>Expected research check</th><th>Result</th><th>Evidence</th></tr></thead>
         <tbody>@foreach (var row in _report)
         {
-            <tr><td>@row.Event.Label</td><td>@row.Event.Expected</td><td>@row.Verdict</td><td>@row.Detail
-                @if (row.ReplayId is { } replayId) { <a href="replay?id=@replayId">Open run</a> }</td></tr>
+            <tr><td>@row.Event.Label<div class="panel-note">@row.Event.Date</div></td><td>@Target(row.Event)</td><td><span class="status @(row.Verdict == "Matches target" ? "" : "status-warn")">@row.Verdict</span></td><td>@ReportDetail(row.Detail)
+                @if (row.ReplayId is { } replayId) { <div><a href="replay?id=@replayId">Open recorded run →</a></div> }
+                <details class="technical-details"><summary>Recorded target and explanation</summary><p>@row.Event.Expected</p><p>@row.Detail</p></details>
+            </td></tr>
         }</tbody>
     </table></div>
 </section>
-<section class="panel"><h2>Recent runs</h2>
+<section class="panel"><h2>Saved runs</h2>
     @if (_history.Count == 0) { <p>No replay has been recorded.</p> }
-    @foreach (var run in _history) { <p><a href="replay?id=@run.ReplayId">@run.EventLabel</a> · @Fmt.Utc(run.RecordedAt)</p> }
+    @if (_history.Count > 0)
+    {
+        <div class="table-wrap"><table class="data">
+            <thead><tr><th>Run</th><th>Period (New York)</th><th>Settings</th><th>Saved (UTC)</th></tr></thead>
+            <tbody>@foreach (var run in _history)
+            {
+                <tr><td><a href="replay?id=@run.ReplayId">@run.EventLabel</a></td><td>@MarketTime.NewYorkDate(run.From) to @MarketTime.NewYorkDate(run.To)</td><td>@(string.IsNullOrWhiteSpace(run.OverridesJson) ? "Baseline" : "Temporary · in-sample") · v@(run.ConfigVersion.Value)</td><td>@Fmt.Utc(run.RecordedAt)</td></tr>
+            }</tbody>
+        </table></div>
+    }
 </section>
 
 @code {
@@ -97,6 +153,25 @@
     private bool _canAdmin;
     private string? _error;
 
+    private static string Target(ValidationEvent item) => item.ExpectDeploy
+        ? $"Conditions met on {item.TargetDate:yyyy-MM-dd} or the previous NYSE trading day."
+        : $"Scenario gap stays below its threshold on {item.TargetDate:yyyy-MM-dd}.";
+
+    private static string ReportDetail(string detail)
+    {
+        foreach (var name in new[] { "composite_score", "top_signal_certainty", "contributing_sources", "newest_observation_age_trading_days", "active_cooldowns" })
+        {
+            detail = detail.Replace(name, DecisionCopy.ConditionName(name), StringComparison.Ordinal);
+        }
+
+        return detail.Replace("No DEPLOY; last decision failed", "Conditions never met; the latest decision had unmet checks:", StringComparison.Ordinal)
+            .Replace("First DEPLOY:", "Conditions first met:", StringComparison.Ordinal)
+            .Replace("dislocation", "scenario gap", StringComparison.Ordinal)
+            .Replace("Dislocation", "Scenario gap", StringComparison.Ordinal)
+            .Replace("No classifiable equity input and reference IV in the target window; absent routes are not estimated.", "No usable US equity classifications paired with a reference volatility index in this period. Missing inputs are not estimated.", StringComparison.Ordinal)
+            .Replace("reference IV", "reference volatility index", StringComparison.Ordinal);
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         _canAdmin = await Access.AdministratorAsync() is not null;
@@ -107,6 +182,11 @@
             _run = await ReplayQuery.HandleAsync(new GetReplay(id), CancellationToken.None);
             _timeline = _run is null ? [] : CanonicalJson.Deserialize<DecisionView[]>(_run.DecisionsJson);
             _error = _run is null ? "Replay was not found." : null;
+        }
+        else
+        {
+            _run = null;
+            _timeline = [];
         }
     }
 

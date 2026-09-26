@@ -10,22 +10,127 @@
 @inject IQueryHandler<GetSignal, SignalView?> SignalByIdQuery
 @inject IQueryHandler<GetDecisions, IReadOnlyList<DecisionView>> DecisionQuery
 
-<PageTitle>Signal tape · PrimeScore Markets</PageTitle>
+<PageTitle>Signal analysis · PrimeScore Markets</PageTitle>
 
 <div class="page-head">
     <div>
-        <div class="eyebrow">Signal tape</div>
-        <h1>Observed signals</h1>
-        <p>
-            Every recorded signal in the four source categories, newest observation first, with its provenance, its
-            classification and their ledger entries. <strong>As of</strong> shows only what had been observed at that moment (SRS SIG-004).
-        </p>
+        <div class="eyebrow">Research evidence</div>
+        <h1>Signal analysis</h1>
+        <p>Explore the observations behind each market scenario. Select an indicator to see its value, source, comparison history and assessment.</p>
     </div>
 </div>
 
+<WorkflowGuide Current="signals" />
+
+@if (_selectionError is not null)
+{
+    <div class="degraded" role="status">@_selectionError</div>
+}
+
+@if (_selected is { } detail)
+{
+    <section class="panel" id="selected-signal" aria-label="Selected observation" tabindex="-1">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">Selected observation · @Fmt.Category(detail.Category)</div>
+                <h2>@Fmt.Instrument(detail.Instrument)</h2>
+            </div>
+            <ProvenanceBadge Provenance="detail.Provenance" />
+        </div>
+        <div class="metric-grid">
+            <div class="metric"><span class="metric-label">Observed value</span><strong class="metric-value">@Fmt.Number(detail.Value, 4)</strong><p class="panel-note">@ValueMeaning(detail)</p></div>
+            <div class="metric"><span class="metric-label">Observed at</span><strong class="metric-text">@Fmt.Utc(detail.ObservedAt)</strong><p class="panel-note">Observation time supplied by the source.</p></div>
+            <div class="metric"><span class="metric-label">Source</span><strong class="metric-text">@detail.Provenance.Provider</strong>
+                @if (detail.Provenance.Url is { } sourceUrl)
+                {
+                    <p class="panel-note"><a href="@sourceUrl" target="_blank" rel="noopener noreferrer">Open source series</a></p>
+                }
+            </div>
+        </div>
+        <div class="action-bar"><a href="ledger/@detail.LedgerSequence">View observation audit record</a></div>
+        <details class="technical-details">
+            <summary>Source timing, identifiers and original payload</summary>
+            <dl class="kv">
+            <dt>Signal id</dt><dd>@detail.SignalId</dd>
+            <dt>Correlation id</dt><dd>@detail.CorrelationId</dd>
+            <dt>Source identifier</dt><dd>@detail.SourceIdentifier</dd>
+            <dt>Series</dt><dd>@detail.Variant</dd>
+            <dt>Payload type</dt><dd>@detail.PayloadType</dd>
+            <dt>Stored by the engine</dt><dd>@Fmt.Utc(detail.RecordedAt)</dd>
+            <dt>Provider</dt><dd>@detail.Provenance.Provider</dd>
+            @if (detail.Provenance.Url is { } url)
+            {
+                <dt>Source URL</dt><dd><a href="@url" target="_blank" rel="noopener noreferrer">@url</a></dd>
+            }
+            @if (detail.Provenance.RetrievedAt is { } retrieved)
+            {
+                <dt>Retrieved</dt><dd>@Fmt.Utc(retrieved)</dd>
+            }
+            @if (detail.Provenance.FirstReleased is { } released)
+            {
+                <dt>First released</dt><dd>@released.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</dd>
+            }
+            @if (detail.Provenance.Derivation is { } derivation)
+            {
+                <dt>Derivation</dt><dd>@derivation</dd>
+            }
+            @if (detail.Provenance.Note is { } note)
+            {
+                <dt>Timing</dt><dd>@note</dd>
+            }
+            <dt>Ledger entry</dt><dd><a href="ledger/@detail.LedgerSequence">#@detail.LedgerSequence</a></dd>
+            </dl>
+            <pre class="code">@Fmt.Json(detail.Payload)</pre>
+        </details>
+    </section>
+    @if (Guid.TryParse(AssessmentParameter, out var used) && Outcome(detail) is { } latest && latest.AssessmentId != used)
+    {
+        <div class="degraded">
+            <strong>The decision used an earlier assessment.</strong>
+            This page shows the latest stored assessment, which may have replaced a reused result. The original assessment ID was <span class="mono">@used</span>; consult the decision's audit evidence to inspect that record.
+        </div>
+    }
+    <AssessmentDetail Outcome="@Outcome(detail)" />
+    <section class="panel" aria-label="Research decisions linked to this observation">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">Follow the evidence</div>
+                <h2>Research decisions linked to this observation</h2>
+            </div>
+        </div>
+        @if (_selectedDecisions.Count == 0)
+        {
+            <p class="panel-note">
+                No decision was recorded for this observation. A decision requires an assessed input in a market context and an observed volatility reference.
+            </p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th scope="col">Market</th><th scope="col">Research status</th><th scope="col">Combined signal strength</th><th scope="col">Scenario gap</th><th scope="col">Analysis</th></tr></thead>
+                    <tbody>
+                        @foreach (var decision in _selectedDecisions)
+                        {
+                            <tr>
+                                <td>@Fmt.Context(decision.Context)</td>
+                                <td><DecisionBadge Outcome="decision.Outcome" /></td>
+                                <td class="num">@Fmt.Signed(decision.CompositeScore, 4)</td>
+                                <td class="num">@Fmt.Signed(decision.DislocationValue, 2) points</td>
+                                <td><a href="decisions/@decision.DecisionId">Review conditions</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
 <section class="panel" aria-label="Filters">
-    <form class="filters" @onsubmit="ApplyAsync">
-        <label>Category
+    <div class="panel-head"><h2>Find an observation</h2></div>
+    <form class="filters" @onsubmit="ApplyAsync" @onsubmit:preventDefault>
+        <label>Input type
             <select @bind="_category">
                 <option value="">All</option>
                 @foreach (var category in Enum.GetValues<SourceCategory>())
@@ -34,169 +139,82 @@
                 }
             </select>
         </label>
-        <label>Instrument <input @bind="_instrument" placeholder="VIX" /></label>
+        <label>Indicator symbol <input @bind="_instrument" placeholder="e.g. VIX" /></label>
         <label>From (UTC) <input type="date" @bind="_from" /></label>
         <label>To (UTC) <input type="date" @bind="_to" /></label>
-        <label>As of (UTC) <input type="datetime-local" @bind="_asOf" /></label>
+        <label>Observed by (UTC) <input type="datetime-local" @bind="_asOf" /></label>
         <div class="filter-actions">
-            <button class="button button-primary" type="submit">Apply</button>
-            <button class="button button-ghost" type="button" @onclick="ResetAsync">Reset</button>
+            <button class="button button-primary" type="submit">Apply filters</button>
+            <button class="button button-ghost" type="button" @onclick="ResetAsync">Clear filters</button>
         </div>
     </form>
+    <p class="panel-note">“Observed by” limits observation dates; assessments shown are the latest stored outcomes for those observations.</p>
 </section>
 
 @if (_error is not null)
 {
-    <div class="degraded"><strong>The tape could not be loaded.</strong> @_error</div>
+    <div class="degraded"><strong>Observations could not be loaded.</strong> @_error</div>
 }
 else if (_page is null)
 {
-    <div class="loading">Loading signals…</div>
+    <div class="loading">Loading observations…</div>
 }
 else if (_page.Total == 0)
 {
-    <EmptyState Title="@(HasFilters ? "No signals match these filters" : "No signals recorded yet")">
+    <EmptyState Title="@(HasFilters ? "No observations match these filters" : "No observations recorded yet")">
         @if (HasFilters)
         {
-            <span>Widen the date range or clear the instrument and category.</span>
+            <span>Widen the date range or clear the indicator and input type.</span>
         }
         else
         {
-            <span>Run the FRED pull from Sources and health, or submit signals through POST /api/admin/signals. Nothing is shown until something is observed.</span>
+            <span>Import market and economic observations from <a href="sources">Data sources</a>.</span>
         }
     </EmptyState>
 }
 else
 {
     <p class="panel-note">
-        @Fmt.Count(_page.Total) signal(s) · showing @(_skip + 1)–@(_skip + _page.Signals.Count).
-        Assessment: signed severity · certainty, a statistical classification of each observation against the history before it, not a forecast.
+        @Fmt.Count(_page.Total) observations · showing @(_skip + 1)–@(_skip + _page.Signals.Count), newest first.
+        Severity describes how unusual an observation is; confidence measures support from its history, not the probability of profit.
     </p>
     <div class="table-wrap">
         <table class="data">
             <thead>
                 <tr>
                     <th scope="col">Observed</th>
-                    <th scope="col">Category</th>
-                    <th scope="col">Instrument</th>
-                    <th scope="col">Value</th>
+                    <th scope="col">Input type</th>
+                    <th scope="col">Indicator</th>
+                    <th scope="col">Observed value</th>
                     <th scope="col">Assessment</th>
                     <th scope="col">Source</th>
-                    <th scope="col">Recorded</th>
-                    <th scope="col">Ledger</th>
+                    <th scope="col">Audit record</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var signal in _page.Signals)
                 {
-                    <tr class="@(signal.SignalId == _selected?.SignalId ? "selected" : "")" @onclick="() => SelectAsync(signal)" style="cursor:pointer">
+                    <tr class="@(signal.SignalId == _selected?.SignalId ? "selected" : "")">
                         <td class="mono">@Fmt.Utc(signal.ObservedAt)</td>
                         <td>@Fmt.Category(signal.Category)</td>
-                        <td class="mono">@signal.Instrument</td>
+                        <td><a href="tape?signal=@signal.SignalId#selected-signal">@Fmt.Instrument(signal.Instrument)</a></td>
                         <td class="num">@Fmt.Number(signal.Value, 4)</td>
                         <td><AssessmentBadge Outcome="@Outcome(signal)" /></td>
                         <td><ProvenanceBadge Provenance="signal.Provenance" /></td>
-                        <td class="mono">@Fmt.Utc(signal.RecordedAt)</td>
                         <td class="mono"><a href="ledger/@signal.LedgerSequence">#@signal.LedgerSequence</a></td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
-    <p class="panel-note">
+    <div class="action-bar">
         <button class="button button-ghost" disabled="@(_skip == 0)" @onclick="() => PageAsync(-PageSize)">Newer</button>
         <button class="button button-ghost" disabled="@(_skip + PageSize >= _page.Total)" @onclick="() => PageAsync(PageSize)">Older</button>
-    </p>
-
-    @if (_selected is { } detail)
-    {
-        <section class="panel" aria-label="Signal detail">
-            <div class="panel-head">
-                <div>
-                    <div class="kicker">@Fmt.Category(detail.Category) · observed event</div>
-                    <h2>@detail.Instrument at @Fmt.Utc(detail.ObservedAt)</h2>
-                </div>
-                <ProvenanceBadge Provenance="detail.Provenance" />
-            </div>
-            <dl class="kv">
-                <dt>Signal id</dt><dd>@detail.SignalId</dd>
-                <dt>Correlation id</dt><dd>@detail.CorrelationId</dd>
-                <dt>Source identifier</dt><dd>@detail.SourceIdentifier</dd>
-                <dt>Series</dt><dd>@detail.Variant</dd>
-                <dt>Payload type</dt><dd>@detail.PayloadType</dd>
-                <dt>Provider</dt><dd>@detail.Provenance.Provider</dd>
-                @if (detail.Provenance.Url is { } url)
-                {
-                    <dt>Source URL</dt><dd><a href="@url" target="_blank" rel="noopener noreferrer">@url</a></dd>
-                }
-                @if (detail.Provenance.RetrievedAt is { } retrieved)
-                {
-                    <dt>Retrieved</dt><dd>@Fmt.Utc(retrieved)</dd>
-                }
-                @if (detail.Provenance.FirstReleased is { } released)
-                {
-                    <dt>First released</dt><dd>@released.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</dd>
-                }
-                @if (detail.Provenance.Derivation is { } derivation)
-                {
-                    <dt>Derivation</dt><dd>@derivation</dd>
-                }
-                @if (detail.Provenance.Note is { } note)
-                {
-                    <dt>Timing</dt><dd>@note</dd>
-                }
-                <dt>Ledger entry</dt><dd><a href="ledger/@detail.LedgerSequence">#@detail.LedgerSequence</a></dd>
-            </dl>
-            <pre class="code">@Fmt.Json(detail.Payload)</pre>
-        </section>
-        @if (Guid.TryParse(AssessmentParameter, out var used) && Outcome(detail) is { } latest && latest.AssessmentId != used)
-        {
-            <div class="degraded">
-                <strong>The decision used an earlier outcome of this signal.</strong>
-                It read assessment <span class="mono">@used</span>; shown below is the signal's latest outcome (for example a real
-                classification that replaced a CLS-004 fallback).
-            </div>
-        }
-        <AssessmentDetail Outcome="@Outcome(detail)" />
-        <section class="panel" aria-label="Decisions this signal triggered">
-            <div class="panel-head">
-                <div>
-                    <div class="kicker">Same correlation id · SRS OBS-001</div>
-                    <h2>Decisions this signal triggered</h2>
-                </div>
-            </div>
-            @if (_selectedDecisions.Count == 0)
-            {
-                <p class="panel-note">
-                    None. A decision follows a dislocation, which needs a classified signal of a context member and an observed reference level.
-                </p>
-            }
-            else
-            {
-                <div class="table-wrap">
-                    <table class="data">
-                        <thead><tr><th>Context</th><th>Outcome</th><th>Composite</th><th>Dislocation</th><th></th></tr></thead>
-                        <tbody>
-                            @foreach (var decision in _selectedDecisions)
-                            {
-                                <tr>
-                                    <td>@decision.Context</td>
-                                    <td><DecisionBadge Outcome="decision.Outcome" /></td>
-                                    <td class="num">@Fmt.Signed(decision.CompositeScore, 4)</td>
-                                    <td class="num">@Fmt.Signed(decision.DislocationValue, 2)</td>
-                                    <td><a href="decisions/@decision.DecisionId">Explore</a></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </section>
-    }
+    </div>
 }
 
-<details class="panel">
-    <summary>Rejected submissions (SRS SIG-002)</summary>
+<details class="panel technical-details">
+    <summary>Rejected observations</summary>
     @if (_rejections is null || _rejections.Count == 0)
     {
         <p class="panel-note">No submission has been rejected.</p>
@@ -223,7 +241,7 @@ else
 </details>
 
 @code {
-    private const int PageSize = 100;
+    private const int PageSize = 25;
 
     private string _category = "";
     private string? _instrument;
@@ -245,6 +263,7 @@ else
     public string? AssessmentParameter { get; set; }
     private IReadOnlyList<RejectionView>? _rejections;
     private string? _error;
+    private string? _selectionError;
 
     private bool HasFilters => _category.Length > 0 || !string.IsNullOrWhiteSpace(_instrument) || _from is not null || _to is not null || _asOf is not null;
 
@@ -252,20 +271,41 @@ else
     {
         await LoadAsync();
         _rejections = await RejectionQuery.HandleAsync(new GetRejections(20), CancellationToken.None);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _selectionError = null;
         if (Guid.TryParse(SignalParameter, out var id))
         {
-            if (await SignalByIdQuery.HandleAsync(new GetSignal(id), CancellationToken.None) is { } signal)
+            if (_selected?.SignalId == id) { return; }
+            _selected = null;
+            _selectedDecisions = [];
+            try
             {
-                await SelectAsync(signal);
+                if (await SignalByIdQuery.HandleAsync(new GetSignal(id), CancellationToken.None) is { } signal)
+                {
+                    await SelectAsync(signal);
+                }
+                else
+                {
+                    _selectionError = "This observation could not be found. Select an observation from the list below.";
+                }
             }
-            else
+            catch (Microsoft.Data.Sqlite.SqliteException)
             {
-                _error = $"No signal {id} is recorded.";
+                _selected = null;
+                _selectionError = "The selected observation could not be loaded. Try opening it again.";
             }
         }
-        else if (!string.IsNullOrWhiteSpace(SignalParameter))
+        else
         {
-            _error = "The signal id in the address is not a UUID.";
+            _selected = null;
+            _selectedDecisions = [];
+            if (!string.IsNullOrWhiteSpace(SignalParameter))
+            {
+                _selectionError = "The observation link is invalid. Select an observation from the list below.";
+            }
         }
     }
 
@@ -328,6 +368,14 @@ else
     }
 
     private AssessmentView? Outcome(SignalView signal) => _outcomes.GetValueOrDefault(signal.SignalId);
+
+    private static string ValueMeaning(SignalView signal) => signal.Instrument switch
+    {
+        "VIX" or "VVIX" or "VXN" or "RVX" or "OVX" or "GVZ" or "EVZ" => "Volatility index level, in index points.",
+        "CPI_YOY" or "CORE_CPI_YOY" or "PCE_YOY" or "CORE_PCE_YOY" => "Year-over-year inflation, in percent.",
+        "INITIAL_CLAIMS" or "CONTINUED_CLAIMS" => "Unemployment claims, in people.",
+        _ => "Value in the source's published units; see the source series for its definition.",
+    };
 
     private static DateTimeOffset? Utc(DateTime? value) =>
         value is { } local ? new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), TimeSpan.Zero) : null;

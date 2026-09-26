@@ -7,7 +7,7 @@
 | Python classifier | Partial product; two executable routes | Signed market/macro scores, explicit fit rejection, horizon-based confidence and readiness checks. Cross-asset and both geopolitical routes remain HTTP 501; [calibration and provider gaps](../apps/classification/LIMITATIONS.md). |
 | Replay dashboard | Built | Eight historical VIX/OVX snapshots through real HTTP classification and a labeled scenario; three views, repeat/reset and degraded/error handling. Run `python scripts/demo.py`; [setup](DEMO.md). |
 | Agent harness and CI | Built | Both OpenAPI contracts, Python dependency and fitness checks, .NET structural tests and HTTP acceptance tests share [one gate](../harness/ORACLE.md). [Remaining harness limits](../apps/classification/HARNESS.md). |
-| Brand and Markets pages | Built | Static HTML, CSS and JavaScript checked at desktop and mobile widths. [Brand source](../sites/brand/); [Markets source](../sites/markets/). |
+| Markets presentation page | Built | Static HTML, CSS and JavaScript; [product source](../sites/markets/). The brand source and Cloudflare workspace belong to `D:\Work\primescore`. |
 | Markets engine | Implemented through M6 | FRED ingestion, ledger, classifications, composites, decisions, replay, versioned settings, Blazor UI and sign-in. [Operational and data limits](../apps/engine/LIMITATIONS.md). |
 | Positions, exits and risk | Deferred | API slots return 501; no options-price source or broker execution. |
 | Contract and credit optimisation | Direction only | No implementation or product specification. |

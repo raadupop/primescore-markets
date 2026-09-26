@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using PrimeScore.Acceptance.Api.Harness;
 using PrimeScore.Api.Contracts;
 using static PrimeScore.Acceptance.Api.Harness.SignalDocuments;
@@ -33,6 +34,55 @@ public sealed class VolmageddonEngine : IAsyncLifetime
 public sealed class DecisionTests(VolmageddonEngine volmageddon) : IClassFixture<VolmageddonEngine>
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task UI_research_analysis_explains_the_reference_values_and_conditions_without_implying_execution()
+    {
+        var engine = volmageddon.Engine;
+        var decision = Assert.Single(await engine.Client(Role.Read).ListDecisionsAsync(VolmageddonEngine.EventAt, VolmageddonEngine.EventAt, Token));
+        using var http = engine.Http(Role.Read);
+        var overview = await http.GetStringAsync(new Uri(engine.ApiBase, "/"), Token);
+        var analysis = await http.GetStringAsync(new Uri(engine.ApiBase, $"/decisions/{decision.Decision_id}"), Token);
+
+        Assert.Contains("No position opened", PageText(overview), StringComparison.Ordinal);
+        Assert.Contains($"href=\"decisions/{decision.Decision_id}\"", overview, StringComparison.Ordinal);
+        Assert.Contains("Position: none. Execution: none.", PageText(analysis), StringComparison.Ordinal);
+        Assert.Contains("no order was sent", PageText(analysis), StringComparison.Ordinal);
+        foreach (var page in new[] { overview, analysis })
+        {
+            var text = PageText(page);
+            Assert.Contains("VIX", text, StringComparison.Ordinal);
+            Assert.Contains("US equity volatility", text, StringComparison.Ordinal);
+            // 37.32 × (1 + 0.9992 × 0.5) = 55.965072; scenario gap 18.645072.
+            Assert.Contains("37.32", text, StringComparison.Ordinal);
+            Assert.Contains("55.97", text, StringComparison.Ordinal);
+            Assert.Contains("18.65", text, StringComparison.Ordinal);
+            var workflow = Regex.Match(page, "<nav[^>]*aria-label=\"Research workflow\"[^>]*>(.*?)</nav>", RegexOptions.Singleline | RegexOptions.CultureInvariant);
+            Assert.True(workflow.Success, "An analysis must expose the route from data to review.");
+            foreach (var route in new[] { "sources", "tape", "./", "decisions" })
+            {
+                Assert.Contains($"href=\"{route}\"", workflow.Value, StringComparison.Ordinal);
+            }
+        }
+
+        var rows = Regex.Matches(analysis, "<tr>(.*?)</tr>", RegexOptions.Singleline | RegexOptions.CultureInvariant)
+            .Select(row => PageText(row.Value)).ToArray();
+        var strength = Assert.Single(rows, row => row.Contains("Combined signal strength", StringComparison.Ordinal));
+        Assert.Contains("0.9992", strength, StringComparison.Ordinal);
+        Assert.Contains("At least 0.5000", strength, StringComparison.Ordinal);
+        var confidence = Assert.Single(rows, row => row.Contains("Strongest signal confidence", StringComparison.Ordinal));
+        Assert.Contains("100%", confidence, StringComparison.Ordinal);
+        Assert.Contains("At least 50%", confidence, StringComparison.Ordinal);
+        Assert.Contains("not a probability of a profitable trade", confidence, StringComparison.Ordinal);
+
+        var observation = await http.GetStringAsync(new Uri(engine.ApiBase, $"/tape?signal={volmageddon.Signals[^1].Signal_id}"), Token);
+        var selected = observation.IndexOf("id=\"selected-signal\"", StringComparison.Ordinal);
+        Assert.True(selected >= 0 && selected < observation.IndexOf("aria-label=\"Filters\"", StringComparison.Ordinal),
+            "Following evidence must show the selected observation before the searchable list.");
+        Assert.Contains("37.3200", PageText(observation), StringComparison.Ordinal);
+        Assert.Contains("Comparison history", PageText(observation), StringComparison.Ordinal);
+        Assert.Contains("not the probability of a profitable position", PageText(observation), StringComparison.Ordinal);
+    }
 
     [Fact]
     public async Task DEC_001_and_DEC_003_Volmageddon_is_a_DEPLOY_with_every_condition_and_its_explanation_recorded()
@@ -211,4 +261,8 @@ public sealed class DecisionTests(VolmageddonEngine volmageddon) : IClassFixture
             Assert.True(passed == condition.Passed, $"{name}: expected passed={passed}");
         }
     }
+
+    private static string PageText(string html) => Regex.Replace(
+        System.Net.WebUtility.HtmlDecode(Regex.Replace(html, "<[^>]+>", " ", RegexOptions.CultureInvariant)),
+        @"\s+", " ", RegexOptions.CultureInvariant);
 }

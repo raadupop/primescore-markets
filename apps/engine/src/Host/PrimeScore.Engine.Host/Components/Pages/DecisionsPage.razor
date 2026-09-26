@@ -5,44 +5,49 @@
 @inject IQueryHandler<GetDecisions, IReadOnlyList<DecisionView>> DecisionQuery
 @inject IQueryHandler<GetActiveSettings, SettingsVersion> SettingsQuery
 
-<PageTitle>Decisions · PrimeScore Markets</PageTitle>
+<PageTitle>Decision journal · PrimeScore Markets</PageTitle>
 
 <div class="page-head">
     <div>
-        <div class="eyebrow">Decision explorer</div>
-        <h1>Decisions</h1>
-        <p>
-            What the rules would have decided for each context, one decision per new assessment of a context member, newest first.
-            DEPLOY means every condition held; no order is placed and no position is opened in v1.
-        </p>
+        <div class="eyebrow">Research · Step 4</div>
+        <h1>Decision journal</h1>
+        <p>Which market scenarios met the configured checks, and why. Open a record to see its observations, thresholds and analysis.</p>
     </div>
+</div>
+
+<WorkflowGuide Current="conditions" />
+
+<div class="callout">
+    <strong>These are recorded research decisions.</strong>
+    “Conditions met” means the checks passed at the observation time. No order was sent, no position was opened,
+    and no tradable contract, size or trading venue was selected. VIX and OVX are reference indices for the analysis.
 </div>
 
 <div class="filters" role="group" aria-label="Decision filters">
     <label>
-        Context
+        Market
         <select @bind="_context" @bind:after="LoadAsync">
-            <option value="">All contexts</option>
+            <option value="">All markets</option>
             @foreach (var context in _contexts)
             {
-                <option value="@context.Name">@context.Name · @context.ReferenceInstrument</option>
+                <option value="@context.Name">@Fmt.Context(context.Name) · @context.ReferenceInstrument</option>
             }
         </select>
     </label>
     <label>
         Outcome
         <select @bind="_outcome" @bind:after="LoadAsync">
-            <option value="">DEPLOY and IDLE</option>
-            <option value="Deploy">DEPLOY only</option>
-            <option value="Idle">IDLE only</option>
+            <option value="">All outcomes</option>
+            <option value="Deploy">Conditions met</option>
+            <option value="Idle">Wait</option>
         </select>
     </label>
     <label>
-        Observed from
+        Observed from (UTC)
         <input type="date" @bind="_from" @bind:after="LoadAsync" />
     </label>
     <label>
-        Observed to
+        Observed to (UTC)
         <input type="date" @bind="_to" @bind:after="LoadAsync" />
     </label>
 </div>
@@ -58,17 +63,22 @@ else if (_decisions is null)
 else if (_decisions.Count == 0)
 {
     <EmptyState Title="No decision matches">
-        A decision is recorded for every dislocation, which needs a classified close of a context member and a reference level.
-        Load history on Sources and health or through <span class="mono">POST /api/admin/signals</span>; nothing is estimated in its place.
+        Broaden the dates or choose another market. If no history has been loaded, check <a href="sources">Data and health</a>.
     </EmptyState>
 }
 else
 {
+    <div class="metric-grid" aria-label="Filtered records">
+        <div class="metric"><span>Records shown</span><strong>@Fmt.Count(_decisions.Count)</strong></div>
+        <div class="metric"><span>Conditions met</span><strong>@Fmt.Count(_decisions.Count(decision => decision.Outcome == DecisionOutcome.Deploy))</strong></div>
+        <div class="metric"><span>Waiting for conditions</span><strong>@Fmt.Count(_decisions.Count(decision => decision.Outcome == DecisionOutcome.Idle))</strong></div>
+    </div>
+    <p class="panel-note">Newest observation first. Each new assessment can create a record, so several records may share a date. Counts describe the filtered records shown, not distinct opportunities or trades.</p>
     <div class="table-wrap">
         <table class="data">
             <thead>
                 <tr>
-                    <th>Observed</th><th>Context</th><th>Outcome</th><th>Scenario</th><th>Composite</th><th>Dislocation</th><th>Failed conditions</th><th></th>
+                    <th>Observed (UTC)</th><th>Market / reference</th><th>Outcome</th><th>Model scenario</th><th>Checks</th><th>Analysis</th>
                 </tr>
             </thead>
             <tbody>
@@ -76,13 +86,17 @@ else
                 {
                     <tr>
                         <td class="mono">@Fmt.Utc(decision.AsOf)</td>
-                        <td>@decision.Context</td>
+                        <td>@Fmt.Context(decision.Context)<div class="panel-note">@decision.ReferenceInstrument</div></td>
                         <td><DecisionBadge Outcome="decision.Outcome" /></td>
-                        <td>@decision.Scenario</td>
-                        <td class="num">@Fmt.Signed(decision.CompositeScore, 4)</td>
-                        <td class="num">@Fmt.Signed(decision.DislocationValue, 2) / ±@Fmt.Number(decision.DislocationThreshold, 2)</td>
-                        <td>@string.Join(", ", decision.Conditions.Where(condition => !condition.Passed).Select(condition => condition.Name))</td>
-                        <td><a href="decisions/@decision.DecisionId">Explore</a></td>
+                        <td>@DecisionCopy.Scenario(decision.Scenario)</td>
+                        <td>
+                            <strong>@decision.Conditions.Count(condition => condition.Passed) of @decision.Conditions.Count passed</strong>
+                            @if (decision.Conditions.Any(condition => !condition.Passed))
+                            {
+                                <div class="panel-note">Unmet: @string.Join(", ", decision.Conditions.Where(condition => !condition.Passed).Select(condition => DecisionCopy.ConditionName(condition.Name)))</div>
+                            }
+                        </td>
+                        <td><a href="decisions/@decision.DecisionId" aria-label="@($"Open {Fmt.Context(decision.Context)} analysis at {Fmt.Utc(decision.AsOf)}")">View analysis →</a></td>
                     </tr>
                 }
             </tbody>

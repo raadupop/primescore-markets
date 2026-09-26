@@ -61,12 +61,3 @@ toggle.addEventListener("click", () => {
 });
 navigation.addEventListener("click", (event) => { if (event.target.closest("a")) closeNavigation(); });
 document.addEventListener("keydown", (event) => { if (event.key === "Escape" && navigation.classList.contains("is-open")) { closeNavigation(); toggle.focus(); } });
-
-// Preserve canonical destinations in HTML; connect the two local preview servers.
-if (["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname)) {
-  for (const link of document.querySelectorAll("a[href]")) {
-    const target = new URL(link.href, window.location.href);
-    const port = target.hostname === "primescore.ai" ? "4173" : target.hostname === "markets.primescore.ai" ? "4174" : null;
-    if (port) { target.protocol = "http:"; target.hostname = window.location.hostname; target.port = port; link.href = target.href; }
-  }
-}

@@ -1,10 +1,10 @@
-# PrimeScore AI
+# PrimeScore Markets
 
 [![Checks](https://github.com/raadupop/primescore-ai/actions/workflows/checks.yml/badge.svg)](https://github.com/raadupop/primescore-ai/actions/workflows/checks.yml)
 
 PrimeScore AI is developing event-driven volatility intelligence for options research. This repository contains the .NET Markets engine, Python classifier, local replay demo and agent harness (instructions, hooks and code checks).
 
-The first product is **PrimeScore Markets**, intended for **markets.primescore.ai**. The umbrella brand at **primescore.ai** also has contract and credit optimisation as a future direction.
+**PrimeScore Markets** is intended for **markets.primescore.ai**. The umbrella brand site and Cloudflare workspace live in `D:\Work\primescore`, which includes this repository as the `products/markets` Git submodule. Active Markets development stays here.
 
 ```mermaid
 flowchart LR
@@ -58,6 +58,8 @@ The engineering approach is **agentic AI systems operating under upfront constra
 
 These are development-time controls around coding agents. The classification prototype does not yet run geopolitical language-model inference. [Harness inventory](apps/classification/HARNESS.md) · [Architecture decision](doc/adr/0001-agent-harness-architecture.md)
 
+The six-architecture comparison is deferred; its design remains available for a future research task.
+
 Run the same checks used by GitHub Actions from Git Bash or a POSIX shell, with the virtual environment active:
 
 ```sh
@@ -68,7 +70,12 @@ The suite includes pytest, fitness tools, dependency boundaries and both OpenAPI
 
 ## Websites
 
-The [brand](sites/brand/) and [Markets](sites/markets/) pages use static HTML, CSS and JavaScript. The Python replay demo runs separately.
+The [Markets page](sites/markets/) uses static HTML, CSS and JavaScript. The brand page lives in `D:\Work\primescore\sites\brand`. The Python replay demo runs separately.
+
+The [engine launcher](docs/ENGINE.md) also starts Markets at <http://127.0.0.1:8091>.
+For the product website only, run `.\scripts\start-websites.ps1`. To include the
+brand at <http://127.0.0.1:8090>, use the umbrella's `scripts/start-markets.ps1`
+with `-MarketsRoot D:\Work\invex`. Ctrl+C stops the selected launcher's services.
 
 ## Licence
 

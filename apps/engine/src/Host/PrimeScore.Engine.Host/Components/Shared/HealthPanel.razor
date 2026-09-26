@@ -4,70 +4,67 @@
 <section class="panel" aria-labelledby="health-title">
     <div class="panel-head">
         <div>
-            <div class="kicker">Engine</div>
-            <h2 id="health-title">Health</h2>
+            <div class="kicker">Operations</div>
+            <h2 id="health-title">Service status</h2>
         </div>
-        @if (_snapshot is not null)
-        {
-            <span class="status @(_snapshot.Ok ? "" : "status-warn")">@(_snapshot.Ok ? "ok" : "degraded")</span>
-        }
+        <div class="actions">
+            @if (_snapshot is not null)
+            {
+                <span class="status @(_snapshot.Ok ? "" : "status-warn")">@(_snapshot.Ok ? "Available" : "Needs attention")</span>
+            }
+            <button class="button button-ghost" @onclick="RefreshAsync" disabled="@_loading">@(_loading ? "Checking…" : "Refresh")</button>
+        </div>
     </div>
 
     @if (_error is not null)
     {
-        <div class="degraded"><strong>Health check failed.</strong> @_error</div>
+        <div class="degraded"><strong>Service status is unavailable.</strong> Try refreshing.</div>
+        <details class="technical-details"><summary>Error details</summary><pre>@_error</pre></details>
     }
     else if (_snapshot is null)
     {
-        <div class="loading">Checking ledger and classifier…</div>
+        <div class="loading">Checking storage and the analysis service…</div>
     }
     else
     {
         <dl class="kv">
-            <dt>Ledger entries</dt>
+            <dt>Audit records stored</dt>
             <dd>@_snapshot.Ledger.Entries.ToString("N0", CultureInfo.InvariantCulture)</dd>
-            <dt>Head sequence</dt>
-            <dd>@_snapshot.Ledger.HeadSequence</dd>
-            <dt>Last verification</dt>
-            <dd>
-                @if (_snapshot.Ledger.LastVerification is { } verification)
-                {
-                    <span class="status @(verification.Ok ? "" : "status-bad")">@(verification.Ok ? "chain intact" : "chain broken")</span>
-                    <span> @verification.VerifiedAt.ToString("u", CultureInfo.InvariantCulture)</span>
-                }
-                else
-                {
-                    <span class="status status-muted">never verified</span>
-                }
-            </dd>
-            <dt>Classifier</dt>
+            <dt>Analysis service</dt>
             <dd>
                 @if (_snapshot.Classifier.Reachable)
                 {
-                    <span class="status">reachable</span>
+                    <span class="status">Connected</span>
                 }
                 else
                 {
-                    <span class="status status-bad">unreachable</span>
+                    <span class="status status-bad">Unavailable</span>
                 }
-                <span> @_snapshot.Classifier.BaseUrl</span>
             </dd>
-            @if (_snapshot.Classifier.Detail is { } detail)
-            {
-                <dt>Classifier detail</dt>
-                <dd>@detail</dd>
-            }
-            <dt>Engine version</dt>
-            <dd>@_snapshot.EngineVersion</dd>
-            <dt>Checked</dt>
-            <dd>@_snapshot.CheckedAt.ToString("u", CultureInfo.InvariantCulture)</dd>
+            <dt>Status checked</dt>
+            <dd>@Fmt.Utc(_snapshot.CheckedAt)</dd>
         </dl>
         @if (!_snapshot.Classifier.Reachable)
         {
-            <p class="panel-note">Classification is unavailable while the classifier is unreachable; no assessment is invented.</p>
+            <div class="degraded">New observations cannot be analysed until the analysis service reconnects. Existing results remain available.</div>
         }
+        else if (_snapshot.Classifier.Ready == false)
+        {
+            <p class="panel-note">The analysis service is reachable. Each request supplies its own historical data, so its empty startup history does not block analysis.</p>
+        }
+        <details class="technical-details">
+            <summary>Connection and build details</summary>
+            <dl class="kv">
+                <dt>Classifier address</dt><dd>@_snapshot.Classifier.BaseUrl</dd>
+                <dt>Engine build</dt><dd class="mono">@_snapshot.EngineVersion</dd>
+                <dt>Latest audit sequence</dt><dd>@_snapshot.Ledger.HeadSequence</dd>
+                @if (_snapshot.Classifier.Detail is { } detail)
+                {
+                    <dt>Classifier diagnostic</dt><dd>@detail</dd>
+                }
+            </dl>
+        </details>
     }
-    <p class="panel-note"><button class="button button-ghost" @onclick="RefreshAsync" disabled="@_loading">Refresh</button></p>
 </section>
 
 @code {

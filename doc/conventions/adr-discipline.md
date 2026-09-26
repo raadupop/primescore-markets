@@ -111,10 +111,29 @@ the ADR is informative or noise.
   terms ("PR review", "stakeholder sign-off", "production rollout") if
   the project's workflow does not use them. Use the project's actual
   workflow vocabulary or describe the action concretely.
+- **Tooling-agnostic at the scope of the ADR.** A project-wide ADR
+  must phrase rules in terms of *roles* (oracle, test runner, type
+  checker, fitness rule, contract gate), not specific tools. "pytest",
+  "xUnit", "mypy", "ruff" are acceptable only inside rows or
+  paragraphs explicitly scoped to a component that uses them. A rule
+  that bakes in one component's stack will misfire when a second
+  component with a different stack arrives.
+- **The filesystem is the roster.** Do not enumerate items that
+  already live as files or directory entries — skill names under
+  `.claude/skills/`, hook scripts, settings files, registry IDs. Link
+  to the directory or contract file; the inventory belongs there, not
+  in the ADR. Restating it creates two sources to drift apart.
 - **Stay in lane per section.** Context describes forces. Decision locks
   the response. Consequences flow from the decision. Trade-offs name what
   was sacrificed. Do not put prescriptions in Context, do not put forces
   in Decision, do not put work plans in Consequences.
+- **Concision.** An ADR records a decision, not its narrative. Cut any
+  sentence that does not name a constraint, a mechanism, a number, or an
+  interface. Reference other documents (component ADRs, contract files in
+  `harness/`, the registry) by link rather than restating their content.
+  If a section can be condensed to a pointer plus a one-line rule, do
+  that. A reader who already knows the project should be able to review
+  an ADR end-to-end in under five minutes.
 
 ## Anti-patterns
 

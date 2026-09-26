@@ -1,84 +1,118 @@
 @using PrimeScore.Modules.Classification.Contracts
+@using PrimeScore.SharedKernel
 
-@* Everything an assessment was computed from and what it said, traceable to its ledger entry (SRS OBS-002). *@
 <section class="panel" aria-label="Assessment">
     <div class="panel-head">
         <div>
-            <div class="kicker">Classification · statistical, not a forecast</div>
-            <h2>@(Outcome is { Available: true } ? "Assessment" : "No assessment")</h2>
+            <div class="kicker">Understand the evidence</div>
+            <h2>@(Outcome is { Available: true } ? "How unusual was this observation?" : "Analysis unavailable")</h2>
         </div>
-        <AssessmentBadge Outcome="Outcome" />
+        @if (Outcome is { } recorded)
+        {
+            <a href="ledger/@recorded.LedgerSequence">View audit record</a>
+        }
     </div>
     @if (Outcome is null)
     {
-        <p class="panel-note">This signal has not been classified yet. Classification runs when a signal is recorded and again every few minutes for anything still pending.</p>
+        <p>This observation is waiting for analysis. The engine checks new observations as they arrive and retries pending observations every few minutes.</p>
     }
     else if (!Outcome.Available)
     {
-        <dl class="kv">
-            <dt>Reason</dt><dd>@AssessmentBadge.Reason(Outcome.Reason)</dd>
-            <dt>Detail</dt><dd>@Outcome.Detail</dd>
-            <dt>Recorded</dt><dd>@Fmt.Utc(Outcome.AssessedAt)</dd>
-            <dt>Ledger entry</dt><dd><a href="ledger/@Outcome.LedgerSequence">#@Outcome.LedgerSequence</a></dd>
-        </dl>
+        <p><strong>@AssessmentBadge.Reason(Outcome.Reason).</strong> @UnavailableExplanation(Outcome.Reason)</p>
+        <p class="panel-note">Last checked @Fmt.Utc(Outcome.AssessedAt).</p>
+        <details class="technical-details">
+            <summary>Analysis diagnostic</summary>
+            <p>@Outcome.Detail</p>
+            <dl class="kv"><dt>Assessment ID</dt><dd>@Outcome.AssessmentId</dd><dt>Correlation ID</dt><dd>@Outcome.CorrelationId</dd></dl>
+        </details>
     }
     else
     {
+        <div class="metric-grid">
+            <div class="metric">
+                <span class="metric-label">Severity</span>
+                <strong class="metric-value">@Fmt.Signed(Outcome.Score, 2)</strong>
+                <p class="panel-note">@SeverityExplanation(Outcome)</p>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Confidence</span>
+                <strong class="metric-value">@Fmt.Percent(Outcome.Certainty)</strong>
+                <p class="panel-note">Support from the amount and freshness of history, reduced when quality checks fail.</p>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Comparison history</span>
+                <strong class="metric-value">@Fmt.Count(Outcome.ReferenceWindowLength)</strong>
+                <p class="panel-note">Earlier values available to this assessment@(Outcome.IsFallback ? ", from the reused observation" : "").</p>
+            </div>
+        </div>
+        <p class="panel-note">Severity runs from −1 to +1; a larger magnitude means a more unusual deviation. Confidence is a measure of data support, not the probability of a profitable position.</p>
+        @if (Outcome.IsFallback)
+        {
+            <div class="degraded"><strong>A previous assessment was reused.</strong> @AssessmentBadge.Reason(Outcome.Reason); the assessment was @AssessmentBadge.Stale(Outcome.StalenessSeconds) when reused.</div>
+        }
+        @foreach (var flag in Outcome.Flags)
+        {
+            <div class="degraded"><strong>@AssessmentBadge.FlagLabel(flag).</strong> @AssessmentBadge.FlagTitle(flag)</div>
+        }
         <dl class="kv">
-            <dt>Severity</dt><dd class="mono">@Fmt.Signed(Outcome.Score, 4) (@Outcome.ScoreType)</dd>
-            <dt>Certainty</dt><dd class="mono">@Fmt.Number(Outcome.Certainty, 4)</dd>
-            <dt>History sufficiency</dt><dd class="mono">@Fmt.Number(Outcome.HistorySufficiency, 4)</dd>
-            <dt>Temporal relevance</dt><dd class="mono">@Fmt.Number(Outcome.TemporalRelevance, 4)</dd>
-            <dt>Method</dt><dd>@Outcome.ClassificationMethod</dd>
-            @if (Outcome.EventTaxonomy is { } taxonomy)
-            {
-                <dt>Event taxonomy</dt><dd>@taxonomy</dd>
-            }
-            @if (Outcome.IsFallback)
-            {
-                <dt>Reused assessment</dt>
-                <dd class="mono">@Outcome.FallbackOf (its window: @Outcome.ReferenceWindowLength value(s) before that earlier signal)</dd>
-            }
-            else
-            {
-                <dt>Reference window</dt>
-                <dd>@Outcome.ReferenceWindowLength value(s) observed before the signal</dd>
-            }
+            <dt>History coverage</dt><dd>@Fmt.Percent(Outcome.HistorySufficiency) of the target history length</dd>
+            <dt>History freshness</dt><dd>@Fmt.Percent(Outcome.TemporalRelevance) at the time of the observation</dd>
+            <dt>Analysed</dt><dd>@Fmt.Utc(Outcome.AssessedAt)</dd>
             @if (Outcome.Consensus is { } consensus)
             {
-                <dt>Consensus used</dt>
-                <dd>
-                    <span class="mono">@Fmt.Number(consensus.Value, 4)</span> ·
-                    <a href="@consensus.Url" target="_blank" rel="noopener noreferrer">@consensus.Source</a> ·
-                    retrieved @Fmt.Utc(consensus.RetrievedAt)
-                </dd>
+                <dt>Consensus estimate</dt>
+                <dd>@Fmt.Number(consensus.Value, 4) · <a href="@consensus.Url" target="_blank" rel="noopener noreferrer">@consensus.Source</a> · retrieved @Fmt.Utc(consensus.RetrievedAt)</dd>
             }
-            @if (Outcome.IsFallback)
-            {
-                <dt>Fallback</dt>
-                <dd>Reused after @AssessmentBadge.Reason(Outcome.Reason); @AssessmentBadge.Stale(Outcome.StalenessSeconds). @Outcome.Detail</dd>
-            }
-            @if (Outcome.Flags.Count > 0)
-            {
-                <dt>Flags</dt><dd>@string.Join(", ", Outcome.Flags)</dd>
-            }
-            <dt>Recorded</dt><dd>@Fmt.Utc(Outcome.AssessedAt)</dd>
-            <dt>Correlation id</dt><dd>@Outcome.CorrelationId</dd>
-            <dt>Ledger entry</dt><dd><a href="ledger/@Outcome.LedgerSequence">#@Outcome.LedgerSequence</a></dd>
         </dl>
-        <h3>Reasoning trace</h3>
-        <p class="trace">@Outcome.ReasoningTrace</p>
-        @if (!string.IsNullOrWhiteSpace(Outcome.ComputedMetrics) && Outcome.ComputedMetrics != "{}")
-        {
-            <details>
-                <summary>Computed metrics</summary>
+        <details class="technical-details">
+            <summary>Calculation trace and audit details</summary>
+            <dl class="kv">
+                <dt>Method</dt><dd>@Fmt.Humanize(Outcome.ClassificationMethod ?? "Unavailable")</dd>
+                <dt>Score type</dt><dd>@Fmt.Humanize(Outcome.ScoreType ?? "Unavailable")</dd>
+                <dt>Exact severity</dt><dd>@Fmt.Signed(Outcome.Score, 4)</dd>
+                <dt>Exact confidence</dt><dd>@Fmt.Number(Outcome.Certainty, 4)</dd>
+                <dt>Assessment ID</dt><dd>@Outcome.AssessmentId</dd>
+                <dt>Correlation ID</dt><dd>@Outcome.CorrelationId</dd>
+                @if (Outcome.EventTaxonomy is { } taxonomy)
+                {
+                    <dt>Event classification</dt><dd>@Fmt.Humanize(taxonomy)</dd>
+                }
+                @if (Outcome.IsFallback)
+                {
+                    <dt>Reused assessment ID</dt><dd>@Outcome.FallbackOf</dd>
+                    <dt>Reuse reason</dt><dd>@Outcome.Detail</dd>
+                }
+            </dl>
+            <h3>Reasoning trace</h3>
+            <p class="trace">@Outcome.ReasoningTrace</p>
+            @if (!string.IsNullOrWhiteSpace(Outcome.ComputedMetrics) && Outcome.ComputedMetrics != "{}")
+            {
+                <h3>Computed values</h3>
                 <pre class="code">@Fmt.Json(Outcome.ComputedMetrics)</pre>
-            </details>
-        }
+            }
+        </details>
     }
 </section>
 
 @code {
     [Parameter]
     public AssessmentView? Outcome { get; set; }
+
+    private static string SeverityExplanation(AssessmentView outcome) => outcome.Category switch
+    {
+        SourceCategory.MarketData => "Positive means above the historical median; negative means below it.",
+        SourceCategory.Macroeconomic => "Positive means above the consensus estimate; negative means below it.",
+        _ => "The sign shows the direction of the deviation from the comparison baseline.",
+    };
+
+    private static string UnavailableExplanation(UnavailableReason? reason) => reason switch
+    {
+        UnavailableReason.AwaitingConsensus => "A sourced estimate for this release date is needed before its surprise can be measured.",
+        UnavailableReason.RouteNotImplemented => "This version records these observations but cannot score them yet.",
+        UnavailableReason.ClassifierUnreachable => "Analysis will be retried when the service reconnects.",
+        UnavailableReason.InvalidResponse => "The service response failed validation; this observation has no usable assessment.",
+        UnavailableReason.ClassifierRejected => "The service could not accept the observation in its current form.",
+        UnavailableReason.UnknownIndicator => "The observation cannot be matched to a configured indicator.",
+        _ => "No usable assessment is available for this observation.",
+    };
 }

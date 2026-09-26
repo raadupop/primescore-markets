@@ -1,0 +1,39 @@
+@page "/guide"
+<PageTitle>How it works · PrimeScore Markets</PageTitle>
+<div class="page-head"><div><div class="eyebrow">PrimeScore AI / Markets</div>
+    <h1>Follow the evidence.</h1>
+    <p>From a recorded observation to a research result. Select a stage to inspect the data behind it.</p>
+</div></div>
+<WorkflowGuide Current="" />
+<div class="guide-stages">
+    <section class="panel guide-stage"><span class="step-number">01</span><div>
+        <div class="kicker">Input → observation</div><h2>What happened in the market?</h2>
+        <p>Prices and economic releases arrive from configured sources. Each value keeps its instrument, observation time and source. Missing values remain missing.</p>
+        <p class="example">Example: a VIX close of 14.21 is a recorded market observation, measured in volatility index points.</p>
+        <a class="button button-ghost" href="sources">Check data coverage →</a>
+    </div></section>
+    <section class="panel guide-stage"><span class="step-number">02</span><div>
+        <div class="kicker">Observation → classified signal</div><h2>How unusual is it?</h2>
+        <p>The classifier compares each observation with earlier history. Severity is signed from −1 to +1. Statistical confidence describes that classification; it is not the probability of a profitable trade.</p>
+        <p class="example">Signal contribution = severity × confidence. Supporting signals are combined by market; missing categories contribute no invented evidence.</p>
+        <a class="button button-ghost" href="tape">Inspect signal analysis →</a>
+    </div></section>
+    <section class="panel guide-stage"><span class="step-number">03</span><div>
+        <div class="kicker">Combined signals → scenario</div><h2>How does the model compare with the market?</h2>
+        <p>The combined signal score is applied to observed volatility using a configured sensitivity. The result is a model scenario. The gap is the scenario minus the observed level, in index points.</p>
+        <p class="example">Illustration: 20 observed × (1 + 0.5 score × 0.5 sensitivity) = 25 scenario; the gap is +5 points. Sensitivity is an assumption, not a fitted forecast.</p>
+        <a class="button button-ghost" href="./">Compare markets →</a>
+    </div></section>
+    <section class="panel guide-stage"><span class="step-number">04</span><div>
+        <div class="kicker">Scenario → condition checks</div><h2>Does this observation pass the research rules?</h2>
+        <p>The engine checks the gap, signal strength, source coverage, confidence and freshness. “Conditions met” means every configured check passed. “Wait” means at least one failed.</p>
+        <p class="example">The recorded API code DEPLOY means conditions met. No order is sent, no position is opened, and no option contract, strike, expiry or size is selected.</p>
+        <a class="button button-ghost" href="decisions">Review conditions →</a>
+    </div></section>
+</div>
+<section class="panel"><div class="panel-head"><div><div class="kicker">Research feedback</div><h2>Test the rules against history</h2></div><a class="button button-ghost" href="replay">Historical replay →</a></div>
+    <p>Replay recalculates scenarios using recorded inputs and temporary settings. Validation compares results with ten event targets. A target match measures rule behavior; returns and trading performance are not measured.</p>
+</section>
+<section class="panel"><h2>Where does this run?</h2>
+    <p>PrimeScore AI is the brand. PrimeScore Markets is this research application. The brand and product websites are separate from this operator dashboard; this session runs on the engine host shown in your browser address. There is no broker connection or execution service.</p>
+</section>

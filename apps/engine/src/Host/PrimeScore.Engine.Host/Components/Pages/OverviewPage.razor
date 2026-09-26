@@ -1,4 +1,5 @@
 @page "/"
+@using PrimeScore.Modules.Analytics.Contracts
 @using PrimeScore.Modules.Classification.Contracts
 @using PrimeScore.Modules.Configuration.Contracts
 @using PrimeScore.Modules.Decision.Contracts
@@ -7,214 +8,141 @@
 @using PrimeScore.SharedKernel.Cqrs
 @inject IQueryHandler<GetObservationSeries, ObservationSeries> SeriesQuery
 @inject IQueryHandler<GetSignal, SignalView?> SignalQuery
-@inject IQueryHandler<GetSignalOutcomes, IReadOnlyDictionary<Guid, AssessmentView>> OutcomeQuery
 @inject IQueryHandler<GetActiveSettings, SettingsVersion> SettingsQuery
 @inject IQueryHandler<GetComposite, CompositeView?> CompositeQuery
 @inject IQueryHandler<GetDislocation, DislocationView?> DislocationQuery
-@inject IQueryHandler<GetCompositeHistory, IReadOnlyList<DailyAggregate>> HistoryQuery
 @inject IQueryHandler<GetDecisions, IReadOnlyList<DecisionView>> DecisionQuery
+@inject IQueryHandler<GetValidationReport, IReadOnlyList<ValidationEventResult>> ReportQuery
 @inject IClock Clock
 
-<PageTitle>Overview · PrimeScore Markets</PageTitle>
-
+<PageTitle>Market overview · PrimeScore Markets</PageTitle>
 <div class="page-head">
-    <div>
-        <div class="eyebrow">Overview</div>
-        <h1>Volatility contexts</h1>
-        <p>
-            Per reference instrument: the latest observed implied volatility, the composite of classified signals and the
-            signal-implied scenario, each traceable to its ledger entry. Statistical classification, not a forecast.
-        </p>
-    </div>
+    <div><div class="eyebrow">Research workspace</div><h1>Understand the market. Trace the signal.</h1>
+        <p>Compare observed volatility with the model scenario, then inspect the evidence and conditions behind it.</p></div>
+    <a class="button button-ghost" href="guide">How it works →</a>
 </div>
-
+<WorkflowGuide />
 @if (_error is not null)
 {
-    <div class="degraded"><strong>The overview could not be read.</strong> @_error</div>
+    <div class="degraded" role="alert"><strong>The overview could not be read.</strong> @_error</div>
 }
 else if (_cards is null)
 {
-    <div class="loading">Loading the latest observations and composites…</div>
+    <div class="loading">Loading market analysis…</div>
+}
+else if (_cards.Count == 0)
+{
+    <EmptyState Title="No markets configured">Add a market in <a href="configuration">Model settings</a> to begin.</EmptyState>
 }
 else
 {
-    <div class="grid grid-2">
-        @foreach (var card in _cards)
+    <div class="market-selector" role="group" aria-label="Choose a market">
+        @foreach (var item in _cards)
         {
-            <section class="panel" aria-label="@card.Context.Name context">
-                <div class="panel-head">
-                    <div>
-                        <div class="kicker">@card.Context.Name context · reference @card.Context.ReferenceInstrument</div>
-                        <h2>@Title(card.Context)</h2>
-                    </div>
-                    @if (card.Dislocation is { } scenario)
-                    {
-                        var (css, label) = Scenario(scenario.DislocationValue);
-                        <span class="status @css"
-                              title="Sign of the signal-implied dislocation; the magnitude is compared with the threshold. An uncalibrated multiplier, not an independent volatility forecast.">
-                            @label
-                        </span>
-                    }
-                    else
-                    {
-                        <span class="status status-muted">no scenario yet</span>
-                    }
-                </div>
-
-                @if (card.Latest is { } latest)
-                {
-                    <div class="figure">@Fmt.Number(latest.Value)</div>
-                    <div class="figure-label">
-                        @card.Context.ReferenceInstrument implied volatility, close observed @Fmt.Utc(latest.ObservedAt) (@Fmt.Age(latest.ObservedAt, Clock.UtcNow)) ·
-                        <ProvenanceBadge Provenance="latest.Provenance" /> ·
-                        <a href="ledger/@latest.LedgerSequence">ledger #@latest.LedgerSequence</a> ·
-                        <AssessmentBadge Outcome="@_outcomes.GetValueOrDefault(latest.SignalId)" />
-                    </div>
-                }
-                else
-                {
-                    <EmptyState Title="No observations yet">
-                        No @card.Context.ReferenceInstrument close has been recorded. Run the FRED pull from Sources and health; nothing is estimated in its place.
-                    </EmptyState>
-                }
-
-                @if (card.Composite is { } composite)
-                {
-                    <div class="metrics">
-                        <div class="metric">
-                            <div class="kicker">Composite</div>
-                            <div class="figure">@Fmt.Signed(composite.Score, 4)</div>
-                            <div class="figure-label"><a href="ledger/@composite.LedgerSequence">ledger #@composite.LedgerSequence</a></div>
-                        </div>
-                        @if (card.Dislocation is { } dislocation)
-                        {
-                            <div class="metric">
-                                <div class="kicker">Dislocation</div>
-                                <div class="figure">@Fmt.Signed(dislocation.DislocationValue, 2)</div>
-                                <div class="figure-label">
-                                    @(dislocation.ThresholdBreached ? "breaches" : "within") ±@Fmt.Number(dislocation.Threshold, 2) ·
-                                    <a href="ledger/@dislocation.LedgerSequence">ledger #@dislocation.LedgerSequence</a>
-                                </div>
-                            </div>
-                            <div class="metric">
-                                <div class="kicker">Signal-implied IV</div>
-                                <div class="figure">@Fmt.Number(dislocation.SignalImpliedIv, 2)</div>
-                                <div class="figure-label">@dislocation.Regime.Replace('_', ' ') regime, k = @Fmt.Number(dislocation.SensitivityFactor, 2)</div>
-                            </div>
-                        }
-                    </div>
-                    @if (card.Dislocation is not null)
-                    {
-                        <p class="panel-note">
-                            Scenario IV = observed IV × (1 + composite × k). Scenarios use an uncalibrated multiplier, not an independent volatility forecast.
-                        </p>
-                    }
-                    <dl class="kv">
-                        <dt>As of</dt>
-                        <dd>@Fmt.Utc(composite.AsOf) · configuration v@(composite.ConfigVersion.Value) · @composite.WeightingSchemeId</dd>
-                        @foreach (var category in composite.Contributing)
-                        {
-                            <dt>@Fmt.Category(category.Category)</dt>
-                            <dd>
-                                @Fmt.Signed(category.WeightedContribution, 4) of the composite ·
-                                net conviction @Fmt.Signed(category.NetConviction, 4) · @category.ConfirmedAssessments.Count confirmed
-                                @if (category.Discount < 1)
-                                {
-                                    <span class="status status-warn">overdue by @Fmt.Duration(category.StalenessSeconds) · d = @Fmt.Number(category.Discount, 2)</span>
-                                }
-                            </dd>
-                        }
-                        @foreach (var absent in composite.Absent)
-                        {
-                            <dt>@Fmt.Category(absent.Category)</dt>
-                            <dd class="muted-cell">absent: @absent.Reason</dd>
-                        }
-                        <dt>Latest decision</dt>
-                        <dd class="muted-cell">
-                            @if (card.Decision is { } decision)
-                            {
-                                <DecisionBadge Outcome="decision.Outcome" />
-                                <span> @FirstSentence(decision.Explanation) · as of @Fmt.Utc(decision.AsOf) ·
-                                    <a href="ledger/@decision.LedgerSequence">ledger #@decision.LedgerSequence</a> ·
-                                    <a href="decisions/@decision.DecisionId">explore</a></span>
-                                @if (card.Dislocation is { } current && decision.DislocationId != current.DislocationId)
-                                {
-                                    <span class="status status-warn">decision pending for the newest dislocation</span>
-                                }
-                            }
-                            else
-                            {
-                                <span>none recorded yet</span>
-                            }
-                        </dd>
-                    </dl>
-                    @if (card.History.Count > 1)
-                    {
-                        var span = SparkSpan(card.History, composite.AsOf);
-                        <div class="kicker sparkline-title">@span</div>
-                        <SeriesChart Compact="true" Dates="card.History.Select(day => day.Date).ToArray()"
-                                     Panels="SparkPanels(card.History)"
-                                     AriaLabel="@($"Composite and dislocation, {span.ToLowerInvariant()}, for the {card.Context.Name} context")" />
-                        <p class="panel-note"><a href="history?context=@card.Context.Name">Full history and table</a></p>
-                    }
-                }
-                else if (card.Latest is not null)
-                {
-                    <p class="panel-note">
-                        No composite yet: one is recorded for every classified signal of this context's member instruments.
-                        Classification runs when a signal is recorded and every few minutes for anything pending.
-                    </p>
-                }
-            </section>
+            <button class="market-choice @(_selected == item.Context.Name ? "selected" : "")" aria-pressed="@(_selected == item.Context.Name ? "true" : "false")"
+                    @onclick="() => _selected = item.Context.Name">
+                <span class="kicker">@item.Context.ReferenceInstrument reference index</span>
+                <strong>@Fmt.Context(item.Context.Name)</strong>
+                <span>@(item.Decision is { } decision ? DecisionCopy.Outcome(decision.Outcome) : "Awaiting analysis")</span>
+            </button>
         }
     </div>
+    var card = _cards.FirstOrDefault(item => item.Context.Name == _selected) ?? _cards[0];
+    @if (card.Decision is { } analysis)
+    {
+        <section class="panel market-analysis" aria-label="Latest completed market analysis">
+            <div class="panel-head">
+                <div><div class="kicker">Latest completed analysis · @Fmt.Instrument(analysis.ReferenceInstrument)</div>
+                    <h2>@DecisionCopy.Scenario(analysis.Scenario)</h2>
+                    <p class="analysis-date">As of @Fmt.Utc(analysis.AsOf) · @Fmt.Age(analysis.AsOf, Clock.UtcNow)</p></div>
+                <DecisionBadge Outcome="analysis.Outcome" />
+            </div>
+            <div class="scenario-comparison">
+                <div class="scenario-value"><span class="kicker">Observed market level</span><strong>@Fmt.Number(analysis.MarketObservedIv)</strong><span>@analysis.ReferenceInstrument index points</span></div>
+                <div class="comparison-arrow" aria-hidden="true">→</div>
+                <div class="scenario-value"><span class="kicker">Model scenario</span><strong>@Fmt.Number(analysis.SignalImpliedIv)</strong><span>Under configured assumptions</span></div>
+                <div class="scenario-gap"><span class="kicker">Scenario gap</span><strong>@Fmt.Signed(analysis.DislocationValue, 2) <small>pts</small></strong>
+                    <span>Review threshold: ±@Fmt.Number(analysis.DislocationThreshold) pts</span></div>
+            </div>
+            <p class="scenario-explanation">The model scenario is @Fmt.Number(Math.Abs(analysis.DislocationValue)) points @(analysis.DislocationValue >= 0 ? "above" : "below") the observed level. It applies a sensitivity multiplier to the combined signal score; it is not a predicted price or an option quote.</p>
+            <div class="analysis-summary">
+                <div><span class="kicker">Research result</span><h3>@DecisionCopy.Summary(analysis)</h3>
+                    <p>@analysis.Conditions.Count(condition => condition.Passed) of @analysis.Conditions.Count checks passed · combined signal score @Fmt.Signed(analysis.CompositeScore, 2)</p></div>
+                <a class="button button-primary" href="decisions/@analysis.DecisionId">Read this analysis →</a>
+            </div>
+            <dl class="position-strip"><div><dt>Instrument monitored</dt><dd>@analysis.ReferenceInstrument volatility index</dd></div><div><dt>Position / execution</dt><dd>No position opened</dd></div><div><dt>Contract / size</dt><dd>Not selected by this model</dd></div></dl>
+        </section>
+        @if (card.Latest is { } newer && newer.ObservedAt > analysis.AsOf)
+        {
+            <div class="degraded">Newer source data is available (@Fmt.Utc(newer.ObservedAt)). This completed analysis uses the earlier inputs shown above.</div>
+        }
+        <div class="grid grid-2">
+            <section class="panel"><div class="panel-head"><div><div class="kicker">Evidence</div><h2>What supports this scenario?</h2></div></div>
+                @if (analysis.TopContributing.Count == 0)
+                { <p>No confirmed supporting signals were recorded for this analysis.</p> }
+                else
+                {
+                    <ul class="evidence-list">
+                        @foreach (var signal in analysis.TopContributing.Take(3))
+                        {
+                            <li><div><a href="tape?signal=@signal.SignalId&amp;assessment=@signal.AssessmentId">@Fmt.Instrument(signal.Instrument) →</a><small>@Fmt.Category(signal.Category) · @Fmt.Date(signal.ObservedAt)</small></div><div class="evidence-value">@Fmt.Signed(signal.Conviction, 2)<small>weighted signal</small></div></li>
+                        }
+                    </ul>
+                }
+                <p class="panel-note">@analysis.Dissenting.Count opposing signal(s) recorded. Confidence measures the classification, not the chance of a profitable trade.</p>
+                <div class="action-bar"><a href="decisions/@analysis.DecisionId">View supporting and opposing evidence →</a></div>
+            </section>
+            <section class="panel"><div class="panel-head"><div><div class="kicker">Coverage &amp; assumptions</div><h2>What is this based on?</h2></div></div>
+                @if (card.Composite is { } composite && composite.CompositeId == analysis.CompositeId)
+                {
+                    <ul class="coverage-list">
+                        @foreach (var category in composite.Contributing)
+                        { <li><span>@Fmt.Category(category.Category)</span><strong>@category.ConfirmedAssessments.Count confirmed signal(s)</strong></li> }
+                        @foreach (var absent in composite.Absent)
+                        { <li><span>@Fmt.Category(absent.Category)</span><span class="muted-cell">Not included</span></li> }
+                    </ul>
+                    @if (composite.Absent.Count > 0)
+                    { <details class="technical-details"><summary>Why some evidence is missing</summary>@foreach (var absent in composite.Absent) { <p><strong>@Fmt.Category(absent.Category):</strong> @absent.Reason</p> }</details> }
+                }
+                else { <p>Coverage for this snapshot is listed with its recorded conditions.</p> }
+                <p class="panel-note">Configuration v@(analysis.ConfigVersion.Value). Scenario sensitivity has not been established as a predictive model. <a href="configuration">Review assumptions</a>.</p>
+                <div class="action-bar"><a href="history?context=@card.Context.Name">Explore this market over time →</a></div>
+            </section>
+        </div>
+        @if (card.Dislocation is { } calculation && calculation.DislocationId == analysis.DislocationId)
+        {
+            <details class="panel technical-details"><summary>How these numbers were calculated</summary>
+                <p>Observed @Fmt.Number(calculation.MarketObservedIv) × (1 + signal score @Fmt.Signed(calculation.CompositeScore, 4) × sensitivity @Fmt.Number(calculation.SensitivityFactor)) = scenario @Fmt.Number(calculation.SignalImpliedIv).</p>
+                <p>Scenario − observed = @Fmt.Signed(calculation.DislocationValue, 2) index points. Sensitivity uses the @Fmt.Humanize(calculation.Regime) regime.</p>
+                <p>Reference observation: @Fmt.Utc(calculation.IvObservedAt). <a href="ledger/@calculation.LedgerSequence">Open calculation audit record →</a></p>
+            </details>
+        }
+    }
+    else
+    {
+        <section class="panel"><h2>@Fmt.Context(card.Context.Name) · awaiting analysis</h2>
+            @if (card.Latest is { } observation)
+            { <p>Latest @card.Context.ReferenceInstrument observation: @Fmt.Number(observation.Value) at @Fmt.Utc(observation.ObservedAt). There is no completed condition check yet.</p> }
+            else { <p>No reference observation is recorded for @card.Context.ReferenceInstrument.</p> }
+            <div class="actions"><a class="button button-primary" href="sources">Check data sources →</a><a class="button button-ghost" href="tape">Inspect signals</a></div>
+        </section>
+    }
+    <section class="research-note"><div><strong>Historical validation</strong>
+        @if (_report.All(row => row.ReplayId is null))
+        { <p>No baseline evaluation is saved yet. Use historical replay to check the event targets.</p> }
+        else
+        { <p>@_report.Count(row => row.Verdict == "Matches target") of @_report.Count event targets matched in the stored report; @_report.Count(row => row.Verdict is "Not evaluated" or "Not evaluable") missing evaluation or data. These are rule checks, not measured trading returns.</p> }
+    </div><a class="button button-ghost" href="replay">Review validation →</a></section>
 }
 
-<HealthPanel />
-
 @code {
-    private sealed record Card(
-        ContextSettings Context,
-        SignalView? Latest,
-        CompositeView? Composite,
-        DislocationView? Dislocation,
-        IReadOnlyList<DailyAggregate> History,
-        DecisionView? Decision);
-
+    private sealed record Card(ContextSettings Context, SignalView? Latest, CompositeView? Composite, DislocationView? Dislocation, DecisionView? Decision);
     private List<Card>? _cards;
-    private IReadOnlyDictionary<Guid, AssessmentView> _outcomes = new Dictionary<Guid, AssessmentView>();
+    private IReadOnlyList<ValidationEventResult> _report = [];
+    private string _selected = "equity";
     private string? _error;
+    [SupplyParameterFromQuery(Name = "context")] public string? ContextQuery { get; set; }
 
-    private static string Title(ContextSettings context) => context.Name switch
-    {
-        "equity" => "US equity implied volatility",
-        "oil" => "Crude oil implied volatility",
-        _ => $"{context.ReferenceInstrument} implied volatility",
-    };
-
-    private static string FirstSentence(string text) => text.IndexOf(". ", StringComparison.Ordinal) is var end and > 0 ? text[..end] : text;
-
-    /// <summary>Lime for expansion, blue for compression (brief §9.7); a zero dislocation is neither.</summary>
-    private static (string Css, string Label) Scenario(double dislocation) => dislocation switch
-    {
-        > 0 => ("", "vol-expansion scenario"),
-        < 0 => ("status-blue", "vol-compression scenario"),
-        _ => ("status-muted", "no scenario (composite 0)"),
-    };
-
-    /// <summary>"Five years" only when the history reaches back that far (a week's slack for holidays).</summary>
-    private static string SparkSpan(IReadOnlyList<DailyAggregate> history, DateTimeOffset asOf) =>
-        history[0].Date <= DateOnly.FromDateTime(asOf.AddYears(-5).UtcDateTime).AddDays(7)
-            ? "Five years"
-            : $"Since {history[0].Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}";
-
-    private static IReadOnlyList<SeriesPanel> SparkPanels(IReadOnlyList<DailyAggregate> history) =>
-    [
-        new SeriesPanel("Composite", "#5b8ef0", history.Select(day => (double?)day.Composite).ToArray(), value => Fmt.Signed(value, 2), -1, 1),
-        new SeriesPanel("Dislocation", "#d8692f", history.Select(day => day.DislocationValue).ToArray(), value => Fmt.Signed(value, 2), 0, 0),
-    ];
-
-    /// <summary>The newest close is chosen exactly as the classifier's window chooses it; the composite is the newest recorded.</summary>
     protected override async Task OnInitializedAsync()
     {
         try
@@ -223,26 +151,22 @@ else
             var cards = new List<Card>();
             foreach (var context in settings.Settings.Contexts)
             {
-                var series = await SeriesQuery.HandleAsync(
-                    new GetObservationSeries(context.ReferenceInstrument, SourceCategory.MarketData, "IMPLIED_VOLATILITY", DateTimeOffset.MaxValue, 1),
-                    CancellationToken.None);
+                var series = await SeriesQuery.HandleAsync(new GetObservationSeries(context.ReferenceInstrument, SourceCategory.MarketData, "IMPLIED_VOLATILITY", DateTimeOffset.MaxValue, 1), CancellationToken.None);
                 var latest = series.Points is [var point] ? await SignalQuery.HandleAsync(new GetSignal(point.SignalId), CancellationToken.None) : null;
                 var composite = await CompositeQuery.HandleAsync(new GetComposite(context.Name), CancellationToken.None);
                 var dislocation = await DislocationQuery.HandleAsync(new GetDislocation(context.Name), CancellationToken.None);
-                var history = composite is null
-                    ? []
-                    : await HistoryQuery.HandleAsync(new GetCompositeHistory(context.Name, composite.AsOf.AddYears(-5)), CancellationToken.None);
                 var decision = (await DecisionQuery.HandleAsync(new GetDecisions(Context: context.Name, Take: 1), CancellationToken.None)).FirstOrDefault();
-                cards.Add(new Card(context, latest, composite, dislocation, history, decision));
+                cards.Add(new Card(context, latest, composite, dislocation, decision));
             }
-
-            var ids = cards.Select(card => card.Latest).OfType<SignalView>().Select(signal => signal.SignalId).ToArray();
-            _outcomes = await OutcomeQuery.HandleAsync(new GetSignalOutcomes(ids), CancellationToken.None);
             _cards = cards;
+            _report = await ReportQuery.HandleAsync(new GetValidationReport(), CancellationToken.None);
         }
         catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException or IOException)
-        {
-            _error = exception.Message;
-        }
+        { _error = exception.Message; }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_cards?.Any(card => card.Context.Name == ContextQuery) == true) { _selected = ContextQuery!; }
     }
 }

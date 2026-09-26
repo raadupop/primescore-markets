@@ -2,8 +2,9 @@
 @attribute [AllowAnonymous]
 @inject Microsoft.Extensions.Options.IOptionsMonitor<PrimeScore.Engine.Host.Security.OperatorOptions> Account
 <PageTitle>Sign in · PrimeScore Markets</PageTitle>
-<section class="panel">
+<section class="panel login-panel">
     <div class="eyebrow">Operator access</div><h1>Sign in</h1>
+    <p>Open your PrimeScore Markets research workspace.</p>
     @if (!Account.CurrentValue.Configured)
     {
         <p class="degraded">No operator password is configured. Run the password setup command in docs/ENGINE.md, then restart the application.</p>

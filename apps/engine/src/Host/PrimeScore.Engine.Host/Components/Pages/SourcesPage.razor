@@ -17,83 +17,41 @@
 @inject IQueryHandler<GetSignals, SignalPage> SignalQuery
 @inject IQueryHandler<GetConsensusStatus, ConsensusStatus> ConsensusQuery
 
-<PageTitle>Sources and health · PrimeScore Markets</PageTitle>
+<PageTitle>Data and health · PrimeScore Markets</PageTitle>
 
 <div class="page-head">
     <div>
         <div class="eyebrow">Operations</div>
-        <h1>Sources and health</h1>
-        <p>Source adapters and their schedules, the indicator registry the engine shares with the classifier, and the ledger's tamper-evidence check.</p>
+        <h1>Data &amp; health</h1>
+        <p>Check which observations are available, what is missing, and whether the analysis service is connected.</p>
     </div>
 </div>
 
-<div class="grid grid-2">
-    <HealthPanel />
-
-    <section class="panel" aria-labelledby="verify-title">
-        <div class="panel-head">
-            <div>
-                <div class="kicker">Audit · SRS AUD-002</div>
-                <h2 id="verify-title">Ledger verification</h2>
-            </div>
-        </div>
-        <p>Recomputes every entry's SHA-256 link from the first entry to the head and checks the head recorded by the last verification. Edits, removals and reordering at or below that recorded head are detected; entries appended since the last verification can be truncated or rewritten undetected, so verify regularly.</p>
-        <p class="panel-note">
-            @if (_canAdmin) { <button class="button button-primary" @onclick="VerifyAsync" disabled="@_verifying">@(_verifying ? "Verifying…" : "Verify ledger now")</button> }
-        </p>
-        @if (_verifyError is not null)
-        {
-            <div class="degraded"><strong>Verification could not run.</strong> @_verifyError</div>
-        }
-        else if (_verification is { } result)
-        {
-            <dl class="kv">
-                <dt>Result</dt>
-                <dd><span class="status @(result.Ok ? "" : "status-bad")">@(result.Ok ? "chain intact" : "chain broken")</span></dd>
-                <dt>Entries checked</dt>
-                <dd>@result.EntriesChecked.ToString("N0", CultureInfo.InvariantCulture)</dd>
-                <dt>Head sequence</dt>
-                <dd>@result.HeadSequence</dd>
-                @if (!result.Ok)
-                {
-                    <dt>First invalid entry</dt>
-                    <dd>@result.FirstInvalidSequence</dd>
-                    <dt>Reason</dt>
-                    <dd>@result.Reason</dd>
-                }
-                <dt>Verified</dt>
-                <dd>@result.VerifiedAt.ToString("u", CultureInfo.InvariantCulture)</dd>
-            </dl>
-        }
-        else
-        {
-            <p class="panel-note">No verification has run yet.</p>
-        }
-    </section>
-</div>
+<WorkflowGuide Current="data" />
 
 <section class="panel" aria-labelledby="adapters-title">
     <div class="panel-head">
         <div>
-            <div class="kicker">Ingestion</div>
-            <h2 id="adapters-title">Source adapters</h2>
+            <div class="kicker">Observations</div>
+            <h2 id="adapters-title">Data feeds and coverage</h2>
         </div>
     </div>
     @if (_sourcesError is not null)
     {
         <div class="degraded">
-            <strong>Adapter status could not be read.</strong> @_sourcesError
+            <strong>Data feed status is temporarily unavailable.</strong>
             @if (_sourcesAsOf is { } asOf)
             {
                 <span> Showing the status as of @Fmt.Utc(asOf).</span>
             }
         </div>
+        <details class="technical-details"><summary>Error details</summary><pre>@_sourcesError</pre></details>
     }
     @if (_sources is null)
     {
         @if (_sourcesError is null)
         {
-            <div class="loading">Loading adapter status…</div>
+            <div class="loading">Loading data feed status…</div>
         }
     }
     else
@@ -102,85 +60,112 @@
         {
             <div class="panel-head">
                 <div>
-                    <h3>@source.Source</h3>
-                    <p class="panel-note">Daily pull and backfill from 2011. Values FRED reports as missing are skipped, never filled.</p>
+                    <h3>@source.Source economic and market data</h3>
+                    <p class="panel-note">Scheduled daily imports with history from 2011. Missing provider values remain missing.</p>
                 </div>
+                <div class="actions">
                 @if (!source.Enabled)
                 {
-                    <span class="status status-muted">disabled</span>
+                    <span class="status status-muted">Import disabled</span>
                 }
                 else if (source.Running)
                 {
-                    <span class="status status-blue">pulling</span>
+                    <span class="status status-blue">Importing</span>
                 }
                 else if (source.LastRunPartial)
                 {
-                    <span class="status status-warn">last run partial</span>
+                    <span class="status status-warn">Some data unavailable</span>
                 }
                 else if (source.LastError is not null)
                 {
-                    <span class="status status-bad">last run failed</span>
+                    <span class="status status-bad">Import failed</span>
                 }
                 else
                 {
-                    <span class="status">enabled</span>
+                    <span class="status">Scheduled</span>
                 }
+                @if (_canAdmin)
+                {
+                    <button class="button button-primary" @onclick="() => PullAsync(source.Source)" disabled="@(!source.Enabled || source.Running)">@(source.Running ? "Importing…" : "Import latest data")</button>
+                }
+                </div>
             </div>
             @if (source.DisabledReason is { } reason)
             {
-                <div class="degraded"><strong>Not pulling.</strong> @reason</div>
+                <div class="degraded"><strong>Automatic imports are disabled.</strong> @reason</div>
             }
             <dl class="kv">
-                <dt>Last attempt</dt><dd>@Fmt.Utc(source.LastAttemptAt) (@Fmt.Age(source.LastAttemptAt, Clock.UtcNow))</dd>
-                <dt>Last success</dt><dd>@Fmt.Utc(source.LastSuccessAt)</dd>
-                <dt>Next scheduled run</dt><dd>@Fmt.Utc(source.NextRunAt)</dd>
-                @if (source.LastError is { } error)
-                {
-                    <dt>Last error</dt><dd>@error</dd>
-                }
+                <dt>Last import started</dt><dd>@Fmt.Utc(source.LastAttemptAt) (@Fmt.Age(source.LastAttemptAt, Clock.UtcNow))</dd>
+                <dt>Latest successful import</dt><dd>@Fmt.Utc(source.LastSuccessAt)</dd>
+                <dt>Next scheduled import</dt><dd>@Fmt.Utc(source.NextRunAt)</dd>
                 @if (source.LastRun is { } counts)
                 {
-                    <dt>Last run</dt>
-                    <dd>@counts.Accepted recorded · @counts.Duplicates already recorded · @counts.Revised revised values kept as first recorded · @counts.Missing missing skipped</dd>
+                    <dt>Latest import result</dt>
+                    <dd>@Fmt.Count(counts.Accepted) new observations · @Fmt.Count(counts.Missing) missing provider values</dd>
                 }
             </dl>
-            <p class="panel-note">
-                @if (_canAdmin) { <button class="button button-primary" @onclick="() => PullAsync(source.Source)" disabled="@(!source.Enabled || source.Running)">Pull now</button> }
-                @if (_pullMessage is not null)
-                {
-                    <span> @_pullMessage</span>
-                }
-            </p>
+            @if (source.LastError is not null)
+            {
+                <div class="degraded"><strong>@ImportIssue(source)</strong> Available observations remain in the analysis.</div>
+            }
+            @if (_pullMessage is not null)
+            {
+                <p class="panel-note" role="status">@_pullMessage</p>
+            }
             <div class="table-wrap">
                 <table class="data">
                     <thead>
-                        <tr><th scope="col">Series</th><th scope="col">Instrument</th><th scope="col">Category</th><th scope="col">Recorded</th><th scope="col">Latest observation</th><th scope="col">Timing</th><th scope="col">Mapping</th></tr>
+                        <tr><th scope="col">Indicator</th><th scope="col">Data coverage</th><th scope="col">Latest observation</th><th scope="col">Provider series</th><th scope="col">Publication timing</th></tr>
                     </thead>
                     <tbody>
                         @foreach (var series in source.Series)
                         {
                             <tr>
-                                <td class="mono"><a href="https://fred.stlouisfed.org/series/@series.SeriesId" target="_blank" rel="noopener noreferrer">@series.SeriesId</a></td>
-                                <td class="mono">@series.Instrument</td>
-                                <td>@Fmt.Category(series.Category)</td>
-                                <td class="num">@Fmt.Count(series.Recorded)</td>
-                                <td class="mono">@Fmt.Utc(series.LatestObservedAt)</td>
-                                <td>@series.Timing</td>
+                                <td><strong>@Fmt.Instrument(series.Instrument)</strong><div class="panel-note">@Fmt.Category(series.Category)</div></td>
                                 <td>
-                                    @if (series.MappingVerified)
+                                    @if (series.Recorded == 0)
                                     {
-                                        <span class="status">verified</span>
+                                        <span class="status status-warn">No observations</span>
                                     }
                                     else
                                     {
-                                        <span class="status status-warn">provider mapping unverified</span>
+                                        <strong>@Fmt.Count(series.Recorded)</strong><div class="panel-note">observations</div>
                                     }
                                 </td>
+                                <td>@Fmt.Utc(series.LatestObservedAt)</td>
+                                <td>
+                                    <a href="https://fred.stlouisfed.org/series/@series.SeriesId" target="_blank" rel="noopener noreferrer">@series.SeriesId</a>
+                                    @if (series.MappingVerified)
+                                    {
+                                        <div class="panel-note">Mapping verified</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="panel-note">Mapping not verified</div>
+                                    }
+                                </td>
+                                <td>@series.Timing</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
+            <details class="technical-details">
+                <summary>Import diagnostics</summary>
+                <p>A provider mapping identifies a series to request; an unverified mapping has not been confirmed. Data coverage separately shows whether observations have actually been stored.</p>
+                @if (source.LastError is { } rawError)
+                {
+                    <pre>@rawError</pre>
+                }
+                @if (source.LastRun is { } runCounts)
+                {
+                    <dl class="kv">
+                        <dt>Already stored</dt><dd>@Fmt.Count(runCounts.Duplicates)</dd>
+                        <dt>Revisions ignored</dt><dd>@Fmt.Count(runCounts.Revised) · first recorded values retained</dd>
+                        <dt>Rejected observations</dt><dd>@Fmt.Count(runCounts.Rejected)</dd>
+                    </dl>
+                }
+            </details>
         }
     }
 </section>
@@ -189,44 +174,43 @@
     <section class="panel" aria-labelledby="classification-title">
         <div class="panel-head">
             <div>
-                <div class="kicker">Classification · SRS CLS-001, CLS-004</div>
-                <h2 id="classification-title">Classification coverage</h2>
+                <div class="kicker">Analysis inputs</div>
+                <h2 id="classification-title">What can be analysed?</h2>
             </div>
             @if (_summary?.LastAssessedAt is { } last)
             {
-                <span class="status status-muted">last outcome @Fmt.Age(last, Clock.UtcNow)</span>
+                <span class="status status-muted">Updated @Fmt.Age(last, Clock.UtcNow)</span>
             }
         </div>
-        <p>The latest outcome of every recorded signal. Newly recorded signals are classified as they arrive; anything still pending, awaiting consensus or unreachable is retried every few minutes.</p>
+        <p>Each observation receives an assessment or a reason analysis is unavailable. Economic releases need a published consensus estimate. Missing inputs are retried every few minutes.</p>
         @if (_summary?.LastRun is { } run)
         {
             <p class="panel-note">
-                Last run @Fmt.Age(run.FinishedAt, Clock.UtcNow) (@(run.FullPass ? "scheduled pass" : "new signals")):
-                @Fmt.Count(run.Classified) classified, @Fmt.Count(run.Fallbacks) fallback(s), @Fmt.Count(run.Unavailable) unavailable;
-                @Fmt.Count(run.Composites) composite(s) recorded.
+                Last run: @Fmt.Count(run.Classified) analysed · @Fmt.Count(run.Unavailable) unavailable · @Fmt.Count(run.Fallbacks) previous assessments reused.
                 @if (run.BreakerTripped)
                 {
-                    <span class="status status-bad">classifier failed 3 times in a row; @Fmt.Count(run.NotSent) signal(s) not sent</span>
+                    <span class="status status-bad">Analysis paused after repeated service errors; @Fmt.Count(run.NotSent) observations waiting</span>
                 }
             </p>
         }
         @if (_summaryError is not null)
         {
-            <div class="degraded"><strong>Classification coverage could not be read.</strong> @_summaryError</div>
+            <div class="degraded"><strong>Analysis coverage is temporarily unavailable.</strong></div>
+            <details class="technical-details"><summary>Error details</summary><pre>@_summaryError</pre></details>
         }
         else if (_summary is null)
         {
-            <div class="loading">Loading classification coverage…</div>
+            <div class="loading">Loading analysis coverage…</div>
         }
         else if (_summary.Outcomes.Count == 0)
         {
-            <EmptyState Title="Nothing classified yet">No signal has a classification outcome. Record signals first, or check that the classifier is reachable above.</EmptyState>
+            <EmptyState Title="Nothing analysed yet">Import observations first, then check that the analysis service is connected above.</EmptyState>
         }
         else
         {
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th scope="col">Category</th><th scope="col">Outcome</th><th scope="col" class="num">Signals</th></tr></thead>
+                    <thead><tr><th scope="col">Input type</th><th scope="col">Analysis status</th><th scope="col" class="num">Observations</th></tr></thead>
                     <tbody>
                         @foreach (var count in _summary.Outcomes)
                         {
@@ -240,7 +224,7 @@
                         {
                             <tr>
                                 <td>@Fmt.Category(category)</td>
-                                <td><span class="status status-warn">pending (no outcome yet)</span></td>
+                                <td><span class="status status-warn">Waiting for analysis</span></td>
                                 <td class="num">@Fmt.Count(pending)</td>
                             </tr>
                         }
@@ -253,45 +237,51 @@
     <section class="panel" aria-labelledby="consensus-title">
         <div class="panel-head">
             <div>
-                <div class="kicker">Macro prints</div>
-                <h2 id="consensus-title">Consensus files</h2>
+                <div class="kicker">Economic releases</div>
+                <h2 id="consensus-title">Consensus estimates</h2>
             </div>
         </div>
-        <p>A macro print is classified only against a sourced consensus row for its release date (<span class="mono">data/consensus/&lt;SYMBOL&gt;.csv</span>). Without one it stays <strong>awaiting consensus</strong>; no expectation is invented.</p>
+        <p>Inflation and employment releases are compared with the published estimate for the same release date. Without an estimate, that release cannot contribute to the analysis.</p>
         @if (_consensus is null)
         {
-            <div class="loading">Loading consensus files…</div>
+            @if (_summaryError is not null)
+            {
+                <p class="panel-note">Consensus status could not be loaded. See the analysis coverage error.</p>
+            }
+            else
+            {
+                <div class="loading">Loading consensus estimates…</div>
+            }
         }
         else
         {
-            <p class="panel-note mono">@(_consensus.Directory ?? "no consensus directory configured")</p>
             @if (_consensus.Files.Count == 0)
             {
-                <EmptyState Title="No consensus files">No macro print can be classified until a sourced consensus file is added.</EmptyState>
+                <EmptyState Title="Economic analysis is waiting for estimates">Add sourced consensus estimates to include economic releases in the analysis.</EmptyState>
             }
             else
             {
                 <div class="table-wrap">
                     <table class="data">
-                        <thead><tr><th scope="col">Indicator</th><th scope="col" class="num">Sourced rows</th><th scope="col">Rejected rows</th></tr></thead>
+                        <thead><tr><th scope="col">Indicator</th><th scope="col" class="num">Estimates</th><th scope="col">Data issues</th></tr></thead>
                         <tbody>
                             @foreach (var file in _consensus.Files)
                             {
                                 <tr>
-                                    <td class="mono">@file.Indicator</td>
+                                    <td>@Fmt.Instrument(file.Indicator)</td>
                                     <td class="num">@Fmt.Count(file.Rows)</td>
                                     <td>
                                         @if (file.Error is { } fileError)
                                         {
-                                            <span class="status status-bad" title="@fileError">unreadable</span>
+                                            <details class="technical-details"><summary>File could not be read</summary><pre>@fileError</pre></details>
                                         }
-                                        @if (file.RejectedRows.Count == 0)
+                                        else if (file.RejectedRows.Count == 0)
                                         {
-                                            <span class="status status-muted">none</span>
+                                            <span class="status status-muted">None</span>
                                         }
                                         else
                                         {
-                                            <span class="status status-warn" title="@string.Join(" | ", file.RejectedRows)">@file.RejectedRows.Count rejected</span>
+                                            <details class="technical-details"><summary>@file.RejectedRows.Count rejected rows</summary><pre>@string.Join(Environment.NewLine, file.RejectedRows)</pre></details>
                                         }
                                     </td>
                                 </tr>
@@ -300,6 +290,11 @@
                     </table>
                 </div>
             }
+            <details class="technical-details">
+                <summary>Consensus file setup</summary>
+                <p>One CSV file per indicator, with sourced estimates for each release date. See the file format in <span class="mono">apps/engine/data/consensus/README.md</span>.</p>
+                <p class="panel-note">Directory: <span class="mono">@(_consensus.Directory ?? "not configured")</span></p>
+            </details>
         }
     </section>
 </div>
@@ -307,21 +302,25 @@
 <section class="panel" aria-labelledby="registry-title">
     <div class="panel-head">
         <div>
-            <div class="kicker">infra/registry.yaml · shared with the classifier</div>
-            <h2 id="registry-title">Indicator registry</h2>
+            <div class="kicker">Reference</div>
+            <h2 id="registry-title">Supported indicators</h2>
         </div>
-        <span class="status status-muted">@Registry.Symbols.Count symbols · @Registry.Classes.Count classes</span>
+        <span class="status status-muted">@Registry.Symbols.Count indicators</span>
     </div>
+    <p>These indicators are recognised by the engine. Registration alone does not mean observations or consensus estimates are available.</p>
+    <details class="technical-details">
+        <summary>Indicator mappings and history settings</summary>
+        <p class="panel-note">Settings come from <span class="mono">infra/registry.yaml</span>. History lengths are counts of earlier observations used to compare each new value.</p>
     <div class="table-wrap">
         <table class="data">
             <thead>
                 <tr>
-                    <th scope="col">Symbol</th>
-                    <th scope="col">Category</th>
-                    <th scope="col">Class</th>
-                    <th scope="col">N</th>
-                    <th scope="col">N_L</th>
-                    <th scope="col">Cadence</th>
+                    <th scope="col">Indicator</th>
+                    <th scope="col">Input type</th>
+                    <th scope="col">Indicator group</th>
+                    <th scope="col">History length</th>
+                    <th scope="col">Long history length</th>
+                    <th scope="col">Ageing calendar</th>
                     <th scope="col">Provider series</th>
                     <th scope="col">Mapping</th>
                 </tr>
@@ -330,25 +329,25 @@
                 @foreach (var symbol in Registry.Symbols.Values.OrderBy(symbol => symbol.IndicatorClass.SourceCategory).ThenBy(symbol => symbol.Symbol, StringComparer.Ordinal))
                 {
                     <tr>
-                        <td class="mono">@symbol.Symbol</td>
-                        <td>@symbol.IndicatorClass.SourceCategory.ToWireName()</td>
-                        <td class="mono">@symbol.IndicatorClass.Name</td>
+                        <td>@Fmt.Instrument(symbol.Symbol)</td>
+                        <td>@Fmt.Category(symbol.IndicatorClass.SourceCategory)</td>
+                        <td>@Fmt.Humanize(symbol.IndicatorClass.Name)</td>
                         <td class="num">@symbol.IndicatorClass.N</td>
-                        <td class="num">@(symbol.IndicatorClass.LongHorizonN?.ToString(CultureInfo.InvariantCulture) ?? "parametric")</td>
-                        <td>@symbol.IndicatorClass.Cadence</td>
-                        <td class="mono">@(symbol.Bootstrap is { } mapping ? $"{mapping.Provider}:{mapping.SeriesId}" : "none")</td>
+                        <td class="num">@(symbol.IndicatorClass.LongHorizonN?.ToString(CultureInfo.InvariantCulture) ?? "Fitted distribution")</td>
+                        <td>@Fmt.Humanize(symbol.IndicatorClass.Cadence)</td>
+                        <td class="mono">@(symbol.Bootstrap is { } mapping ? $"{mapping.Provider}:{mapping.SeriesId}" : "Not configured")</td>
                         <td>
                             @if (symbol.Bootstrap is null)
                             {
-                                <span class="status status-muted">no provider</span>
+                                <span class="status status-muted">No provider</span>
                             }
                             else if (symbol.Bootstrap.Verified)
                             {
-                                <span class="status">verified</span>
+                                <span class="status">Verified</span>
                             }
                             else
                             {
-                                <span class="status status-warn">provider mapping unverified</span>
+                                <span class="status status-warn">Not verified</span>
                             }
                         </td>
                     </tr>
@@ -356,7 +355,61 @@
             </tbody>
         </table>
     </div>
+    </details>
 </section>
+
+<div class="grid grid-2">
+    <HealthPanel />
+
+    <section class="panel" aria-labelledby="verify-title">
+        <div class="panel-head">
+            <div>
+                <div class="kicker">Record keeping</div>
+                <h2 id="verify-title">Audit integrity</h2>
+            </div>
+            @if (_canAdmin)
+            {
+                <div class="actions"><button class="button button-ghost" @onclick="VerifyAsync" disabled="@_verifying">@(_verifying ? "Checking…" : "Check integrity")</button></div>
+            }
+        </div>
+        <p>Check the stored analysis history for missing or changed records. This checks record integrity, not the accuracy of the analysis.</p>
+        @if (_verifyError is not null)
+        {
+            <div class="degraded"><strong>The integrity check could not run.</strong> Try again after checking storage access.</div>
+            <details class="technical-details"><summary>Error details</summary><pre>@_verifyError</pre></details>
+        }
+        else if (_verification is { } result)
+        {
+            <dl class="kv">
+                <dt>Result</dt>
+                <dd><span class="status @(result.Ok ? "" : "status-bad")">@(result.Ok ? "No changes detected" : "Integrity check failed")</span></dd>
+                <dt>Records checked</dt>
+                <dd>@result.EntriesChecked.ToString("N0", CultureInfo.InvariantCulture)</dd>
+                @if (!result.Ok)
+                {
+                    <dt>First affected record</dt>
+                    <dd>@result.FirstInvalidSequence</dd>
+                    <dt>Reason</dt>
+                    <dd>@result.Reason</dd>
+                }
+                <dt>Last checked</dt>
+                <dd>@Fmt.Utc(result.VerifiedAt)</dd>
+            </dl>
+        }
+        else
+        {
+            <p class="panel-note">The stored history has not been checked yet.</p>
+        }
+        <details class="technical-details">
+            <summary>What this check covers</summary>
+            <p>Every record is linked to the previous record by a SHA-256 hash. Verification checks these links and the endpoint saved by the previous check. Changes at or before that saved endpoint are detectable; newer records can be rewritten or removed without detection until verified.</p>
+            @if (_verification is { } verified)
+            {
+                <p class="panel-note">Latest verified audit sequence: @verified.HeadSequence.</p>
+            }
+        </details>
+    </section>
+</div>
 
 @code {
     private IReadOnlyList<SourceStatus>? _sources;
@@ -410,10 +463,22 @@
 
     private static string OutcomeLabel(string outcome) => outcome switch
     {
-        "assessed" => "assessed",
-        "fallback" => "fallback to last assessment (CLS-004)",
-        _ => Enum.TryParse<UnavailableReason>(outcome, out var reason) ? AssessmentBadge.Reason(reason) : outcome,
+        "assessed" => "Analysed",
+        "fallback" => "Previous assessment reused",
+        nameof(UnavailableReason.AwaitingConsensus) => "Missing consensus estimate",
+        nameof(UnavailableReason.RouteNotImplemented) => "Input type not yet supported",
+        nameof(UnavailableReason.ClassifierUnreachable) => "Analysis service unavailable",
+        nameof(UnavailableReason.InvalidResponse) => "Analysis returned an invalid result",
+        nameof(UnavailableReason.ClassifierRejected) => "Observation rejected by analysis",
+        nameof(UnavailableReason.UnknownIndicator) => "Indicator not recognised",
+        _ => Fmt.Humanize(outcome),
     };
+
+    private static string ImportIssue(SourceStatus source) =>
+        source.LastError?.Contains("series does not exist", StringComparison.OrdinalIgnoreCase) == true
+            ? "The provider could not find one or more configured series."
+            : source.LastRunPartial ? "The last import completed with gaps."
+            : "The last import could not complete.";
 
     /// <summary>A failed refresh keeps the last status on screen, flagged with its age; it never breaks the circuit.</summary>
     private async Task LoadSourcesAsync()
@@ -458,7 +523,7 @@
     {
         if (await Access.AdministratorAsync() is null) { _pullMessage = "Administrator sign-in is required."; return; }
         var ack = await PullCommand.HandleAsync(new RequestSourcePull(source), CancellationToken.None);
-        _pullMessage = ack.Queued ? ack.Reason ?? "Pull queued; progress appears here." : ack.Reason;
+        _pullMessage = ack.Queued ? ack.Reason ?? "Import queued; progress appears here." : ack.Reason;
         await LoadSourcesAsync();
     }
 

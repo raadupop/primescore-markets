@@ -3,7 +3,7 @@
 @* One signal's classification outcome in a table cell: severity and certainty, or why there is none. *@
 @if (Outcome is null)
 {
-    <span class="status status-muted" title="Not classified yet; the next classification run picks it up.">pending</span>
+    <span class="status status-muted" title="The next analysis run will assess this observation.">Awaiting analysis</span>
 }
 else if (!Outcome.Available)
 {
@@ -12,16 +12,17 @@ else if (!Outcome.Available)
 }
 else
 {
-    <span class="mono" title="Signed severity in [−1, 1] and certainty in [0, 1]: a statistical classification of the observation, not a forecast.">
-        @Fmt.Signed(Outcome.Score, 2) · @Fmt.Number(Outcome.Certainty, 2)
-    </span>
+    <div class="assessment-summary">
+        <span title="Signed severity from −1 to +1. The sign gives the direction of the deviation; the magnitude ranks it against earlier history.">Severity <strong>@Fmt.Signed(Outcome.Score, 2)</strong></span>
+        <span class="panel-note" title="Confidence reflects the amount and freshness of the comparison history. It is not a probability of profit.">Confidence <strong>@Fmt.Percent(Outcome.Certainty)</strong></span>
+    </div>
     @if (Outcome.IsFallback)
     {
-        <span class="status status-warn" title="The classifier gave no valid answer; the last real assessment was reused (SRS CLS-004).">fallback · @Stale(Outcome.StalenessSeconds)</span>
+        <span class="status status-warn" title="The analysis service gave no valid answer, so the last valid assessment was reused.">Previous assessment · @Stale(Outcome.StalenessSeconds)</span>
     }
     @foreach (var flag in Outcome.Flags)
     {
-        <span class="status status-warn" title="@FlagTitle(flag)">@flag.Replace('_', ' ')</span>
+        <span class="status status-warn" title="@FlagTitle(flag)">@FlagLabel(flag)</span>
     }
 }
 
@@ -31,22 +32,31 @@ else
 
     public static string Reason(UnavailableReason? reason) => reason switch
     {
-        UnavailableReason.AwaitingConsensus => "awaiting consensus",
-        UnavailableReason.RouteNotImplemented => "route not in v1",
-        UnavailableReason.ClassifierUnreachable => "classifier unreachable",
-        UnavailableReason.InvalidResponse => "invalid classifier answer",
-        UnavailableReason.ClassifierRejected => "rejected by classifier",
-        UnavailableReason.UnknownIndicator => "not in the registry",
-        _ => "not classified",
+        UnavailableReason.AwaitingConsensus => "Missing consensus estimate",
+        UnavailableReason.RouteNotImplemented => "Input type not yet supported",
+        UnavailableReason.ClassifierUnreachable => "Analysis service unavailable",
+        UnavailableReason.InvalidResponse => "Invalid analysis result",
+        UnavailableReason.ClassifierRejected => "Observation rejected by analysis",
+        UnavailableReason.UnknownIndicator => "Indicator not recognised",
+        _ => "Not analysed",
     };
 
-    private static string FlagTitle(string flag) => flag switch
+    public static string FlagLabel(string flag) => flag switch
     {
-        "insufficient_history" => "Too little earlier history to rank against; severity and certainty are 0 (SRS CLS-009).",
-        "window_degenerate" => "The history window has a single distinct value; certainty is reduced (SRS CLS-009).",
-        "unknown_indicator" => "The instrument is not in the indicator registry; score 0 (SRS CLS-009).",
-        "fit_rejected" => "The parametric fit was rejected; certainty is reduced.",
-        _ => "Classifier flag",
+        "insufficient_history" => "Too little history",
+        "window_degenerate" => "History has little variation",
+        "unknown_indicator" => "Unknown indicator",
+        "fit_rejected" => "Statistical fit rejected",
+        _ => Fmt.Humanize(flag),
+    };
+
+    public static string FlagTitle(string flag) => flag switch
+    {
+        "insufficient_history" => "Too few earlier observations to rank this value; severity and confidence are zero.",
+        "window_degenerate" => "The recent comparison history has a single distinct value; confidence is reduced.",
+        "unknown_indicator" => "The indicator is not registered; severity is zero.",
+        "fit_rejected" => "The fitted distribution did not meet the statistical checks; confidence is reduced.",
+        _ => "Analysis quality marker",
     };
 
     public static string Stale(double? seconds) => seconds is null ? "age unknown" : $"{Fmt.Duration(seconds)} old";

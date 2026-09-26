@@ -1,0 +1,24 @@
+<nav class="workflow" aria-label="Research workflow">
+    <ol>
+        @foreach (var step in Steps)
+        {
+            <li class="@(Current == step.Id ? "is-current" : "")">
+                <a href="@step.Href" aria-current="@(Current == step.Id ? "step" : null)">
+                    <span class="step-number">@step.Number</span>
+                    <span><strong>@step.Title</strong><small>@step.Output</small></span>
+                    <span class="step-arrow" aria-hidden="true">→</span>
+                </a>
+            </li>
+        }
+    </ol>
+</nav>
+@code {
+    [Parameter] public string Current { get; set; } = "scenario";
+    private static readonly (string Id, string Number, string Title, string Output, string Href)[] Steps =
+    [
+        ("data", "01", "Observe", "Prices & releases", "sources"),
+        ("signals", "02", "Classify", "Evidence & confidence", "tape"),
+        ("scenario", "03", "Compare", "Market vs model", "./"),
+        ("conditions", "04", "Review", "Conditions & evidence", "decisions"),
+    ];
+}

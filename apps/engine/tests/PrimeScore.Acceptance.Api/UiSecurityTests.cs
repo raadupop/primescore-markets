@@ -23,6 +23,10 @@ public sealed class UiSecurityTests
         Assert.Equal(HttpStatusCode.Redirect, anonymous.StatusCode);
         Assert.Contains("login", anonymous.Headers.Location!.ToString(), StringComparison.Ordinal);
 
+        var anonymousLogin = await browser.GetStringAsync("login", token);
+        Assert.DoesNotContain("class=\"sidebar\"", anonymousLogin, StringComparison.Ordinal);
+        Assert.DoesNotContain("Read the workflow", anonymousLogin, StringComparison.Ordinal);
+
         using var csrfMissing = await browser.PostAsync("account/login", Form(password, null), token);
         Assert.Equal(HttpStatusCode.BadRequest, csrfMissing.StatusCode);
         var csrf = await AntiforgeryAsync(browser, token);
@@ -38,7 +42,10 @@ public sealed class UiSecurityTests
             && cookie.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase));
         using var page = await browser.GetAsync("configuration", token);
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
-        Assert.Contains("Save configuration", await page.Content.ReadAsStringAsync(token), StringComparison.Ordinal);
+        var signedInPage = await page.Content.ReadAsStringAsync(token);
+        Assert.Contains("Save configuration", signedInPage, StringComparison.Ordinal);
+        Assert.Contains("class=\"sidebar\"", signedInPage, StringComparison.Ordinal);
+        Assert.Contains("Read the workflow", signedInPage, StringComparison.Ordinal);
         using var api = await browser.GetAsync("api/health", token);
         Assert.Equal(HttpStatusCode.Unauthorized, api.StatusCode);
 
@@ -50,6 +57,9 @@ public sealed class UiSecurityTests
         Assert.Equal(HttpStatusCode.Redirect, logout.StatusCode);
         using var signedOut = await browser.GetAsync("configuration", token);
         Assert.Equal(HttpStatusCode.Redirect, signedOut.StatusCode);
+        var signedOutLogin = await browser.GetStringAsync("login", token);
+        Assert.DoesNotContain("class=\"sidebar\"", signedOutLogin, StringComparison.Ordinal);
+        Assert.DoesNotContain("Read the workflow", signedOutLogin, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -62,6 +72,14 @@ public sealed class UiSecurityTests
         Assert.DoesNotContain("Save configuration", configuration, StringComparison.Ordinal);
         var replay = await read.GetStringAsync(new Uri(engine.ApiBase, "/replay"), token);
         Assert.DoesNotContain("Run replay</button>", replay, StringComparison.Ordinal);
+        var sources = await read.GetStringAsync(new Uri(engine.ApiBase, "/sources"), token);
+        Assert.DoesNotContain("Import latest data</button>", sources, StringComparison.Ordinal);
+        Assert.DoesNotContain("Check integrity</button>", sources, StringComparison.Ordinal);
+
+        using var admin = engine.Http(Role.Admin);
+        var adminSources = await admin.GetStringAsync(new Uri(engine.ApiBase, "/sources"), token);
+        Assert.Contains("Import latest data</button>", adminSources, StringComparison.Ordinal);
+        Assert.Contains("Check integrity</button>", adminSources, StringComparison.Ordinal);
     }
 
     [Fact]
