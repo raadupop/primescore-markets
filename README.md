@@ -4,7 +4,7 @@
 
 PrimeScore AI is developing event-driven volatility intelligence for options research. This repository contains the .NET Markets engine, Python classifier, local replay demo and agent harness (instructions, hooks and code checks).
 
-**PrimeScore Markets** is intended for **markets.primescore.ai**. The umbrella brand site and Cloudflare workspace live in `D:\Work\primescore`, which includes this repository as the `products/markets` Git submodule. Active Markets development stays here.
+**PrimeScore Markets** is intended for **markets.primescore.ai**. The umbrella brand site, brand and portfolio decisions, and Cloudflare workspace live in `D:\Work\primescore`, which includes this repository as the `products/markets` Git submodule. Brand research belongs in its `docs/brand/` directory; active Markets development stays here.
 
 ```mermaid
 flowchart LR
