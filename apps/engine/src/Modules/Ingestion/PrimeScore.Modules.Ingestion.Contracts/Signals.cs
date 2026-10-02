@@ -33,6 +33,8 @@ public sealed record GetSignals(SignalFilter Filter) : IQuery<SignalPage>;
 /// <param name="AsOf">Point-in-time cut (SRS SIG-004): only signals observed at or before it.</param>
 /// <param name="Instrument">Matched without regard to letter case.</param>
 /// <param name="Variant">Metric type, indicator and reference period, or event type (exact).</param>
+/// <param name="SourcePrefix">Source identifiers starting with this text (e.g. <c>cboe:</c>).</param>
+/// <param name="Provider">Provenance provider, e.g. <c>Cboe</c>, <c>FRED</c>, <c>api</c> (any letter case).</param>
 public sealed record SignalFilter(
     DateTimeOffset? AsOf = null,
     DateTimeOffset? From = null,
@@ -42,7 +44,9 @@ public sealed record SignalFilter(
     int Skip = 0,
     int Take = 100,
     string? Variant = null,
-    long MaxSequence = long.MaxValue);
+    long MaxSequence = long.MaxValue,
+    string? SourcePrefix = null,
+    string? Provider = null);
 
 public sealed record SignalPage(IReadOnlyList<SignalView> Signals, int Total);
 
@@ -64,6 +68,12 @@ public sealed record SignalView(
 /// <param name="Provider">Where the value came from, e.g. <c>FRED</c>, <c>api</c>, <c>HUMAN_CURATED</c>.</param>
 /// <param name="FirstReleased">First publication date for series with release vintages (point-in-time basis).</param>
 /// <param name="MappingVerified">False when the registry marks the provider series id as unconfirmed.</param>
+/// <param name="FileSha256">Lower-case hex SHA-256 of the fetched file the value was read from.</param>
+/// <param name="Reconstructed">
+/// True when the provider back-calculated the value before the series' live start; false on or after a
+/// verified live start; null when not applicable or the live start is unverified (<paramref name="Note"/> says which).
+/// Null fields are not serialized, so provenance recorded before these fields existed hashes unchanged.
+/// </param>
 public sealed record SignalProvenance(
     string Provider,
     string? SeriesId = null,
@@ -73,7 +83,9 @@ public sealed record SignalProvenance(
     string? Derivation = null,
     bool? MappingVerified = null,
     string? SubmittedBy = null,
-    string? Note = null);
+    string? Note = null,
+    string? FileSha256 = null,
+    bool? Reconstructed = null);
 
 /// <summary>One recorded signal.</summary>
 public sealed record GetSignal(Guid SignalId) : IQuery<SignalView?>;

@@ -16,17 +16,17 @@
 <PageTitle>Historical replay · PrimeScore Markets</PageTitle>
 <div class="page-head"><div>
     <div class="eyebrow">Research checks</div><h1>Historical replay</h1>
-    <p>Choose a past event, recalculate its scenarios, then inspect which conditions passed. Each decision uses observations available by its observation time.</p>
+    <p>Choose a past period, recalculate its states and decisions, then inspect which conditions passed. Each decision uses observations available by its observation time.</p>
 </div></div>
-<div class="callout"><strong>What a replay measures.</strong> Whether the configured research checks would have passed. It creates no orders or positions and measures no trade returns. Scenario sensitivity is a configured assumption.</div>
+<div class="callout"><strong>What a replay measures.</strong> Whether the configured research checks would have passed. It creates no orders or positions and measures no trade returns. Each saved run links to its own outcomes record.</div>
 
 <section class="panel" aria-label="Replay inputs">
-    <div class="panel-head"><div><div class="kicker">1 · Choose the question</div><h2>Run a historical scenario</h2></div></div>
+    <div class="panel-head"><div><div class="kicker">1 · Choose the question</div><h2>Run a historical replay</h2></div></div>
     <p class="panel-note">Select an event to fill its dates, or enter a custom period. A replay saves its own result and leaves current decisions and settings unchanged.</p>
     <div class="filters">
         <label>Historical event<select @bind="_eventId" @bind:after="SelectEvent">
             <option value="">Custom range</option>
-            @foreach (var item in _events) { <option value="@item.Id">@item.Label · @item.Date</option> }
+            @foreach (var item in _events) { <option value="@item.Id">@item.Label · @Fmt.Day(item.Date)</option> }
         </select></label>
         <label>Run name<input @bind="_label" maxlength="200" /></label>
         <label>From (New York)<input type="date" @bind="_from" /></label>
@@ -52,13 +52,14 @@
 {
     <section class="panel" aria-label="Selected replay result">
         <div class="panel-head"><div><div class="kicker">2 · Inspect the recorded result</div><h2>@selectedRun.EventLabel</h2></div></div>
-        <p>@MarketTime.NewYorkDate(selectedRun.From) to @MarketTime.NewYorkDate(selectedRun.To) (New York) · saved @Fmt.Utc(selectedRun.RecordedAt)</p>
+        <p>@Fmt.Day(MarketTime.NewYorkDate(selectedRun.From)) to @Fmt.Day(MarketTime.NewYorkDate(selectedRun.To)) (New York) · saved @Fmt.Utc(selectedRun.RecordedAt)</p>
         <div class="metric-grid">
             <div class="metric"><span>Observations read</span><strong>@Fmt.Count(selectedRun.SignalCount)</strong></div>
             <div class="metric"><span>Decision records</span><strong>@Fmt.Count(_timeline.Count)</strong></div>
-            <div class="metric"><span>Conditions met</span><strong>@Fmt.Count(_timeline.Count(decision => decision.Outcome == DecisionOutcome.Deploy))</strong></div>
+            <div class="metric"><span>All checks passed</span><strong>@Fmt.Count(_timeline.Count(decision => decision.Outcome == DecisionOutcome.Deploy && !DecisionCopy.IsLegacy(decision.Scenario)))</strong></div>
         </div>
         <p class="panel-note">Counts describe records, not distinct opportunities. Each new assessment can produce a decision for its market.</p>
+        <p class="panel-note"><a href="outcomes?replay=@selectedRun.ReplayId">What followed the decisions in this run →</a></p>
         @if (!string.IsNullOrWhiteSpace(selectedRun.OverridesJson)) { <p class="degraded">In-sample: this run used temporary settings. The ten-event baseline report below excludes these runs.</p> }
         @if (_timeline.Count == 0)
         {
@@ -67,18 +68,17 @@
         else
         {
             <div class="table-wrap"><table class="data">
-                <thead><tr><th>Observed (UTC)</th><th>Market / reference</th><th>Outcome</th><th>Model scenario</th><th>Analysis</th></tr></thead>
-                <tbody>@foreach (var decision in _timeline)
+                <thead><tr><th>Observed (UTC)</th><th>Market / reference</th><th>Outcome</th><th>State</th><th>Analysis</th></tr></thead>
+                <tbody>@foreach (var decision in _timeline.Take(TimelineLimit))
                 {
-                    <tr><td>@Fmt.Utc(decision.AsOf)</td><td>@Fmt.Context(decision.Context)<div class="panel-note">@decision.ReferenceInstrument</div></td><td><DecisionBadge Outcome="decision.Outcome" /></td>
+                    <tr><td>@Fmt.Utc(decision.AsOf)</td><td>@Fmt.Context(decision.Context)<div class="panel-note">@decision.ReferenceInstrument</div></td><td><DecisionBadge Outcome="decision.Outcome" Scenario="@decision.Scenario" /></td>
                         <td>@DecisionCopy.Scenario(decision.Scenario)</td>
                         <td><details><summary>@decision.Conditions.Count(condition => condition.Passed) of @decision.Conditions.Count checks passed · View analysis</summary>
                             <p>@DecisionCopy.Summary(decision)</p>
                             <dl class="kv">
                                 <dt>Observed @decision.ReferenceInstrument</dt><dd>@Fmt.Number(decision.MarketObservedIv, 2) index points</dd>
-                                <dt>Model scenario</dt><dd>@Fmt.Number(decision.SignalImpliedIv, 2) index points</dd>
-                                <dt>Scenario gap</dt><dd>@Fmt.Signed(decision.DislocationValue, 2) index points · threshold ±@Fmt.Number(decision.DislocationThreshold, 2)</dd>
-                                <dt>Combined score</dt><dd>@Fmt.Signed(decision.CompositeScore, 4) · positive supports higher volatility; negative supports lower volatility.</dd>
+                                <dt>Place in its own history</dt><dd>@DecisionCopy.Percentile(decision.LevelPercentile, decision.Scenario)</dd>
+                                <dt>Combined score</dt><dd>@Fmt.Signed(decision.CompositeScore, 4) · the strongest confirmed input above (+) or below (−) its own median; a rank, not a direction.</dd>
                             </dl>
                             <div class="table-wrap"><table class="data">
                                 <thead><tr><th>Check</th><th>Recorded value</th><th>Requirement</th><th>Result</th></tr></thead>
@@ -95,6 +95,10 @@
                         </details></td></tr>
                 }</tbody>
             </table></div>
+            @if (_timeline.Count > TimelineLimit)
+            {
+                <p class="panel-note">Showing the first @TimelineLimit of @Fmt.Count(_timeline.Count) records in time order. Replay a shorter period to inspect other dates; the <a href="outcomes?replay=@selectedRun.ReplayId">outcomes record</a> summarizes every record.</p>
+            }
         }
         <details class="technical-details"><summary>Recorded configuration and audit reference</summary>
             <p>Configuration version @selectedRun.ConfigVersion.Value · inputs recorded through ledger #@selectedRun.InputSequence · <a href="ledger/@selectedRun.LedgerSequence">Replay audit record #@selectedRun.LedgerSequence</a></p>
@@ -113,13 +117,13 @@
     <div class="metric-grid">
         <div class="metric"><span>Matches target</span><strong>@_report.Count(row => row.Verdict == "Matches target") / @_report.Count</strong></div>
         <div class="metric"><span>Misses target</span><strong>@_report.Count(row => row.Verdict == "Misses target")</strong></div>
-        <div class="metric"><span>Missing evaluation or data</span><strong>@_report.Count(row => row.Verdict is "Not evaluated" or "Not evaluable")</strong></div>
+        <div class="metric"><span>Missing evaluation or data</span><strong>@_report.Count(row => row.Verdict is "Legacy baseline, re-run" or "Not evaluated" or "Not evaluable")</strong></div>
     </div>
     <p class="panel-note">The full-set action uses current settings for all ten events; it does not use the custom dates or temporary settings above. Iran February 2026 is a calibration target.</p>
     <div class="table-wrap"><table class="data"><thead><tr><th>Event</th><th>Expected research check</th><th>Result</th><th>Evidence</th></tr></thead>
         <tbody>@foreach (var row in _report)
         {
-            <tr><td>@row.Event.Label<div class="panel-note">@row.Event.Date</div></td><td>@Target(row.Event)</td><td><span class="status @(row.Verdict == "Matches target" ? "" : "status-warn")">@row.Verdict</span></td><td>@ReportDetail(row.Detail)
+            <tr><td>@row.Event.Label<div class="panel-note">@Fmt.Day(row.Event.Date)</div></td><td>@Target(row.Event)</td><td><span class="status @(row.Verdict == "Matches target" ? "" : "status-warn")">@row.Verdict</span></td><td>@ReportDetail(row.Detail)
                 @if (row.ReplayId is { } replayId) { <div><a href="replay?id=@replayId">Open recorded run →</a></div> }
                 <details class="technical-details"><summary>Recorded target and explanation</summary><p>@row.Event.Expected</p><p>@row.Detail</p></details>
             </td></tr>
@@ -134,7 +138,7 @@
             <thead><tr><th>Run</th><th>Period (New York)</th><th>Settings</th><th>Saved (UTC)</th></tr></thead>
             <tbody>@foreach (var run in _history)
             {
-                <tr><td><a href="replay?id=@run.ReplayId">@run.EventLabel</a></td><td>@MarketTime.NewYorkDate(run.From) to @MarketTime.NewYorkDate(run.To)</td><td>@(string.IsNullOrWhiteSpace(run.OverridesJson) ? "Baseline" : "Temporary · in-sample") · v@(run.ConfigVersion.Value)</td><td>@Fmt.Utc(run.RecordedAt)</td></tr>
+                <tr><td><a href="replay?id=@run.ReplayId">@run.EventLabel</a></td><td>@Fmt.Day(MarketTime.NewYorkDate(run.From)) to @Fmt.Day(MarketTime.NewYorkDate(run.To))</td><td>@(string.IsNullOrWhiteSpace(run.OverridesJson) ? "Baseline" : "Temporary · in-sample") · v@(run.ConfigVersion.Value)</td><td>@Fmt.Utc(run.RecordedAt)</td></tr>
             }</tbody>
         </table></div>
     }
@@ -142,6 +146,9 @@
 
 @code {
     [SupplyParameterFromQuery(Name = "id")] public Guid? ReplayId { get; set; }
+    /// <summary>A ten-year replay holds over 10,000 records; rendering them all produced a 54 MB page.</summary>
+    private const int TimelineLimit = 300;
+
     private IReadOnlyList<ValidationEvent> _events = [];
     private IReadOnlyList<ValidationEventResult> _report = [];
     private IReadOnlyList<ReplayView> _history = [];
@@ -154,18 +161,25 @@
     private string? _error;
 
     private static string Target(ValidationEvent item) => item.ExpectDeploy
-        ? $"Conditions met on {item.TargetDate:yyyy-MM-dd} or the previous NYSE trading day."
-        : $"Scenario gap stays below its threshold on {item.TargetDate:yyyy-MM-dd}.";
+        ? $"All checks pass on {item.TargetDate:yyyy-MM-dd} or the previous NYSE trading day."
+        : $"No decision passes all checks on {item.TargetDate:yyyy-MM-dd}.";
 
     private static string ReportDetail(string detail)
     {
-        foreach (var name in new[] { "composite_score", "top_signal_certainty", "contributing_sources", "newest_observation_age_trading_days", "active_cooldowns" })
+        foreach (var name in new[] { "level_percentile_tail", "composite_score", "top_signal_certainty", "contributing_sources", "newest_observation_age_trading_days", "active_cooldowns" })
         {
             detail = detail.Replace(name, DecisionCopy.ConditionName(name), StringComparison.Ordinal);
         }
 
-        return detail.Replace("No DEPLOY; last decision failed", "Conditions never met; the latest decision had unmet checks:", StringComparison.Ordinal)
-            .Replace("First DEPLOY:", "Conditions first met:", StringComparison.Ordinal)
+        return detail.Replace("No DEPLOY; last decision failed", "No extreme state; the latest decision had unmet checks:", StringComparison.Ordinal)
+            .Replace("First DEPLOY (extreme_high state):", "All checks first passed (extremely stretched):", StringComparison.Ordinal)
+            .Replace("First DEPLOY (extreme_low state):", "All checks first passed (extremely compressed):", StringComparison.Ordinal)
+            .Replace("No decision reached DEPLOY", "No decision passed all checks", StringComparison.Ordinal)
+            .Replace("DEPLOY (extreme_high state)", "All checks passed (extremely stretched)", StringComparison.Ordinal)
+            .Replace("DEPLOY (extreme_low state)", "All checks passed (extremely compressed)", StringComparison.Ordinal)
+            .Replace("DEPLOY (vol-expansion state)", "Conditions met under the legacy gate", StringComparison.Ordinal)
+            .Replace("DEPLOY (vol-compression state)", "Conditions met under the legacy gate", StringComparison.Ordinal)
+            .Replace("DEPLOY (", "All checks passed (", StringComparison.Ordinal)
             .Replace("dislocation", "scenario gap", StringComparison.Ordinal)
             .Replace("Dislocation", "Scenario gap", StringComparison.Ordinal)
             .Replace("No classifiable equity input and reference IV in the target window; absent routes are not estimated.", "No usable US equity classifications paired with a reference volatility index in this period. Missing inputs are not estimated.", StringComparison.Ordinal)

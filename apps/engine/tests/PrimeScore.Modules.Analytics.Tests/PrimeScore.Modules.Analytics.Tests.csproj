@@ -2,5 +2,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Modules\Analytics\PrimeScore.Modules.Analytics\PrimeScore.Modules.Analytics.csproj" />
     <ProjectReference Include="..\..\src\Modules\Configuration\PrimeScore.Modules.Configuration\PrimeScore.Modules.Configuration.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Catalysts\PrimeScore.Modules.Catalysts.Contracts\PrimeScore.Modules.Catalysts.Contracts.csproj" />
   </ItemGroup>
 </Project>

@@ -17,7 +17,7 @@ TOOLS = (
     "pytest", "pytest_asyncio", "yaml", "jsonschema", "openapi_spec_validator",
     "importlinter", "ruff", "mypy", "xenon", "vulture",
 )
-ENGINE_SETTING_PREFIXES = ("engine__", "auth__", "fred__", "classifier__", "registry__")
+ENGINE_SETTING_PREFIXES = ("engine__", "auth__", "fred__", "sources__", "classifier__", "registry__")
 
 
 def has_changes(root: Path) -> bool:

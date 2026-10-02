@@ -73,12 +73,12 @@ public sealed class UiSecurityTests
         var replay = await read.GetStringAsync(new Uri(engine.ApiBase, "/replay"), token);
         Assert.DoesNotContain("Run replay</button>", replay, StringComparison.Ordinal);
         var sources = await read.GetStringAsync(new Uri(engine.ApiBase, "/sources"), token);
-        Assert.DoesNotContain("Import latest data</button>", sources, StringComparison.Ordinal);
+        Assert.DoesNotContain("Run now</button>", sources, StringComparison.Ordinal);
         Assert.DoesNotContain("Check integrity</button>", sources, StringComparison.Ordinal);
 
         using var admin = engine.Http(Role.Admin);
         var adminSources = await admin.GetStringAsync(new Uri(engine.ApiBase, "/sources"), token);
-        Assert.Contains("Import latest data</button>", adminSources, StringComparison.Ordinal);
+        Assert.Contains("Run now</button>", adminSources, StringComparison.Ordinal);
         Assert.Contains("Check integrity</button>", adminSources, StringComparison.Ordinal);
     }
 

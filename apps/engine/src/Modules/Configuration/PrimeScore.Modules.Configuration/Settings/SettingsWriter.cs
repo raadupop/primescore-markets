@@ -44,11 +44,16 @@ internal sealed class SettingsWriter(ILedger ledger, ConfigurationReadStore read
         {
             if (await LoadLatestAsync(cancellationToken).ConfigureAwait(false) is { } existing)
             {
-                // Versions recorded before deploy conditions existed (M4) gain the defaults as a new, audited version.
-                _active = existing.Settings.DeployConditions is null
+                // Versions recorded before deploy conditions existed (M4), or before the state gate replaced the
+                // composite rank gate (ADR-0008), gain the defaults as a new, audited version.
+                var conditions = existing.Settings.DeployConditions;
+                _active = conditions is null
                     ? await AppendAsync(existing, existing.Settings with { DeployConditions = defaults.DeployConditions },
                         "Deploy conditions added with their uncalibrated defaults (brief §9.6)", "engine", cancellationToken).ConfigureAwait(false)
-                    : existing;
+                    : conditions.All(condition => condition.Name != DeployConditionNames.LevelPercentileTail)
+                        ? await AppendAsync(existing, existing.Settings with { DeployConditions = WithStateGate(conditions, defaults.DeployConditions!) },
+                            "Level percentile tail gate added and the composite rank gate removed; the dislocation no longer gates; other thresholds kept (ADR-0008)", "engine", cancellationToken).ConfigureAwait(false)
+                        : existing;
                 return;
             }
 
@@ -104,6 +109,17 @@ internal sealed class SettingsWriter(ILedger ledger, ConfigurationReadStore read
     }
 
     public void Dispose() => _gate.Dispose();
+
+    /// <summary>
+    /// ADR-0008 upgrade of a stored condition list: the default tail condition first, the refuted
+    /// composite gate dropped, every other condition kept with its operator and threshold.
+    /// </summary>
+    internal static IReadOnlyList<DeployCondition> WithStateGate(IReadOnlyList<DeployCondition> stored, IReadOnlyList<DeployCondition> defaults) =>
+        [
+            defaults.Single(condition => condition.Name == DeployConditionNames.LevelPercentileTail),
+            .. DeployConditionNames.Required.Where(name => name != DeployConditionNames.LevelPercentileTail)
+                .Select(name => stored.FirstOrDefault(condition => condition.Name == name) ?? defaults.Single(condition => condition.Name == name)),
+        ];
 
     private async Task<SettingsVersion> AppendAsync(SettingsVersion? current, EngineSettings next, string reason, string changedBy, CancellationToken cancellationToken)
     {

@@ -10,16 +10,35 @@ public static class MarketTime
 {
     public static TimeZoneInfo NewYork { get; } = FindNewYork();
 
-    /// <summary>The UTC instant of a New York wall-clock time on a date (DST-aware).</summary>
+    private static readonly TimeSpan EasternStandard = TimeSpan.FromHours(-5);
+
+    private static readonly TimeSpan EasternDaylight = TimeSpan.FromHours(-4);
+
+    /// <summary>
+    /// The UTC instant of a New York wall-clock time on a date (DST-aware, <see cref="UniformTimeActDaylight"/>
+    /// before 1987). A time that does not exist or occurs twice resolves to the standard offset.
+    /// </summary>
     public static DateTimeOffset AtNewYork(DateOnly date, TimeOnly time)
     {
         var local = date.ToDateTime(time, DateTimeKind.Unspecified);
-        var offset = NewYork.GetUtcOffset(local);
+        var offset = UniformTimeActDaylight(date.Year) is { } daylight
+            ? local >= daylight.Start.AddHours(1) && local < daylight.End.AddHours(-1) ? EasternDaylight : EasternStandard
+            : NewYork.GetUtcOffset(local);
         return new DateTimeOffset(local, offset).ToUniversalTime();
     }
 
-    public static DateOnly NewYorkDate(DateTimeOffset instant) =>
-        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, NewYork).DateTime);
+    public static DateOnly NewYorkDate(DateTimeOffset instant)
+    {
+        var standard = instant.UtcDateTime + EasternStandard;
+        if (UniformTimeActDaylight(standard.Year) is not { } daylight)
+        {
+            return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, NewYork).DateTime);
+        }
+
+        // Daylight time runs from 02:00 EST at the start to 02:00 EDT (01:00 EST) at the end.
+        var inDaylight = standard >= daylight.Start && standard < daylight.End.AddHours(-1);
+        return DateOnly.FromDateTime(inDaylight ? standard.AddHours(1) : standard);
+    }
 
     public static bool IsBusinessDay(DateOnly date) => date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday);
 
@@ -185,6 +204,29 @@ public static class MarketTime
         var month = (h + l - (7 * m) + 114) / 31;
         var day = ((h + l - (7 * m) + 114) % 31) + 1;
         return new DateOnly(year, month, day);
+    }
+
+    /// <summary>
+    /// New York daylight time from 1967 to 1986, as local wall-clock bounds (02:00 on each changeover
+    /// Sunday): the last Sunday of April to the last Sunday of October, except 6 January 1974 and
+    /// 23 February 1975 (energy-crisis starts). Windows' "Eastern Standard Time" applies the 1987–2006
+    /// rule to every earlier year, so SPX closes from 1975 would get a different stamp than on Linux,
+    /// some before the close; null outside these years, where the system zone is right.
+    /// </summary>
+    private static (DateTime Start, DateTime End)? UniformTimeActDaylight(int year)
+    {
+        if (year is < 1967 or > 1986)
+        {
+            return null;
+        }
+
+        var start = year switch
+        {
+            1974 => new DateOnly(1974, 1, 6),
+            1975 => new DateOnly(1975, 2, 23),
+            _ => LastWeekday(year, 4, DayOfWeek.Sunday),
+        };
+        return (start.ToDateTime(new TimeOnly(2, 0)), LastWeekday(year, 10, DayOfWeek.Sunday).ToDateTime(new TimeOnly(2, 0)));
     }
 
     private static TimeZoneInfo FindNewYork()

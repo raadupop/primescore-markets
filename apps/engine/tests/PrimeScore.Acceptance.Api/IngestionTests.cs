@@ -107,6 +107,18 @@ public sealed class IngestionTests(EngineFixture fixture)
     }
 
     [Theory]
+    [InlineData("cboe:VIX", "cboe:")]
+    [InlineData("bls:CPI", "bls:")]
+    [InlineData("gdelt:X", "gdelt:")]
+    [InlineData("usgs:X", "usgs:")]
+    public async Task Source_prefixes_of_the_engines_adapters_are_reserved(string source, string prefix)
+    {
+        var response = await PostAsync(Batch(MarketData("VIX", 18.0, Base.AddDays(6), source: source)));
+
+        AssertRejected(response.Signals.Single(), $"source_identifier: the '{prefix}' prefix is reserved");
+    }
+
+    [Theory]
     [InlineData("not json")]
     [InlineData("""{"signals":"not an array"}""")]
     [InlineData("""{"signals":[]}""")]

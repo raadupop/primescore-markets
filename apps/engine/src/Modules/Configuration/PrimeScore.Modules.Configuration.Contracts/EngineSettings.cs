@@ -87,9 +87,11 @@ public enum RegimeMode
 public sealed record RegimeRule(RegimeMode Mode, double LowBelow, double HighAbove, double? LowVolUpper, double? HighVolLower);
 
 /// <summary>
-/// One DEC-001 condition: <c>actual operator threshold</c> must hold for a DEPLOY decision
-/// (brief §9.6). The dislocation condition is per context (its threshold, compared by
-/// magnitude) and the cooldown condition is fixed until Milestone B; neither is listed here.
+/// One DEC-001 condition: <c>actual operator threshold</c> must hold for a DEPLOY decision.
+/// Since ADR-0008 the gate is the reference level's position in its own history
+/// (<see cref="DeployConditionNames.LevelPercentileTail"/>), not the dislocation: the dislocation
+/// is the observed level multiplied by a rank of the observed level and carries no independent
+/// information. A DEPLOY records an extreme state; it asserts no direction.
 /// </summary>
 /// <param name="Name">One of <see cref="DeployConditionNames"/>.</param>
 /// <param name="Operator">One of <c>&gt;=</c>, <c>&gt;</c>, <c>&lt;=</c>, <c>&lt;</c>, <c>==</c>.</param>
@@ -97,7 +99,16 @@ public sealed record DeployCondition(string Name, string Operator, double Thresh
 
 public static class DeployConditionNames
 {
-    /// <summary>|composite score|.</summary>
+    /// <summary>
+    /// <c>min(p, 1 − p)</c> where <c>p</c> is the reference level's ECDF percentile within its previous
+    /// <c>N_L</c> closes: how far into either tail of its own history the level sits. Operator <c>&lt;=</c>
+    /// or <c>&lt;</c> only. A threshold of <c>t</c> fires on about <c>2t</c> of days for a stationary level;
+    /// a persistent level fires more (13.5 percent of VIX days at t = 0.05, 2016 to 2026). Fewer than 252
+    /// prior closes record the tail as 1 (ADR-0008).
+    /// </summary>
+    public const string LevelPercentileTail = "level_percentile_tail";
+
+    /// <summary>|composite score|. Optional since ADR-0008: a rank of the level, so a threshold on it is a quantile.</summary>
     public const string CompositeScore = "composite_score";
 
     /// <summary>Categories that contributed to the composite.</summary>
@@ -109,13 +120,16 @@ public static class DeployConditionNames
     /// <summary>NYSE trading days between the newest contributing observation and the decision.</summary>
     public const string NewestObservationAge = "newest_observation_age_trading_days";
 
-    /// <summary>|dislocation| against the context's threshold (set through the dislocation settings).</summary>
+    /// <summary>Legacy name in decisions recorded before ADR-0008: |dislocation| against the context's threshold.</summary>
     public const string Dislocation = "dislocation";
 
-    /// <summary>Active cooldowns; always 0 in v1 (RSK-001 is Milestone B).</summary>
+    /// <summary>Legacy name in decisions recorded before ADR-0008: active cooldowns, always 0.</summary>
     public const string Cooldown = "active_cooldowns";
 
-    public static readonly IReadOnlyList<string> Configurable = Array.AsReadOnly(new[] { CompositeScore, ContributingSources, TopSignalCertainty, NewestObservationAge });
+    public static readonly IReadOnlyList<string> Configurable = Array.AsReadOnly(new[] { LevelPercentileTail, CompositeScore, ContributingSources, TopSignalCertainty, NewestObservationAge });
+
+    /// <summary>Conditions every valid configuration must list; <see cref="CompositeScore"/> is optional.</summary>
+    public static readonly IReadOnlyList<string> Required = Array.AsReadOnly(new[] { LevelPercentileTail, ContributingSources, TopSignalCertainty, NewestObservationAge });
 
     public static readonly IReadOnlyList<string> Operators = Array.AsReadOnly(new[] { ">=", ">", "<=", "<", "==" });
 }

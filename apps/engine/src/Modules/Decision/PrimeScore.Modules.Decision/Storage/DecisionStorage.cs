@@ -7,8 +7,10 @@ using PrimeScore.SharedKernel.Json;
 namespace PrimeScore.Modules.Decision.Storage;
 
 /// <summary>Ledger payload of <see cref="LedgerKinds.DecisionMade"/> (SRS DEC-001 to DEC-003, AUD-001).</summary>
+/// <param name="Scenario">The volatility state label since ADR-0008; a directional label in earlier entries.</param>
 /// <param name="DislocationSequence">Ledger sequence of the dislocation decided on: the decision stage's cursor.</param>
 /// <param name="ConditionsConfigured">The deploy conditions as configured (name, operator, threshold) when the decision was made.</param>
+/// <param name="LevelPercentile">The reference level's percentile within its prior closes; absent in entries before ADR-0008.</param>
 internal sealed record DecisionMadePayload(
     Guid DecisionId,
     string Context,
@@ -30,7 +32,8 @@ internal sealed record DecisionMadePayload(
     IReadOnlyList<ConditionEvaluation> Conditions,
     IReadOnlyList<DecisionSignal> TopContributing,
     IReadOnlyList<DecisionSignal> Dissenting,
-    string Explanation);
+    string Explanation,
+    double? LevelPercentile = null);
 
 /// <summary>Decision's read table: one row per decision, projected from <c>DecisionMade</c>.</summary>
 internal sealed class DecisionDbContext(DbContextOptions<DecisionDbContext> options) : DbContext(options)

@@ -28,6 +28,8 @@ internal static class DecisionDtos
         }).ToList(),
         Top_contributing_signals = view.TopContributing.Select(signal => signal.SignalId).ToList(),
         Dissenting_signals = view.Dissenting.Select(signal => signal.SignalId).ToList(),
+        State = view.Scenario,
+        Level_percentile = view.LevelPercentile,
         Decided_at = view.AsOf,
         Correlation_id = view.CorrelationId.Value,
     };

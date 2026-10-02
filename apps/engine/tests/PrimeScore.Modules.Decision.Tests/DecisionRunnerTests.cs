@@ -48,7 +48,7 @@ public sealed class DecisionRunnerTests : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         await _services.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        new EngineDatabase(Path.Combine(_directory, "engine.db")).ClearPool();
         try
         {
             Directory.Delete(_directory, recursive: true);
@@ -61,12 +61,12 @@ public sealed class DecisionRunnerTests : IAsyncLifetime
     [Fact]
     public async Task Each_dislocation_gets_exactly_one_decision_under_its_correlation_id_and_a_rerun_records_nothing()
     {
-        var first = _aggregates.Add(sequence: 11, composite: 0.9992, dislocation: 18.645072, at: Day);
-        _aggregates.Add(sequence: 21, composite: 0.3, dislocation: 5.0, at: Day.AddDays(1));
+        var first = _aggregates.Add(sequence: 11, composite: 0.9992, percentile: 0.9992, at: Day);
+        _aggregates.Add(sequence: 21, composite: 0.3, percentile: 0.5, at: Day.AddDays(1));
 
         var ack = await PublishAndCountAsync();
         var again = await CommandAsync();
-        _aggregates.Add(sequence: 31, composite: -0.8849, dislocation: -8.132231, at: Day.AddDays(2));
+        _aggregates.Add(sequence: 31, composite: -0.8849, percentile: 0.003, at: Day.AddDays(2));
         var third = await CommandAsync();
         var decisions = await Query<GetDecisions, IReadOnlyList<DecisionView>>(new GetDecisions());
 
@@ -75,16 +75,16 @@ public sealed class DecisionRunnerTests : IAsyncLifetime
         Assert.Equal((1, 0), (third.Deploy, third.Idle));
         Assert.Equal([Day.AddDays(2), Day.AddDays(1), Day], decisions.Select(decision => decision.AsOf));
         var volmageddon = decisions.Single(decision => decision.AsOf == Day);
-        Assert.Equal((first.Dislocation.CorrelationId, 1, DecisionOutcome.Deploy, "vol-expansion"),
-            (volmageddon.CorrelationId, volmageddon.ConfigVersion.Value, volmageddon.Outcome, volmageddon.Scenario));
-        Assert.Equal("vol-compression", decisions[0].Scenario);
+        Assert.Equal((first.Dislocation.CorrelationId, 1, DecisionOutcome.Deploy, "extreme_high", 0.9992),
+            (volmageddon.CorrelationId, volmageddon.ConfigVersion.Value, volmageddon.Outcome, volmageddon.Scenario, volmageddon.LevelPercentile));
+        Assert.Equal(("extreme_low", "normal"), (decisions[0].Scenario, decisions[1].Scenario));
     }
 
     [Fact]
     public async Task The_audit_trail_lists_every_decision_in_ledger_order_with_its_event_type()
     {
-        _aggregates.Add(sequence: 11, composite: 0.9992, dislocation: 18.645072, at: Day);
-        _aggregates.Add(sequence: 21, composite: 0.3, dislocation: 5.0, at: Day.AddDays(1));
+        _aggregates.Add(sequence: 11, composite: 0.9992, percentile: 0.9992, at: Day);
+        _aggregates.Add(sequence: 21, composite: 0.3, percentile: 0.5, at: Day.AddDays(1));
         await CommandAsync();
 
         var audit = await Query<GetAuditEntries, IReadOnlyList<AuditEntryView>>(new GetAuditEntries());
@@ -104,7 +104,7 @@ public sealed class DecisionRunnerTests : IAsyncLifetime
     [Fact]
     public async Task Changed_deploy_conditions_apply_from_the_next_decision_which_names_the_new_version()
     {
-        _aggregates.Add(sequence: 11, composite: 0.6, dislocation: 5.0, at: Day);
+        _aggregates.Add(sequence: 11, composite: 0.6, percentile: 0.99, at: Day);
         await CommandAsync();
         using (var scope = _services.CreateScope())
         {
@@ -113,7 +113,7 @@ public sealed class DecisionRunnerTests : IAsyncLifetime
             Assert.Equal(2, ack.Version);
         }
 
-        _aggregates.Add(sequence: 21, composite: 0.6, dislocation: 5.0, at: Day.AddDays(1));
+        _aggregates.Add(sequence: 21, composite: 0.6, percentile: 0.99, at: Day.AddDays(1));
         await CommandAsync();
         var decisions = await Query<GetDecisions, IReadOnlyList<DecisionView>>(new GetDecisions());
 
@@ -151,7 +151,7 @@ public sealed class DecisionRunnerTests : IAsyncLifetime
     {
         private readonly List<AggregateRecord> _records = [];
 
-        public AggregateRecord Add(long sequence, double composite, double dislocation, DateTimeOffset at)
+        public AggregateRecord Add(long sequence, double composite, double percentile, DateTimeOffset at)
         {
             var correlation = CorrelationId.New();
             var close = new ConfirmedAssessment(Guid.NewGuid(), Guid.NewGuid(), sequence - 3, SourceCategory.MarketData, "VIX", at, composite, 1.0, IsFallback: false);
@@ -159,7 +159,8 @@ public sealed class DecisionRunnerTests : IAsyncLifetime
                 [new CategoryContribution(SourceCategory.MarketData, 0.3, 1, 0, composite, composite, null, null, [close.AssessmentId], [])],
                 [], close.SignalId, close.AssessmentId, at, at);
             var dislocationView = new DislocationView(Guid.NewGuid(), sequence, correlation, new ConfigVersion(1), "equity", compositeView.CompositeId, composite,
-                "VIX", 20, at, Guid.NewGuid(), "normal", 0.5, 1260, 0.75, 20 + dislocation, dislocation, 1.5, Math.Abs(dislocation) >= 1.5, at, at);
+                "VIX", 20, at, Guid.NewGuid(), percentile > 0.7 ? "high_vol" : percentile < 0.3 ? "low_vol" : "normal", percentile, 1260, 0.75,
+                20 * (1 + (composite * 0.75)), 20 * composite * 0.75, 1.5, Math.Abs(20 * composite * 0.75) >= 1.5, at, at);
             var record = new AggregateRecord(compositeView, dislocationView, [close]);
             _records.Add(record);
             return record;

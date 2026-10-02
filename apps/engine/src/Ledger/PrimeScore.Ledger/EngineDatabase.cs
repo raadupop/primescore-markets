@@ -31,6 +31,17 @@ public sealed class EngineDatabase
 
     public SqliteConnection CreateConnection() => new(ConnectionString);
 
+    /// <summary>
+    /// Closes this file's idle pooled connections only. <see cref="SqliteConnection.ClearAllPools"/> also closes
+    /// connections that other databases in the same process are opening (parallel test classes failed with a
+    /// disposed sqlite3 handle).
+    /// </summary>
+    public void ClearPool()
+    {
+        using var connection = CreateConnection();
+        SqliteConnection.ClearPool(connection);
+    }
+
     /// <summary>Options for a context that opens its own connection (reads, migrations).</summary>
     public DbContextOptions<TContext> ContextOptions<TContext>(string migrationsHistoryTable)
         where TContext : DbContext =>

@@ -77,6 +77,8 @@ internal sealed class IngestionDbContext(DbContextOptions<IngestionDbContext> op
             run.Property(row => row.Revised).HasColumnName("revised");
             run.Property(row => row.Missing).HasColumnName("missing");
             run.Property(row => row.Rejected).HasColumnName("rejected");
+            run.Property(row => row.Flags).HasColumnName("flags");
+            run.Property(row => row.Note).HasColumnName("note");
             run.HasIndex(row => new { row.Source, row.StartedAtMs }).HasDatabaseName("ix_ing_source_runs_source_time");
         });
     }
@@ -153,6 +155,12 @@ internal sealed class SourceRunRow
     public int Missing { get; set; }
 
     public int Rejected { get; set; }
+
+    /// <summary>JSON array of operational findings (a cross-check disagreement); null when none.</summary>
+    public string? Flags { get; set; }
+
+    /// <summary>One-line summary of the run from the adapter.</summary>
+    public string? Note { get; set; }
 }
 
 internal sealed class IngestionSchema(EngineDatabase database) : IEngineSchema

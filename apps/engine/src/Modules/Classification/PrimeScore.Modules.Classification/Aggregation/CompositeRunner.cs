@@ -201,6 +201,8 @@ internal sealed partial class CompositeRunner(
         nameof(UnavailableReason.RouteNotImplemented) => "classifier route not in v1",
         nameof(UnavailableReason.ClassifierUnreachable) or nameof(UnavailableReason.InvalidResponse) => "classifier unavailable",
         nameof(UnavailableReason.ClassifierRejected) => "rejected by the classifier",
+        nameof(UnavailableReason.OutsideClassifiedHistory) => "recorded before the classified history",
+        nameof(UnavailableReason.DuplicateObservation) => "same-day observation already recorded by another source",
         _ => reason ?? "not classified",
     };
 

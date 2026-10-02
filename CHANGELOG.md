@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-02
+
+- Slice specs ([doc/slices/](doc/slices/README.md)): eight slices in build order, each with SRS IDs, design links, UI tests and a click-through on a demo copy of the ledger. Slices 1 (volatility state) and 2 (events ahead) were run on real data: VIX 16.34 on 2026-09-30 at the 35.5th percentile and the 9-day/30-day ratio −0.131 both match Cboe's files.
+- SRS v2.4.0: CLS-006 descriptive; DEC-005, ANA-003, SIG-006, CLS-010 and CAT-001 to CAT-003 added; ANA-001 and §11 verified on Volmageddon; §9 events kept as a regression record because the state gate fires on or after a shock, never before.
+- `scripts/build-demo-ledger.ps1` copies the live ledger and records a state-gate replay; `start-markets.ps1 -Database <path> [-PullSources]` serves a copy and refuses sources on the live ledger.
+- Fixes found on the demo copy: a relative `--database` created an empty database (now refused); the replay page rendered every record of a ten-year run (54 MB, now the first 300); Cboe's CDN refused 1 to 3 of 10 files per run with HTTP 403 (now retried, with a User-Agent); dates printed as 1/4/2016 on two pages; "83.1th percentile"; journal tiles that did not add up; escaped "+" in formatted ledger JSON.
+- Test harness: two intermittent gate failures fixed. Test classes cleared every SQLite pool in the process while parallel classes were opening connections (now each clears only its own database), and the acceptance harness closed a child process's log before its last output lines arrived.
+
+## 2026-09-29
+
+- Engine API contract 1.3.0 (additive): `GET /api/catalysts` (`from` defaults to now, `to` to 30 days later, optional `family`) and `GET /api/catalysts/{catalyst_id}` with every schedule vintage. Each catalyst carries its canonical id, source provenance, never-rescheduled flag and the 9-day/30-day ratio (VIX9D ÷ VIX − 1) with its weekday-matched baseline percentile and n; no index levels are served. Catalyst calendar page (`/catalysts`, next 30 days; consensus "not yet captured") and the `import-catalysts --file <csv> [--force]` CLI verb for curated back-fill.
+
 ## 2026-09-25
 
 - Engine milestone M6 (SEC-001/002, NFR-003): operator cookie sign-in, protected UI actions, CSRF checks, login throttling and configuration editing with version-conflict detection. Interactive password setup writes a hash to user-secrets; the bearer API remains separate. [Runbook](docs/ENGINE.md) covers setup, ingestion, replay, credentials, backup and ledger verification.

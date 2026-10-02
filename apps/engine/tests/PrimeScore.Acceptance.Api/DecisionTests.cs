@@ -26,10 +26,10 @@ public sealed class VolmageddonEngine : IAsyncLifetime
 }
 
 /// <summary>
-/// SRS DEC-001 to DEC-003, AUD-001, AUD-002 and OBS-001 with the default conditions (brief §9.6):
-/// |dislocation| ≥ the context threshold (1.5), |composite| ≥ 0.5, contributing categories ≥ 1,
-/// top signal certainty ≥ 0.5, newest contributing observation ≤ 2 trading days old, no active cooldown.
-/// Every expected value is the hand calculation in <see cref="CompositeTests"/>.
+/// SRS DEC-001 to DEC-003, AUD-001, AUD-002 and OBS-001 with the default conditions (ADR-0008):
+/// the reference level within 5% of either end of its prior closes, contributing categories ≥ 1,
+/// top signal certainty ≥ 0.5, newest contributing observation ≤ 2 trading days old. Percentiles are
+/// counted by hand from the fixture window; composites are the hand calculation in <see cref="CompositeTests"/>.
 /// </summary>
 public sealed class DecisionTests(VolmageddonEngine volmageddon) : IClassFixture<VolmageddonEngine>
 {
@@ -53,10 +53,11 @@ public sealed class DecisionTests(VolmageddonEngine volmageddon) : IClassFixture
             var text = PageText(page);
             Assert.Contains("VIX", text, StringComparison.Ordinal);
             Assert.Contains("US equity volatility", text, StringComparison.Ordinal);
-            // 37.32 × (1 + 0.9992 × 0.5) = 55.965072; scenario gap 18.645072.
+            // 37.32 is at or above 1,259 of its 1,260 prior closes: percentile 0.99921, the extreme upper tail.
             Assert.Contains("37.32", text, StringComparison.Ordinal);
-            Assert.Contains("55.97", text, StringComparison.Ordinal);
-            Assert.Contains("18.65", text, StringComparison.Ordinal);
+            Assert.Contains("99.9th percentile", text, StringComparison.Ordinal);
+            Assert.Contains("Extremely stretched", text, StringComparison.Ordinal);
+            Assert.Contains("not a directional forecast", text, StringComparison.Ordinal);
             var workflow = Regex.Match(page, "<nav[^>]*aria-label=\"Research workflow\"[^>]*>(.*?)</nav>", RegexOptions.Singleline | RegexOptions.CultureInvariant);
             Assert.True(workflow.Success, "An analysis must expose the route from data to review.");
             foreach (var route in new[] { "sources", "tape", "./", "decisions" })
@@ -67,9 +68,11 @@ public sealed class DecisionTests(VolmageddonEngine volmageddon) : IClassFixture
 
         var rows = Regex.Matches(analysis, "<tr>(.*?)</tr>", RegexOptions.Singleline | RegexOptions.CultureInvariant)
             .Select(row => PageText(row.Value)).ToArray();
-        var strength = Assert.Single(rows, row => row.Contains("Combined signal strength", StringComparison.Ordinal));
-        Assert.Contains("0.9992", strength, StringComparison.Ordinal);
-        Assert.Contains("At least 0.5000", strength, StringComparison.Ordinal);
+        var tail = Assert.Single(rows, row => row.Contains("Level in the extreme tail", StringComparison.Ordinal));
+        // 1 / 1260 = 0.0794%, shown to two decimals so it can be read against the 5.00% requirement.
+        Assert.Contains("0.08% from the nearer end", tail, StringComparison.Ordinal);
+        Assert.Contains("At most 5.00% from the nearer end", tail, StringComparison.Ordinal);
+        Assert.Contains("not a forecast", tail, StringComparison.Ordinal);
         var confidence = Assert.Single(rows, row => row.Contains("Strongest signal confidence", StringComparison.Ordinal));
         Assert.Contains("100%", confidence, StringComparison.Ordinal);
         Assert.Contains("At least 50%", confidence, StringComparison.Ordinal);
@@ -84,6 +87,30 @@ public sealed class DecisionTests(VolmageddonEngine volmageddon) : IClassFixture
         Assert.Contains("not the probability of a profitable position", PageText(observation), StringComparison.Ordinal);
     }
 
+    /// <summary>The Decision journal (slice 1): newest first, the Volmageddon close leads with every check passed.</summary>
+    [Fact]
+    public async Task UI_decision_journal_lists_Volmageddon_first_as_all_checks_passed_in_the_extremely_stretched_state()
+    {
+        var engine = volmageddon.Engine;
+        var decisions = await engine.Client(Role.Read).ListDecisionsAsync(null, null, Token);
+        var decision = Assert.Single(decisions, candidate => candidate.Decided_at == VolmageddonEngine.EventAt);
+        using var http = engine.Http(Role.Read);
+        var page = await http.GetStringAsync(new Uri(engine.ApiBase, "/decisions"), Token);
+        var text = PageText(page);
+
+        // The journal shows at most the newest 300 records.
+        Assert.Contains($"Records shown {Math.Min(decisions.Count, 300).ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}", text, StringComparison.Ordinal);
+        Assert.Contains("No order was sent", text, StringComparison.Ordinal);
+        var newest = Regex.Matches(page, "<tr>(.*?)</tr>", RegexOptions.Singleline | RegexOptions.CultureInvariant)
+            .Select(row => row.Value).First(row => row.Contains("<td", StringComparison.Ordinal));
+        Assert.Contains($"href=\"decisions/{decision.Decision_id}\"", newest, StringComparison.Ordinal);
+        var row = PageText(newest);
+        Assert.Contains("2018-02-05 21:15 UTC", row, StringComparison.Ordinal);
+        Assert.Contains("All checks passed", row, StringComparison.Ordinal);
+        Assert.Contains("Extremely stretched", row, StringComparison.Ordinal);
+        Assert.Contains("4 of 4 passed", row, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task DEC_001_and_DEC_003_Volmageddon_is_a_DEPLOY_with_every_condition_and_its_explanation_recorded()
     {
@@ -92,20 +119,21 @@ public sealed class DecisionTests(VolmageddonEngine volmageddon) : IClassFixture
 
         var decision = Assert.Single(await volmageddon.Engine.Client(Role.Read).ListDecisionsAsync(VolmageddonEngine.EventAt, VolmageddonEngine.EventAt, Token));
 
-        // Composite 0.9992, dislocation 18.645072; the event (0.9992 × 1.0) leads the 2018-02-02 close (0.8253 × 0.9992); nothing dissents.
+        // Composite 0.9992, dislocation 18.645072 (recorded, no longer a gate); the event (0.9992 × 1.0) leads the 2018-02-02
+        // close (0.8253 × 0.9992); nothing dissents. Level percentile 1259 / 1260, so tail 1 / 1260 = 0.000794 ≤ 0.05.
         Assert.Equal(DecisionOutcome.DEPLOY, decision.Outcome);
+        Assert.Equal("extreme_high", decision.State);
+        Assert.Equal(1259.0 / 1260, decision.Level_percentile!.Value, 12);
         Assert.Equal(0.9992, decision.Composite_score, 12);
         Assert.Equal(18.645072, decision.Dislocation_value, 9);
         Assert.Equal([eventSignal, dayBefore], decision.Top_contributing_signals);
         Assert.Empty(decision.Dissenting_signals);
         Assert.Equal(VolmageddonEngine.EventAt, decision.Decided_at);
         AssertConditions(decision,
-            ("dislocation", 1.5, 18.645072, true),
-            ("composite_score", 0.5, 0.9992, true),
+            ("level_percentile_tail", 0.05, 1.0 / 1260, true),
             ("contributing_sources", 1, 1, true),
             ("top_signal_certainty", 0.5, 1.0, true),
-            ("newest_observation_age_trading_days", 2, 0, true),
-            ("active_cooldowns", 0, 0, true));
+            ("newest_observation_age_trading_days", 2, 0, true));
     }
 
     [Fact]
@@ -118,7 +146,10 @@ public sealed class DecisionTests(VolmageddonEngine volmageddon) : IClassFixture
 
         var decision = Assert.Single(await volmageddon.Engine.Client(Role.Read).ListDecisionsAsync(at, at, Token));
 
-        Assert.Equal(DecisionOutcome.DEPLOY, decision.Outcome);
+        // 17.31 is at percentile 0.8594 of its 1,259 prior closes: stretched, not extreme (tail 0.1406 > 0.05).
+        // The refuted composite gate called this close a DEPLOY; the state gate does not.
+        Assert.Equal((DecisionOutcome.IDLE, "high"), (decision.Outcome, decision.State));
+        Assert.Equal(["level_percentile_tail"], decision.Conditions_evaluated.Where(condition => !condition.Passed).Select(condition => condition.Condition_name));
         Assert.Equal(0.78340584, decision.Composite_score, 9);
         Assert.Equal(6.7803775452, decision.Dislocation_value, 9);
         Assert.Equal([dayBefore], decision.Top_contributing_signals);
@@ -142,7 +173,8 @@ public sealed class DecisionTests(VolmageddonEngine volmageddon) : IClassFixture
         Assert.Equal(0.9992, input.GetProperty("composite_score").GetDouble(), 12);
         Assert.Equal(18.645072, input.GetProperty("dislocation_value").GetDouble(), 9);
         Assert.Equal("DEPLOY", output.GetProperty("outcome").GetString());
-        Assert.Equal(6, output.GetProperty("conditions_evaluated").GetArrayLength());
+        Assert.Equal(4, output.GetProperty("conditions_evaluated").GetArrayLength());
+        Assert.Equal("extreme_high", output.GetProperty("scenario").GetString());
         var idles = await client.ListAuditEntriesAsync(null, AuditEventType.IDLE_DECISION, null, null, Token);
         Assert.NotEqual(default, entry.Recorded_at);
         Assert.Contains(deploys, audit => audit.Entity_id == decision.Decision_id);
@@ -168,11 +200,14 @@ public sealed class DecisionTests(VolmageddonEngine volmageddon) : IClassFixture
     [Fact]
     public async Task DEC_001_and_DEC_002_one_failing_condition_is_IDLE_with_every_value_recorded_and_processing_continues()
     {
-        // Threshold 30, then 2018-02-06 (29.98): composite 0.9992 (net max of 0.9992 and 0.996), percentile 0.996, k = 0.5,
-        // dislocation 29.98 × 0.9992 × 0.5 = 14.978008 < 30. Only the dislocation condition fails.
+        // Tail at most 0.001, then 2018-02-06 (29.98): 1,255 of its 1,260 prior closes are at or below it, percentile
+        // 0.996032, tail 5 / 1260 = 0.003968 > 0.001. Only the tail condition fails.
         await using var engine = await RunningEngine.StartAsync();
         await AnchorHistory.LoadAsync(engine, "market_data_vix_volmageddon_2018_02_05.json", new DateOnly(2018, 2, 2), 37.32, VolmageddonEngine.EventAt, Token);
-        await engine.Client(Role.Admin).SetDislocationThresholdAsync(new Body { Threshold = 30, Reference_instrument = "VIX" }, Token);
+        await engine.Client(Role.Admin).SetDeployConditionsAsync(new DeployConditionsConfig
+        {
+            Conditions = [new Conditions { Name = "level_percentile_tail", Operator = ConditionsOperator.Le, Threshold = 0.001 }],
+        }, Token);
         var next = VolmageddonEngine.EventAt.AddDays(1);
         await AnchorHistory.PostAsync(engine, Batch(MarketData("VIX", 29.98, next, source: "fixture:VIXCLS")), Token);
         var client = engine.Client(Role.Read);
@@ -182,12 +217,12 @@ public sealed class DecisionTests(VolmageddonEngine volmageddon) : IClassFixture
 
         Assert.Equal(DecisionOutcome.IDLE, decision.Outcome);
         AssertConditions(decision,
-            ("dislocation", 30, 14.978008, false),
-            ("composite_score", 0.5, 0.9992, true),
+            ("level_percentile_tail", 0.001, 5.0 / 1260, false),
             ("contributing_sources", 1, 1, true),
             ("top_signal_certainty", 0.5, 1.0, true),
-            ("newest_observation_age_trading_days", 2, 0, true),
-            ("active_cooldowns", 0, 0, true));
+            ("newest_observation_age_trading_days", 2, 0, true));
+        // The state uses the configured tail too: 0.003968 is outside a 0.001 tail, so stretched, not extreme.
+        Assert.Equal("high", decision.State);
 
         // DEC-002: idle means no exposure, and signal processing carried on for that close.
         Assert.Equal(next, composite.As_of);

@@ -8,7 +8,7 @@ internal static class EngineSolution
 {
     public const string ModulesPrefix = "PrimeScore.Modules.";
 
-    public static readonly string[] ImplementedModules = ["Ingestion", "Classification", "Decision", "Analytics", "Configuration"];
+    public static readonly string[] ImplementedModules = ["Ingestion", "Classification", "Decision", "Analytics", "Configuration", "Catalysts"];
 
     public static readonly string[] MilestoneBModules = ["Positions", "Exits", "Risk"];
 

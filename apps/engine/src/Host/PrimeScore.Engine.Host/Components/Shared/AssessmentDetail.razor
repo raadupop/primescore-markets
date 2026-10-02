@@ -113,6 +113,8 @@
         UnavailableReason.InvalidResponse => "The service response failed validation; this observation has no usable assessment.",
         UnavailableReason.ClassifierRejected => "The service could not accept the observation in its current form.",
         UnavailableReason.UnknownIndicator => "The observation cannot be matched to a configured indicator.",
+        UnavailableReason.OutsideClassifiedHistory => "This observation predates the history the engine assesses; it is kept and used as reference history.",
+        UnavailableReason.DuplicateObservation => "Another source recorded this series for the same New York date first; that observation is the one analysed.",
         _ => "No usable assessment is available for this observation.",
     };
 }

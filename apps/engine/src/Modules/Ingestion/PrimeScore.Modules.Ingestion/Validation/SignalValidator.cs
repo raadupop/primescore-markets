@@ -19,8 +19,6 @@ internal sealed partial class SignalValidator(IndicatorRegistry registry, IClock
 {
     public const string CuratedPrefix = "curated:";
 
-    public const string AdapterPrefix = "fred:";
-
     private static readonly TimeSpan FutureTolerance = TimeSpan.FromMinutes(5);
     private static readonly DateTimeOffset Earliest = new(1990, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
@@ -48,10 +46,10 @@ internal sealed partial class SignalValidator(IndicatorRegistry registry, IClock
 
         var category = RequiredEnum(document, "source_category", ["MARKET_DATA", "MACROECONOMIC", "GEOPOLITICAL", "CROSS_ASSET_FLOW"], errors);
         var source = RequiredText(document, "source_identifier", errors, maxLength: 200);
-        if (source is not null && source.StartsWith(AdapterPrefix, StringComparison.OrdinalIgnoreCase))
+        if (source is not null && SourcePrefixes.ReservedPrefixOf(source) is { } reserved)
         {
-            // The adapter's rows are only the adapter's: it resumes from them and the Sources page counts them.
-            errors.Add($"source_identifier: the '{AdapterPrefix}' prefix is reserved for the engine's FRED adapter; use another source name");
+            // An adapter's rows are only the adapter's: it resumes from them and the Sources page counts them.
+            errors.Add($"source_identifier: the '{reserved}' prefix is reserved for the engine's source adapters; use another source name");
             source = null;
         }
         var timestamp = RequiredTimestamp(document, "timestamp", errors);

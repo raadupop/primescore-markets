@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Scheduled macro and market catalysts: canonical ids, schedule vintages, release calendars (v3 design §5.2).
+       Only the registration entry point is public (brief §5 rules 1 and 4). -->
+  <PropertyGroup>
+    <RootNamespace>PrimeScore.Modules.Catalysts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PrimeScore.Modules.Catalysts.Contracts\PrimeScore.Modules.Catalysts.Contracts.csproj" />
+    <ProjectReference Include="..\..\Ingestion\PrimeScore.Modules.Ingestion.Contracts\PrimeScore.Modules.Ingestion.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\..\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PrimeScore.Modules.Catalysts.Tests" />
+  </ItemGroup>
+</Project>

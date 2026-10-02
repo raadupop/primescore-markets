@@ -1,8 +1,6 @@
-using Microsoft.Extensions.Options;
 using PrimeScore.Modules.Ingestion.Contracts;
 using PrimeScore.Modules.Ingestion.Recording;
 using PrimeScore.Modules.Ingestion.Sources;
-using PrimeScore.Modules.Ingestion.Sources.Fred;
 using PrimeScore.Modules.Ingestion.Validation;
 using PrimeScore.SharedKernel;
 using PrimeScore.SharedKernel.Cqrs;
@@ -39,25 +37,27 @@ internal sealed class IngestSignalsHandler(
     }
 }
 
-/// <summary>Queues an on-demand pull; the scheduler runs it in the background.</summary>
-internal sealed class RequestSourcePullHandler(SourcePullQueue queue, IOptions<FredOptions> options)
+/// <summary>Queues an on-demand pull of a registered adapter; the scheduler runs it in the background.</summary>
+internal sealed class RequestSourcePullHandler(IEnumerable<ISourceAdapter> adapters, SourceRuntime runtime)
     : ICommandHandler<RequestSourcePull, SourcePullAck>
 {
     public Task<SourcePullAck> HandleAsync(RequestSourcePull command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
-        if (!string.Equals(command.Source, FredOptions.SourceName, StringComparison.OrdinalIgnoreCase))
+        var adapter = adapters.FirstOrDefault(candidate => string.Equals(candidate.Name, command.Source, StringComparison.OrdinalIgnoreCase));
+        if (adapter is null)
         {
             return Task.FromResult(new SourcePullAck(false, $"Unknown source '{command.Source}'."));
         }
 
-        if (options.Value.DisabledReason() is { } reason)
+        if (adapter.DisabledReason is { } reason)
         {
             return Task.FromResult(new SourcePullAck(false, reason));
         }
 
-        return Task.FromResult(queue.TryRequest(FredOptions.SourceName)
-            ? new SourcePullAck(true, queue.Running ? "A pull is running; another will follow it." : null)
+        var state = runtime.For(adapter.Name);
+        return Task.FromResult(state.TryRequest()
+            ? new SourcePullAck(true, state.Running ? "A pull is running; another will follow it." : null)
             : new SourcePullAck(false, "Pull requests are already queued."));
     }
 }

@@ -1,0 +1,2 @@
+family,scheduled_date,scheduled_time_new_york,originally_scheduled_date,title,reference_period,source_key,sep,source_url,retrieved_at,verified_by,note
+CPI,2014-13-01,08:30,,Consumer Price Index,December 2013,CPI:2013-12,,https://www.bls.gov/schedule/2014/home.htm,2026-09-01T12:00:00Z,acceptance fixture,month 13 does not exist

@@ -3,84 +3,52 @@ using PrimeScore.SharedKernel.Registry;
 
 namespace PrimeScore.Modules.Ingestion.Sources.Fred;
 
-internal enum FredTiming
-{
-    /// <summary>Daily index close, stamped 16:15 America/New_York (Cboe close) on the observation date.</summary>
-    DailyClose,
-
-    /// <summary>Release series: each value as first published, stamped 08:30 America/New_York on its first release date.</summary>
-    InitialRelease,
-
-    /// <summary>Basket price, stamped 16:00 America/New_York on the observation date; FRED may publish it later.</summary>
-    BasketObservation,
-}
-
-/// <param name="Kind">MARKET_DATA asset class, MACROECONOMIC indicator type, or the basket instrument.</param>
-internal sealed record FredSeries(
-    string SeriesId,
-    string Instrument,
-    SourceCategory Category,
-    FredTiming Timing,
-    bool Verified,
-    bool DeriveYearOverYear,
-    string Kind,
-    string Unit)
+/// <summary>A FRED series the engine recorded until FRED became a cross-check; its rows stay as recorded history.</summary>
+internal sealed record FredSeries(string SeriesId, string Instrument, SourceCategory Category, bool Verified)
 {
     public string SourceIdentifier => "fred:" + SeriesId;
 
-    public Uri SourceUrl => new($"https://fred.stlouisfed.org/series/{SeriesId}");
+    public Uri SourceUrl => FredSeriesCatalog.SeriesUrl(SeriesId);
+}
 
-    public TimeOnly NewYorkTime => Timing switch
-    {
-        FredTiming.DailyClose => new TimeOnly(16, 15),
-        FredTiming.InitialRelease => new TimeOnly(8, 30),
-        _ => new TimeOnly(16, 0),
-    };
-
-    public string TimingDescription => Timing switch
-    {
-        FredTiming.DailyClose => "daily close, 16:15 New York on the observation date",
-        FredTiming.InitialRelease => "first release, 08:30 New York on the release date",
-        _ => "observation date 16:00 New York; publication may be later",
-    };
+/// <summary>One Cboe index compared with the FRED series that republishes it; an unknown FRED id surfaces as an item error naming it.</summary>
+internal sealed record FredCrossCheckPair(string CboeSymbol, string FredSeriesId)
+{
+    public string CboeSourceIdentifier => "cboe:" + CboeSymbol;
 }
 
 /// <summary>
-/// Which FRED series the engine pulls (brief §7): every registry MARKET_DATA symbol mapped to
-/// FRED (unverified mappings included and labelled), the verified registry MACROECONOMIC
-/// symbols mapped to FRED, and the configured cross-asset basket.
+/// Which FRED series matter now that FRED records nothing (ADR-0009): the series recorded until
+/// then, for status coverage of their historical rows, and the pairs the cross-check compares.
+/// Pairs come from the registry's FRED bootstrap mappings for the configured Cboe symbols, plus the
+/// Cboe indices whose FRED copy the registry does not map (VIX3M as <c>VXVCLS</c>, SPX as <c>SP500</c>).
 /// </summary>
 internal static class FredSeriesCatalog
 {
-    private static readonly Dictionary<string, string> AssetClasses = new(StringComparer.Ordinal)
+    /// <summary>The cross-asset basket recorded from FRED until the cross-check replaced it (brief §7).</summary>
+    private static readonly string[] HistoricalBasket = ["SP500", "DGS10", "DCOILWTICO", "DEXUSEU"];
+
+    private static readonly Dictionary<string, string> MacroClasses = new(StringComparer.Ordinal)
     {
-        ["VIX"] = "equity_index",
-        ["VXN"] = "equity_index",
-        ["RVX"] = "equity_index",
-        ["VVIX"] = "equity_index",
-        ["OVX"] = "commodity",
-        ["GVZ"] = "commodity",
-        ["EVZ"] = "fx",
+        ["us_inflation_yoy"] = "INFLATION",
+        ["us_labor_weekly"] = "EMPLOYMENT",
     };
 
-    private static readonly Dictionary<string, (string Indicator, string Unit)> MacroKinds = new(StringComparer.Ordinal)
+    private static readonly Dictionary<string, string> UnmappedCboeCopies = new(StringComparer.Ordinal)
     {
-        ["us_inflation_yoy"] = ("INFLATION", "percent_yoy"),
-        ["us_labor_weekly"] = ("EMPLOYMENT", "claims"),
+        ["VIX3M"] = "VXVCLS",
+        ["SPX"] = "SP500",
     };
 
-    private static readonly Dictionary<string, string> BasketUnits = new(StringComparer.Ordinal)
-    {
-        ["SP500"] = "index",
-        ["DGS10"] = "percent",
-        ["DCOILWTICO"] = "usd_per_barrel",
-        ["DEXUSEU"] = "usd_per_eur",
-    };
+    public static Uri SeriesUrl(string seriesId) => new($"https://fred.stlouisfed.org/series/{seriesId}");
 
-    public static IReadOnlyList<FredSeries> Build(IndicatorRegistry registry, FredOptions options)
+    /// <summary>
+    /// The series recorded until 2026-09-29: every registry MARKET_DATA symbol mapped to FRED, the
+    /// verified registry macro symbols mapped to FRED, and the fixed cross-asset basket.
+    /// </summary>
+    public static IReadOnlyList<FredSeries> Historical(IndicatorRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(registry);
-        ArgumentNullException.ThrowIfNull(options);
         var series = new List<FredSeries>();
         foreach (var symbol in registry.SymbolsWithProvider("fred"))
         {
@@ -88,25 +56,37 @@ internal static class FredSeriesCatalog
             switch (symbol.IndicatorClass.SourceCategory)
             {
                 case SourceCategory.MarketData:
-                    series.Add(new FredSeries(
-                        mapping.SeriesId, symbol.Symbol, SourceCategory.MarketData, FredTiming.DailyClose, mapping.Verified,
-                        DeriveYearOverYear: false, AssetClasses.GetValueOrDefault(symbol.Symbol, "volatility_index"), "points"));
+                    series.Add(new FredSeries(mapping.SeriesId, symbol.Symbol, SourceCategory.MarketData, mapping.Verified));
                     break;
-                case SourceCategory.Macroeconomic when mapping.Verified && MacroKinds.TryGetValue(symbol.IndicatorClass.Name, out var kind):
-                    series.Add(new FredSeries(
-                        mapping.SeriesId, symbol.Symbol, SourceCategory.Macroeconomic, FredTiming.InitialRelease, Verified: true,
-                        DeriveYearOverYear: mapping.Derive == "pct_change_yoy", kind.Indicator, kind.Unit));
+                case SourceCategory.Macroeconomic when mapping.Verified && MacroClasses.ContainsKey(symbol.IndicatorClass.Name):
+                    series.Add(new FredSeries(mapping.SeriesId, symbol.Symbol, SourceCategory.Macroeconomic, Verified: true));
                     break;
             }
         }
 
-        foreach (var id in options.BasketSeries.Distinct(StringComparer.Ordinal))
+        series.AddRange(HistoricalBasket.Select(id => new FredSeries(id, id, SourceCategory.CrossAssetFlow, Verified: true)));
+        return series;
+    }
+
+    /// <summary>The configured Cboe symbols FRED also publishes, minus <paramref name="excluded"/> (any letter case).</summary>
+    public static IReadOnlyList<FredCrossCheckPair> CrossCheckPairs(
+        IndicatorRegistry registry, IEnumerable<string> cboeSymbols, IEnumerable<string> excluded)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        var skip = excluded.Select(symbol => symbol.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var pairs = new List<FredCrossCheckPair>();
+        foreach (var symbol in cboeSymbols.Where(symbol => !skip.Contains(symbol)))
         {
-            series.Add(new FredSeries(
-                id, id, SourceCategory.CrossAssetFlow, FredTiming.BasketObservation, Verified: true,
-                DeriveYearOverYear: false, id, BasketUnits.GetValueOrDefault(id, "level")));
+            if (registry.TryGetSymbol(symbol, out var registered) && registered.Bootstrap is { Provider: "fred" } mapping)
+            {
+                pairs.Add(new FredCrossCheckPair(symbol, mapping.SeriesId));
+            }
+            else if (UnmappedCboeCopies.TryGetValue(symbol, out var seriesId))
+            {
+                pairs.Add(new FredCrossCheckPair(symbol, seriesId));
+            }
         }
 
-        return series;
+        return pairs;
     }
 }

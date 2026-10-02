@@ -1,7 +1,7 @@
 # PrimeScore Markets v1 — build brief
 
 You are a principal .NET engineer and architect. Build the first meaningful version of
-**PrimeScore Markets** in the repository at `D:\Work\invex` (GitHub `raadupop/primescore-ai`,
+**PrimeScore Markets** in the repository at `D:\Work\primescore-markets` (GitHub `raadupop/primescore-markets`,
 branch `master`). The Python classifier and the local replay dashboard already exist; the .NET
 engine the design documents describe does not. v1 turns the repository from a classifier
 prototype with a static page into a product that ingests real observations every day,
@@ -48,7 +48,7 @@ risk limits are Milestone B (§3), behind the same contract, after v1 ships.
 
 ## 2. Ground truth: read these first, in this order
 
-| Path (relative to `D:\Work\invex`) | Why |
+| Path (relative to `D:\Work\primescore-markets`) | Why |
 | --- | --- |
 | `README.md`, `AGENTS.md`, `CLAUDE.md` | Implemented scope, operator rules (brevity, one destination per fact, Case A / Case B handling) |
 | `doc/srs/PrimeScore-SRS.md` (v2.3.3) | Requirements. §3 definitions, §5.1–5.3 and §5.7–5.11 are the v1 core |
@@ -67,7 +67,7 @@ risk limits are Milestone B (§3), behind the same contract, after v1 ships.
 Then run the existing gate before changing anything, and keep it green throughout:
 
 ```sh
-cd D:\Work\invex
+cd D:\Work\primescore-markets
 python -m venv .venv && .venv\Scripts\Activate.ps1
 python -m pip install -r apps/classification/requirements-dev.txt
 bash harness/check-suite.sh        # expected: 38 passed / 4 skipped classification tests, 47 repository tests, 6/6 import contracts

@@ -4,9 +4,13 @@
 Start the local engine, classifier and Markets presentation website; Ctrl+C stops all.
 .PARAMETER CheckOnly
 Validate prerequisites and ports without building or starting services.
+.PARAMETER Database
+Serve another engine database, for example the demo copy from scripts/build-demo-ledger.ps1.
+.PARAMETER PullSources
+With -Database only: switch on the Cboe and calendar sources for this run (docs/ENGINE.md).
 #>
 [CmdletBinding()]
-param([switch]$CheckOnly)
+param([switch]$CheckOnly, [string]$Database, [switch]$PullSources)
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
@@ -16,6 +20,24 @@ $classifier = $null
 $websites = $null
 $previousBootstrap = $env:BOOTSTRAP_MODE
 $previousRegistry = $env:PRIMESCORE_REGISTRY_PATH
+$sourceSections = @('Cboe', 'FedCalendar', 'BlsCalendar', 'BeaCalendar', 'EiaCalendar', 'ClaimsCalendar', 'OpecCalendar')
+$engineVariables = @{}
+if ($PullSources -and -not $Database) {
+    throw '-PullSources needs -Database: sources stay off on the live ledger until TODO-016 is settled.'
+}
+if ($Database) {
+    $databasePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Database)
+    if (-not (Test-Path -LiteralPath $databasePath -PathType Leaf)) { throw "No engine database at $databasePath." }
+    $engineVariables['Engine__DatabasePath'] = $databasePath
+}
+if ($PullSources) {
+    foreach ($section in $sourceSections) {
+        $engineVariables["Sources__${section}__Enabled"] = 'true'
+        $engineVariables["Sources__${section}__RunOnStartup"] = 'true'
+    }
+}
+$previousEngine = @{}
+foreach ($name in $engineVariables.Keys) { $previousEngine[$name] = [Environment]::GetEnvironmentVariable($name) }
 
 function Assert-FreePort([int]$Port) {
     $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $Port)
@@ -85,6 +107,8 @@ try {
     Write-Host 'Classifier: http://127.0.0.1:8000'
     Write-Host 'PrimeScore Markets: http://127.0.0.1:8091'
     Write-Host "Service logs: $logDirectory"
+    if ($Database) { Write-Host "Database: $databasePath" }
+    foreach ($name in $engineVariables.Keys) { [Environment]::SetEnvironmentVariable($name, $engineVariables[$name]) }
     & $dotnetPath run --project $hostProject --no-build --launch-profile engine
     if ($LASTEXITCODE -ne 0) { throw "Engine exited with code $LASTEXITCODE." }
 } finally {
@@ -96,5 +120,6 @@ try {
     }
     $env:BOOTSTRAP_MODE = $previousBootstrap
     $env:PRIMESCORE_REGISTRY_PATH = $previousRegistry
+    foreach ($name in $previousEngine.Keys) { [Environment]::SetEnvironmentVariable($name, $previousEngine[$name]) }
     Pop-Location
 }

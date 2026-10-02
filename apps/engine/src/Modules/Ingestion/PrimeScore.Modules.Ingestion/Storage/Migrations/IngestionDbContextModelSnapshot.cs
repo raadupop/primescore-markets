@@ -163,9 +163,17 @@ namespace PrimeScore.Modules.Ingestion.Storage.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("finished_at_ms");
 
+                    b.Property<string>("Flags")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("flags");
+
                     b.Property<int>("Missing")
                         .HasColumnType("INTEGER")
                         .HasColumnName("missing");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("note");
 
                     b.Property<int>("Rejected")
                         .HasColumnType("INTEGER")

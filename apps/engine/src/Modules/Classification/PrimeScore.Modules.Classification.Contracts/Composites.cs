@@ -90,7 +90,7 @@ public sealed record CategoryContribution(
 
 public sealed record AbsentCategoryView(SourceCategory Category, string Reason);
 
-/// <param name="RegimePercentile">Share of the reference instrument's previous levels at or below the observed one; null in level mode.</param>
+/// <param name="RegimePercentile">Share of the reference instrument's previous levels at or below the observed one, in either regime mode; null without history (null in level mode before ADR-0008).</param>
 public sealed record DislocationView(
     Guid DislocationId,
     long LedgerSequence,
@@ -115,6 +115,7 @@ public sealed record DislocationView(
     DateTimeOffset ComputedAt);
 
 /// <summary>A history point: the day's last composite and, when a reference level existed, its dislocation.</summary>
+/// <param name="RegimePercentile">The reference level's percentile within its prior closes (ADR-0008); null without history.</param>
 public sealed record DailyAggregate(
     DateOnly Date,
     DateTimeOffset AsOf,
@@ -129,4 +130,5 @@ public sealed record DailyAggregate(
     double? Threshold,
     bool? ThresholdBreached,
     string? Regime,
-    double? SensitivityFactor);
+    double? SensitivityFactor,
+    double? RegimePercentile = null);

@@ -16,8 +16,8 @@
         <div class="eyebrow">Explore the pattern</div>
         <h1>Market history</h1>
         <p>
-            Follow the combined signal score and scenario gap through time. Each point is the last analysis recorded for that New York trading day.
-            The markers show when research conditions passed; they do not represent trades.
+            Follow the combined signal score and the reference level's place in its own history. Each point is the last analysis recorded for that New York trading day.
+            The markers show extreme states; they do not represent trades or forecasts.
         </p>
     </div>
 </div>
@@ -54,7 +54,7 @@ else if (_days.Count == 0)
 {
     <EmptyState Title="No composite recorded for this context">
         A composite is recorded for every classified signal of the context's member instruments. Load history on Sources and health
-        (FRED backfill) or through <span class="mono">POST /api/admin/signals</span>; nothing is estimated in its place.
+        (source adapters) or through <span class="mono">POST /api/admin/signals</span>; nothing is estimated in its place.
     </EmptyState>
 }
 else
@@ -63,12 +63,12 @@ else
         <div class="panel-head">
             <div>
                 <div class="kicker">@Context context · @Fmt.Count(_days.Count) trading days · @_days[0].Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) to @_days[^1].Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)</div>
-                <h2>Signal strength and scenario gap</h2>
+                <h2>Signal score and level percentile</h2>
             </div>
-            <span class="status" title="Days whose final research result passed all configured checks.">@_markers.Count days with conditions met</span>
+            <span class="status" title="Days whose final research result passed all configured checks.">@_markers.Count days in an extreme state</span>
         </div>
-        <p class="panel-note">Signal score: −1 to +1, indicating lower or higher volatility in the model. Scenario gap: model level minus observed level, in index points. Shading indicates periods of low or high observed volatility.</p>
-        <SeriesChart Dates="_dates" Panels="_panels" Runs="_runs" Extras="_extras" Markers="_markers" MarkerLabel="Conditions met"
+        <p class="panel-note">Signal score: −1 to +1, where the level sits against its reference median. Level percentile: share of prior closes at or below the level; dashed lines mark the extreme tails. Shading indicates periods of low or high observed volatility.</p>
+        <SeriesChart Dates="_dates" Panels="_panels" Runs="_runs" Extras="_extras" Markers="_markers" MarkerLabel="Extreme state"
                      AriaLabel="@($"Daily composite score and dislocation for the {Context} context")"
                      Footnote="@_footnote" />
     </section>
@@ -84,6 +84,7 @@ else
     private IReadOnlyList<int> _markers = [];
     private string? _footnote;
     private string? _error;
+    private double _tail = 0.05;
 
     [SupplyParameterFromQuery(Name = "context")]
     public string? ContextQuery { get; set; }
@@ -96,7 +97,9 @@ else
     {
         try
         {
-            _contexts = (await SettingsQuery.HandleAsync(new GetActiveSettings(), CancellationToken.None)).Settings.Contexts;
+            var active = (await SettingsQuery.HandleAsync(new GetActiveSettings(), CancellationToken.None)).Settings;
+            _contexts = active.Contexts;
+            _tail = active.DeployConditions?.FirstOrDefault(condition => condition.Name == DeployConditionNames.LevelPercentileTail)?.Threshold ?? 0.05;
             Context = _contexts.FirstOrDefault(context => string.Equals(context.Name, ContextQuery, StringComparison.OrdinalIgnoreCase))?.Name
                 ?? _contexts.FirstOrDefault()?.Name ?? "equity";
         }
@@ -135,31 +138,30 @@ else
             .GroupBy(decision => SharedKernel.MarketTime.NewYorkDate(decision.AsOf))
             .ToDictionary(day => day.Key, day => day.MaxBy(decision => (decision.AsOf, decision.LedgerSequence))!);
         _dates = days.Select(day => day.Date).ToArray();
-        var references = threshold is { } active
-            ? new[] { new ReferenceLine(active, $"active threshold ±{Fmt.Number(active, 2)}"), new ReferenceLine(-active, "") }
-            : [];
+        var tail = _tail;
+        var references = new[] { new ReferenceLine(1 - tail, $"extreme tail {Fmt.Percent(tail)}"), new ReferenceLine(tail, "") };
         _panels =
         [
             new SeriesPanel("Signal score", "#5b8ef0", days.Select(day => (double?)day.Composite).ToArray(), value => Fmt.Signed(value, 2), -1, 1),
-            new SeriesPanel("Scenario gap (pts)", "#d8692f", days.Select(day => day.DislocationValue).ToArray(), value => Fmt.Signed(value, 2), 0, 0, references),
+            new SeriesPanel("Level percentile", "#d8692f", days.Select(day => day.RegimePercentile).ToArray(), value => Fmt.Percent(value), 0, 1, references),
         ];
         _runs = Runs(days);
         _extras =
         [
             new ExtraColumn("Observed volatility", index => days[index].MarketObservedIv is { } iv ? Fmt.Number(iv, 2) : "—"),
             new ExtraColumn("Regime · sensitivity", index => days[index].Regime is { } regime ? $"{regime.Replace('_', ' ')} · {Fmt.Number(days[index].SensitivityFactor, 2)}" : "—"),
-            new ExtraColumn("Breached", index => days[index].ThresholdBreached switch { true => "yes", false => "no", null => "—" }),
-            new ExtraColumn("Research result", index => lastDecision.TryGetValue(days[index].Date, out var decision) ? DecisionCopy.Outcome(decision.Outcome) : "—"),
+            new ExtraColumn("State", index => lastDecision.TryGetValue(days[index].Date, out var decision) ? DecisionCopy.Scenario(decision.State) : "—"),
+            new ExtraColumn("Research result", index => lastDecision.TryGetValue(days[index].Date, out var decision) ? DecisionCopy.Outcome(decision.Outcome, decision.State) : "—"),
             new ExtraColumn("Config", index => $"v{days[index].ConfigVersion} · {days[index].WeightingSchemeId}"),
         ];
         _markers = Enumerable.Range(0, days.Count)
-            .Where(index => lastDecision.TryGetValue(days[index].Date, out var decision) && decision.Outcome == DecisionOutcome.Deploy)
+            .Where(index => lastDecision.TryGetValue(days[index].Date, out var decision) && decision.Outcome == DecisionOutcome.Deploy && !DecisionCopy.IsLegacy(decision.State))
             .ToArray();
         var versions = days.Select(day => day.ConfigVersion).Distinct().Count();
         _footnote = versions > 1
-            ? $"{versions} configuration versions over this range; each point used the version in force when it was recorded. Dashed lines: the active threshold (breached by magnitude)."
-            : "Dashed lines: the currently configured gap threshold, checked in either direction.";
-        _footnote += " Scenario gap = observed volatility × signal score × sensitivity. Sensitivity is a model assumption, not a fitted forecast.";
+            ? $"{versions} configuration versions over this range; each point used the version in force when it was recorded. Decisions before ADR-0008 used the refuted composite gate."
+            : "Dashed lines: the configured extreme tail at each end of the level's history.";
+        _footnote += " The percentile ranks the level against its prior closes; it describes where the level sits, not where it goes.";
     }
 
     /// <summary>Contiguous runs of the low and high regimes; normal is left unshaded.</summary>

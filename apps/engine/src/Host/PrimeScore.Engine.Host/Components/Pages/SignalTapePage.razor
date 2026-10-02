@@ -16,7 +16,7 @@
     <div>
         <div class="eyebrow">Research evidence</div>
         <h1>Signal analysis</h1>
-        <p>Explore the observations behind each market scenario. Select an indicator to see its value, source, comparison history and assessment.</p>
+        <p>Explore the observations behind each market state. Select an indicator to see its value, source, comparison history and assessment.</p>
     </div>
 </div>
 
@@ -108,15 +108,15 @@
         {
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th scope="col">Market</th><th scope="col">Research status</th><th scope="col">Combined signal strength</th><th scope="col">Scenario gap</th><th scope="col">Analysis</th></tr></thead>
+                    <thead><tr><th scope="col">Market</th><th scope="col">Research status</th><th scope="col">Combined signal strength</th><th scope="col">State</th><th scope="col">Analysis</th></tr></thead>
                     <tbody>
                         @foreach (var decision in _selectedDecisions)
                         {
                             <tr>
                                 <td>@Fmt.Context(decision.Context)</td>
-                                <td><DecisionBadge Outcome="decision.Outcome" /></td>
+                                <td><DecisionBadge Outcome="decision.Outcome" Scenario="@decision.Scenario" /></td>
                                 <td class="num">@Fmt.Signed(decision.CompositeScore, 4)</td>
-                                <td class="num">@Fmt.Signed(decision.DislocationValue, 2) points</td>
+                                <td>@DecisionCopy.Scenario(decision.Scenario)</td>
                                 <td><a href="decisions/@decision.DecisionId">Review conditions</a></td>
                             </tr>
                         }

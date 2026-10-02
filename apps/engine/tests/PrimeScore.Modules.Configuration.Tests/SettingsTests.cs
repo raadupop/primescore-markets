@@ -40,7 +40,7 @@ public sealed class SettingsTests : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         await _services.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        new EngineDatabase(Path.Combine(_directory, "engine.db")).ClearPool();
         try
         {
             Directory.Delete(_directory, recursive: true);
@@ -224,23 +224,27 @@ public sealed class SettingsTests : IAsyncLifetime
         var conditions = (await Query<GetActiveSettings, SettingsVersion>(new GetActiveSettings())).Settings.DeployConditions!;
 
         Assert.True(ack.Accepted, string.Join("; ", ack.Errors));
+        // composite_score is optional since ADR-0008: listing it adds it, in the canonical condition order.
         Assert.Equal(
-            [("composite_score", ">", 0.6), ("contributing_sources", ">=", 1.0), ("top_signal_certainty", ">=", 0.5), ("newest_observation_age_trading_days", "<=", 2.0)],
+            [("level_percentile_tail", "<=", 0.05), ("composite_score", ">", 0.6), ("contributing_sources", ">=", 1.0),
+             ("top_signal_certainty", ">=", 0.5), ("newest_observation_age_trading_days", "<=", 2.0)],
             conditions.Select(condition => (condition.Name, condition.Operator, condition.Threshold)));
     }
 
     [Fact]
     public async Task The_audit_diff_writes_operators_as_typed()
     {
-        await Command<SetDeployConditions, SettingsChangeAck>(new SetDeployConditions([new DeployCondition(DeployConditionNames.CompositeScore, ">", 0.5)], "operator"));
+        await Command<SetDeployConditions, SettingsChangeAck>(new SetDeployConditions([new DeployCondition(DeployConditionNames.LevelPercentileTail, "<", 0.05)], "operator"));
 
         var active = await Query<GetActiveSettings, SettingsVersion>(new GetActiveSettings());
 
-        Assert.Equal(["deploy_conditions[composite_score].operator: \">=\" → \">\""], active.Changes);
+        Assert.Equal(["deploy_conditions[level_percentile_tail].operator: \"<=\" → \"<\""], active.Changes);
     }
 
     [Theory]
-    [InlineData("dislocation", ">=", 2.0, "set per context through PUT /config/dislocation-threshold")]
+    [InlineData("dislocation", ">=", 2.0, "no longer gates decisions")]
+    [InlineData("level_percentile_tail", "<=", 0.5, "outside [0, 0.25]")]
+    [InlineData("level_percentile_tail", ">=", 0.05, "must be <= or <")]
     [InlineData("risk_budget", ">=", 1.0, "Milestone B")]
     [InlineData("vibes", ">=", 1.0, "unknown condition")]
     [InlineData("composite_score", "=>", 0.5, "operator: must be one of")]
@@ -270,7 +274,49 @@ public sealed class SettingsTests : IAsyncLifetime
 
         Assert.Equal((3, "engine"), (active.Version.Value, active.ChangedBy));
         Assert.Equal(DefaultSettings.Conditions(), active.Settings.DeployConditions);
-        Assert.Contains("deploy_conditions[composite_score].operator: (none) → \">=\"", active.Changes);
+        Assert.Contains("deploy_conditions[level_percentile_tail].operator: (none) → \"<=\"", active.Changes);
+    }
+
+    [Fact]
+    public async Task A_version_with_the_refuted_composite_gate_gains_the_state_gate_as_a_new_audited_version()
+    {
+        // As on a database from M6: deploy conditions exist but gate on |composite| ≥ 0.5 (ADR-0008 refuted it).
+        var ledger = _services.GetRequiredService<ILedger>();
+        // The operator had tightened certainty and age; those must survive the upgrade.
+        IReadOnlyList<DeployCondition> refuted =
+        [
+            new(DeployConditionNames.CompositeScore, ">=", 0.5),
+            new(DeployConditionNames.ContributingSources, ">=", 1),
+            new(DeployConditionNames.TopSignalCertainty, ">=", 0.8),
+            new(DeployConditionNames.NewestObservationAge, "<=", 1),
+        ];
+        await ledger.AppendAsync(
+            [LedgerAppend.Create(LedgerKinds.ConfigurationChanged, Guid.NewGuid(), CorrelationId.New(), new ConfigVersion(2), "M6 settings",
+                new Storage.SettingsChangedPayload(2, "engine", "M6 settings", DefaultSettings.Create() with { DeployConditions = refuted }, []))],
+            Token);
+        var writer = new SettingsWriter(ledger, _services.GetRequiredService<Storage.ConfigurationReadStore>());
+
+        await writer.SeedAsync(DefaultSettings.Create(), Token);
+        var active = await writer.ActiveAsync(Token);
+
+        Assert.Equal((3, "engine"), (active.Version.Value, active.ChangedBy));
+        Assert.Contains("ADR-0008", active.Reason, StringComparison.Ordinal);
+        Assert.Equal(
+            [("level_percentile_tail", "<=", 0.05), ("contributing_sources", ">=", 1.0), ("top_signal_certainty", ">=", 0.8), ("newest_observation_age_trading_days", "<=", 1.0)],
+            active.Settings.DeployConditions!.Select(condition => (condition.Name, condition.Operator, condition.Threshold)));
+    }
+
+    [Fact]
+    public void A_configuration_without_the_state_gate_is_refused()
+    {
+        var defaults = DefaultSettings.Create();
+
+        var errors = SettingsValidator.Validate(defaults with
+        {
+            DeployConditions = defaults.DeployConditions!.Where(condition => condition.Name != DeployConditionNames.LevelPercentileTail).ToArray(),
+        });
+
+        Assert.Contains("deploy_conditions.level_percentile_tail: missing", errors);
     }
 
     private static EngineSettings WithEquity(Func<ContextSettings, ContextSettings> change)

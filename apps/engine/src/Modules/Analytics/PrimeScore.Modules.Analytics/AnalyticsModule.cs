@@ -23,6 +23,8 @@ public static class AnalyticsModule
         services.AddScoped<IQueryHandler<GetValidationEvents, IReadOnlyList<ValidationEvent>>, GetValidationEventsHandler>();
         services.AddScoped<ICommandHandler<EvaluateValidationEvents, ValidationEvaluationAck>, EvaluateValidationEventsHandler>();
         services.AddScoped<IQueryHandler<GetValidationReport, IReadOnlyList<ValidationEventResult>>, GetValidationReportHandler>();
+        services.AddScoped<IQueryHandler<GetForwardOutcomes, ForwardOutcomesReport?>, GetForwardOutcomesHandler>();
+        services.AddScoped<IQueryHandler<GetCatalystRatios, CatalystRatioList>, GetCatalystRatiosHandler>();
         return services;
     }
 }

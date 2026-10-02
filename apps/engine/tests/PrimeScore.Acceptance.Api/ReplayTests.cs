@@ -24,24 +24,36 @@ public sealed class ReplayTests(VolmageddonEngine fixture) : IClassFixture<Volma
         // Feb 2: (0.8253 - 0.0412667...) * 0.9992, k=0.5, IV=17.31.
         Assert.Equal(0.78340584, decisions[0].GetProperty("composite_score").GetDouble(), 9);
         Assert.Equal(6.7803775452, decisions[0].GetProperty("dislocation_value").GetDouble(), 9);
-        Assert.Equal("DEPLOY", decisions[0].GetProperty("outcome").GetString());
+        // Feb 2 (17.31) sits at percentile 0.8594: stretched, not extreme, so IDLE under the state gate (ADR-0008).
+        Assert.Equal("IDLE", decisions[0].GetProperty("outcome").GetString());
+        Assert.Equal("high", decisions[0].GetProperty("state").GetString());
+        Assert.Equal("DEPLOY", decisions[1].GetProperty("outcome").GetString());
         Assert.Equal(0.9992, decisions[1].GetProperty("composite_score").GetDouble(), 9);
         Assert.Equal(18.645072, decisions[1].GetProperty("dislocation_value").GetDouble(), 9);
         Assert.Empty(baseline.GetProperty("positions").EnumerateArray());
         Assert.Empty(baseline.GetProperty("exits").EnumerateArray());
 
-        var changed = await ReplayAsync(from, VolmageddonEngine.EventAt,
-            new { contexts = new { equity = new { dislocation_threshold = 10.0 } } });
-        var delayed = changed.GetProperty("decisions").EnumerateArray().ToArray();
-        Assert.Equal("IDLE", delayed[0].GetProperty("outcome").GetString());
-        Assert.Equal("DEPLOY", delayed[1].GetProperty("outcome").GetString());
-        Assert.Equal(10.0, delayed[0].GetProperty("conditions_evaluated").EnumerateArray()
-            .Single(c => c.GetProperty("condition_name").GetString() == "dislocation").GetProperty("required_value").GetDouble());
+        // A looser tail (20%) admits Feb 2 (tail 0.1406); arrays replace, so every required condition is listed.
+        var changed = await ReplayAsync(from, VolmageddonEngine.EventAt, new
+        {
+            deploy_conditions = new object[]
+            {
+                new { name = "level_percentile_tail", @operator = "<=", threshold = 0.2 },
+                new { name = "contributing_sources", @operator = ">=", threshold = 1.0 },
+                new { name = "top_signal_certainty", @operator = ">=", threshold = 0.5 },
+                new { name = "newest_observation_age_trading_days", @operator = "<=", threshold = 2.0 },
+            },
+        });
+        var loosened = changed.GetProperty("decisions").EnumerateArray().ToArray();
+        Assert.Equal("DEPLOY", loosened[0].GetProperty("outcome").GetString());
+        Assert.Equal("DEPLOY", loosened[1].GetProperty("outcome").GetString());
+        Assert.Equal(0.2, loosened[0].GetProperty("conditions_evaluated").EnumerateArray()
+            .Single(c => c.GetProperty("condition_name").GetString() == "level_percentile_tail").GetProperty("required_value").GetDouble());
         var after = await client.ListDecisionsAsync(from, VolmageddonEngine.EventAt, Token);
         Assert.Equal(before.Select(d => d.Decision_id), after.Select(d => d.Decision_id));
         Assert.Equal(before.Select(d => d.Dislocation_value), after.Select(d => d.Dislocation_value));
         var again = await ReplayAsync(from, VolmageddonEngine.EventAt);
-        Assert.Equal("DEPLOY", again.GetProperty("decisions")[0].GetProperty("outcome").GetString());
+        Assert.Equal("IDLE", again.GetProperty("decisions")[0].GetProperty("outcome").GetString());
     }
 
     [Fact]

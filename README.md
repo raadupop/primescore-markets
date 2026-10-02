@@ -1,6 +1,6 @@
 # PrimeScore Markets
 
-[![Checks](https://github.com/raadupop/primescore-ai/actions/workflows/checks.yml/badge.svg)](https://github.com/raadupop/primescore-ai/actions/workflows/checks.yml)
+[![Checks](https://github.com/raadupop/primescore-markets/actions/workflows/checks.yml/badge.svg)](https://github.com/raadupop/primescore-markets/actions/workflows/checks.yml)
 
 PrimeScore AI is developing event-driven volatility intelligence for options research. This repository contains the .NET Markets engine, Python classifier, local replay demo and agent harness (instructions, hooks and code checks).
 
@@ -8,7 +8,7 @@ PrimeScore AI is developing event-driven volatility intelligence for options res
 
 ```mermaid
 flowchart LR
-    R[FRED observations / API submissions] --> N[.NET engine and ledger]
+    R[Cboe index history / API submissions] --> N[.NET engine and ledger]
     N -->|HTTP POST /classify with prior history| C[Python classifier]
     C --> S[Signed severity / certainty / reasoning]
     S --> V[Composite / volatility scenario / decision]
@@ -23,7 +23,8 @@ The engine records simulation decisions; it places no orders. Its volatility sce
 | Available in this repository | Planned or incomplete |
 | --- | --- |
 | Market-data and macroeconomic classification behind an OpenAPI contract | Cross-asset and geopolitical classification; model/RAG integration |
-| Daily FRED ingestion, append-only ledger, composite and simulation decisions | Independent volatility forecasting and calibrated signals |
+| Cboe index ingestion with a FRED cross-check, append-only ledger, composite and simulation decisions | Independent volatility forecasting and calibrated signals |
+| Release calendar (FOMC, CPI, NFP, claims, GDP, PCE, WPSR, OPEC) with canonical ids and schedule vintages; Catalysts page with the 9-day/30-day ratio against a weekday-matched baseline | Prints of record, consensus and the per-catalyst outcomes record |
 | Blazor dashboard, historical replay, configuration editing and operator sign-in | Options prices, positions, exits, portfolio risk and broker execution |
 | Agent hooks, bounded steering, tests and architecture contracts | Independent market-outcome validation and six-architecture benchmark results |
 
@@ -75,7 +76,7 @@ The [Markets page](sites/markets/) uses static HTML, CSS and JavaScript. The bra
 The [engine launcher](docs/ENGINE.md) also starts Markets at <http://127.0.0.1:8091>.
 For the product website only, run `.\scripts\start-websites.ps1`. To include the
 brand at <http://127.0.0.1:8090>, use the umbrella's `scripts/start-markets.ps1`
-with `-MarketsRoot D:\Work\invex`. Ctrl+C stops the selected launcher's services.
+with `-MarketsRoot D:\Work\primescore-markets`. Ctrl+C stops the selected launcher's services.
 
 ## Licence
 

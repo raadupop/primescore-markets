@@ -21,13 +21,18 @@ public sealed record GetSignalsById(IReadOnlyList<Guid> SignalIds) : IQuery<Sign
 /// rather than a <c>PRICE</c> submitted for the same symbol). When sources overlap, one point is
 /// kept per New York date and variant: the earliest recorded.
 /// </summary>
+/// <param name="SourcePrefix">
+/// Only source identifiers starting with this text (e.g. <c>cboe:</c>), applied before the
+/// earliest-recorded rule; null reads every source.
+/// </param>
 public sealed record GetObservationSeries(
     string Instrument,
     SourceCategory Category,
     string? Variant,
     DateTimeOffset Before,
     int Length,
-    long MaxSequence = long.MaxValue) : IQuery<ObservationSeries>;
+    long MaxSequence = long.MaxValue,
+    string? SourcePrefix = null) : IQuery<ObservationSeries>;
 
 public sealed record ObservationSeries(IReadOnlyList<ObservationPoint> Points)
 {

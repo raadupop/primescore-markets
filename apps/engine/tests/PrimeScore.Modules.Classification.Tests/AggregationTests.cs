@@ -256,6 +256,17 @@ public sealed class AggregationTests
     }
 
     [Fact]
+    public void Level_mode_still_records_the_percentile_that_the_state_gate_reads()
+    {
+        // ADR-0008: 20 is above 3 of the 4 prior levels (10, 15, 18, 30): percentile 0.75, while level mode labels it normal.
+        var parameters = new DislocationParameters(1.5, 1.0, 0.25, 0.5, PercentileMode: false, 0.3, 0.7, LowVolUpper: 15, HighVolLower: 25);
+
+        var result = DislocationCalculator.Compute(0.4, 20, [10, 15, 18, 30], parameters);
+
+        Assert.Equal((DislocationCalculator.Normal, (double?)0.75, 4), (result.Regime, result.RegimePercentile, result.RegimeHistory));
+    }
+
+    [Fact]
     public void Without_prior_levels_the_percentile_regime_is_normal_and_a_dislocation_of_0_90045_misses_a_1_5_threshold()
     {
         // 18 × 0.0667 × 0.75 = 1.2006 × 0.75 = 0.90045.
@@ -300,7 +311,8 @@ public sealed class AggregationTests
 
         var result = DislocationCalculator.Compute(0.4, level, [1, 2, 3], parameters);
 
-        Assert.Equal((regime, k, (double?)null), (result.Regime, result.SensitivityFactor, result.RegimePercentile));
+        // Level boundaries label the regime; the percentile is still recorded for the state gate (ADR-0008): every level here is above 1, 2 and 3.
+        Assert.Equal((regime, k, (double?)1.0), (result.Regime, result.SensitivityFactor, result.RegimePercentile));
     }
 
     [Fact]

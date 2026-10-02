@@ -42,6 +42,26 @@ public sealed class SignalValidatorTests
     public void The_fred_prefix_is_reserved_for_the_engines_adapter() =>
         AssertRejected(MarketData().Replace("cboe_vix", "FRED:VIXCLS", StringComparison.Ordinal), "source_identifier: the 'fred:' prefix is reserved");
 
+    [Theory]
+    [InlineData("fred:VIXCLS", "fred:")]
+    [InlineData("cboe:VIX", "cboe:")]
+    [InlineData("CBOE:VIX", "cboe:")]
+    [InlineData("cboe-vx:VX", "cboe-vx:")]
+    [InlineData("bls:CPI", "bls:")]
+    [InlineData("bea:GDP", "bea:")]
+    [InlineData("cal:FOMC", "cal:")]
+    [InlineData("nowcast:CPI", "nowcast:")]
+    [InlineData("pm:FOMC", "pm:")]
+    [InlineData("gdelt:Europe", "gdelt:")]
+    [InlineData("gpr:GPR", "gpr:")]
+    [InlineData("usgs:quake", "usgs:")]
+    public void Source_prefixes_of_the_engines_adapters_are_reserved(string source, string prefix) =>
+        AssertRejected(MarketData().Replace("cboe_vix", source, StringComparison.Ordinal), $"source_identifier: the '{prefix}' prefix is reserved for the engine's source adapters");
+
+    [Fact]
+    public void A_source_name_that_only_resembles_a_reserved_prefix_is_accepted() =>
+        Assert.IsType<SignalCandidate>(Validate(MarketData()));
+
     [Fact]
     public void A_registry_symbol_in_any_case_is_stored_in_the_registrys_spelling_and_the_variant_carries_metric_and_tenor()
     {

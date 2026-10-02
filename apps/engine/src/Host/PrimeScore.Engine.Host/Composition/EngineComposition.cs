@@ -5,6 +5,7 @@ using PrimeScore.Engine.Host.Health;
 using PrimeScore.Engine.Host.Security;
 using PrimeScore.Ledger;
 using PrimeScore.Modules.Analytics;
+using PrimeScore.Modules.Catalysts;
 using PrimeScore.Modules.Classification;
 using PrimeScore.Modules.Configuration;
 using PrimeScore.Modules.Decision;
@@ -24,6 +25,7 @@ internal static class EngineComposition
     {
         EnginePaths.ApplyDefaultDatabasePath(builder.Configuration, builder.Environment.ContentRootPath);
         EnginePaths.ApplyDefaultConsensusDirectory(builder.Configuration, builder.Environment.ContentRootPath);
+        EnginePaths.ApplyDefaultOpecFile(builder.Configuration, builder.Environment.ContentRootPath);
 
         // Serve wwwroot from the project when running from build output in any environment.
         builder.WebHost.UseStaticWebAssets();
@@ -56,7 +58,8 @@ internal static class EngineComposition
             .AddIngestionModule(configuration)
             .AddClassificationModule(configuration)
             .AddDecisionModule(configuration)
-            .AddAnalyticsModule(configuration);
+            .AddAnalyticsModule(configuration)
+            .AddCatalystsModule(configuration);
 
     /// <summary>Fails fast on an unreadable registry, then migrates the database.</summary>
     public static Task InitializeEngineAsync(this WebApplication app)

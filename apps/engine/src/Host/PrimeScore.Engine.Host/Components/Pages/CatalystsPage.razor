@@ -1,0 +1,157 @@
+@page "/catalysts"
+@using PrimeScore.Modules.Analytics.Contracts
+@using PrimeScore.Modules.Catalysts.Contracts
+@using PrimeScore.SharedKernel
+@using PrimeScore.SharedKernel.Cqrs
+@inject IQueryHandler<GetCatalysts, CatalystList> CatalystsQuery
+@inject IQueryHandler<GetCatalystRatios, CatalystRatioList> RatiosQuery
+@inject IClock Clock
+
+<PageTitle>Catalyst calendar · PrimeScore Markets</PageTitle>
+<div class="page-head">
+    <div><div class="eyebrow">Research · Scheduled catalysts</div><h1>Catalyst calendar</h1>
+        <p>Scheduled releases and meetings for the next 30 days, each with its canonical id, its schedule history and the 9-day/30-day ratio read before it. Computed from the ledger on each read, like <span class="mono">GET /api/catalysts</span>.</p></div>
+</div>
+<div class="filters" role="group" aria-label="Catalyst filters">
+    <label>From (New York)<input type="date" @bind="_from" @bind:after="LoadAsync" /></label>
+    <label>Family
+        <select @bind="_family" @bind:after="LoadAsync">
+            <option value="">All families</option>
+            @foreach (var family in Enum.GetValues<CatalystFamily>())
+            { <option value="@Wire(family)">@Wire(family) · @FamilyName(family)</option> }
+        </select>
+    </label>
+</div>
+@if (_error is not null)
+{ <div class="degraded"><strong>The calendar could not be read.</strong> @_error</div> }
+else if (_list is null)
+{ <div class="loading">Reading the calendar…</div> }
+else if (_list.Catalysts.Count == 0)
+{ <EmptyState Title="No catalyst recorded for these 30 days">Enable the calendar sources in <a href="sources">Data and health</a>, or import a curated file with <span class="mono">import-catalysts</span>.</EmptyState> }
+else
+{
+    <section class="panel" aria-label="Catalysts">
+        <div class="panel-head"><div><div class="kicker">@_from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) to @_from.AddDays(Days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) · New York</div><h2>@Fmt.Count(_list.Catalysts.Count) scheduled catalyst@(_list.Catalysts.Count == 1 ? "" : "s")</h2></div></div>
+        <div class="table-wrap"><table class="data">
+            <thead><tr><th>Event</th><th>Family</th><th>Scheduled</th><th>Trading days ahead</th><th>9-day/30-day ratio</th><th>Percentile</th><th>Consensus</th><th>Schedule</th></tr></thead>
+            <tbody>
+            @foreach (var row in _list.Catalysts)
+            {
+                var reading = _readings.GetValueOrDefault(row.CatalystId);
+                <tr>
+                    <td>
+                        <span class="mono">@row.CatalystId</span>
+                        @if (row.Sep == true) { <span class="status status-blue">SEP</span> }
+                        @if (row.Tentative) { <span class="status status-warn">tentative</span> }
+                        @if (row.Status == CatalystStatus.Cancelled) { <span class="status status-bad">cancelled</span> }
+                        @if (row.Derivation is "rule" or "standard-weekday") { <span class="status status-muted">derived</span> }
+                        @if (row.Backfilled) { <span class="status status-muted">back-filled</span> }
+                        @if (row.ReferencePeriod is { } period) { <div class="panel-note">@row.Title · @period</div> }
+                        else { <div class="panel-note">@row.Title</div> }
+                    </td>
+                    <td>@FamilyName(row.Family)</td>
+                    <td class="mono">@Scheduled(row)</td>
+                    <td class="num">@MarketTime.TradingDaysBetween(_from, row.ScheduledDate)</td>
+                    <td class="num">
+                        @if (reading?.Value is { } value)
+                        {
+                            @Fmt.Signed(value, 3)
+                            <div class="panel-note">as of @reading.AsOf?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)@(reading.DayBefore ? "" : $" · read {reading.CalendarDaysBefore} days before")</div>
+                        }
+                        else { <span class="muted-cell">no date with both closes</span> }
+                    </td>
+                    <td class="num">
+                        @if (reading?.Value is null) { <span class="muted-cell">—</span> }
+                        else if (reading.BaselinePercentile is { } percentile)
+                        {
+                            @Fmt.Percent(percentile)
+                            <div class="panel-note">n = @reading.BaselineCount@(reading.MissingCloses > 0 ? $" · {reading.MissingCloses} missing closes" : "")</div>
+                        }
+                        else if (reading.NoBaselineReason is { } reason) { <span class="muted-cell">@reason</span> }
+                        @if (reading is { UnscreenedFamilies.Count: > 0 })
+                        { <div class="panel-note">halo incomplete: no @string.Join(", ", reading.UnscreenedFamilies) calendar reaches the earliest read date</div> }
+                        @if (reading is { PlaceboDays: > 0 })
+                        { <div class="panel-note">@reading.PlaceboDays placebo days · @reading.HaloExcluded inside a halo · @reading.NoSession without a session</div> }
+                    </td>
+                    <td class="muted-cell">not yet captured</td>
+                    <td>
+                        @ScheduleLabel(row)
+                        <div class="panel-note">@(row.Derivation == "rule" ? "derived" : "first announced") @Fmt.Date(row.FirstAnnouncedAt) · <a href="ledger/@row.LedgerSequence">ledger #@row.LedgerSequence</a></div>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table></div>
+        <p class="panel-note">9-day/30-day ratio: VIX9D ÷ VIX − 1, the slope of the short end of the S&amp;P 500 volatility term structure. The percentile ranks the latest ratio among ratios read the same number of days before same-weekday days one to three weeks ahead of past events of this family, leaving out days within one trading day of a scheduled FOMC, CPI, NFP, GDP, PCE or OPEC event. A rank, not a forecast. Trading days ahead count NYSE sessions from the start date up to the catalyst's date. Weekly releases (claims, WPSR) have no baseline: every same weekday is an event day. Missing closes are counted and left out, never filled.</p>
+        <p class="panel-note">Sources: Federal Reserve, BLS, BEA and EIA release schedules (public domain). Weekly claims dates are derived by rule from the Department of Labor's published practice (Thursday 08:30 ET; the Wednesday before when that Thursday is a federal holiday; <a href="https://oui.doleta.gov/unemploy/claims.asp">oui.doleta.gov/unemploy/claims.asp</a>). OPEC dates are curated by the operator with their source. Back-filled schedules show the dates releases happened, not as first announced, so whether they were rescheduled is unknown. Consensus capture is not built yet. Computed @Fmt.Utc(_list.ComputedAt).</p>
+    </section>
+}
+
+@code {
+    private const int Days = 30;
+    private CatalystList? _list;
+    private IReadOnlyDictionary<string, CatalystRatioReading> _readings = new Dictionary<string, CatalystRatioReading>();
+    private DateOnly _from;
+    private string _family = "";
+    private string? _error;
+    [SupplyParameterFromQuery(Name = "from")] public string? FromQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "family")] public string? FamilyQuery { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _from = DateOnly.TryParseExact(FromQuery, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var from)
+            ? from
+            : MarketTime.NewYorkDate(Clock.UtcNow);
+        _family = Enum.GetValues<CatalystFamily>().Select(Wire).FirstOrDefault(name => name == FamilyQuery) ?? "";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        _list = null;
+        try
+        {
+            CatalystFamily? family = Enum.GetValues<CatalystFamily>().Where(candidate => Wire(candidate) == _family).Select(candidate => (CatalystFamily?)candidate).FirstOrDefault();
+            var list = await CatalystsQuery.HandleAsync(new GetCatalysts(
+                MarketTime.AtNewYork(_from, TimeOnly.MinValue), MarketTime.AtNewYork(_from.AddDays(Days), TimeOnly.MaxValue), family), CancellationToken.None);
+            var ids = list.Catalysts.Select(row => row.CatalystId).ToArray();
+            _readings = ids.Length == 0
+                ? new Dictionary<string, CatalystRatioReading>()
+                : (await RatiosQuery.HandleAsync(new GetCatalystRatios(ids), CancellationToken.None)).Readings.ToDictionary(reading => reading.CatalystId, StringComparer.Ordinal);
+            _list = list;
+        }
+        catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        { _error = exception.Message; }
+    }
+
+    /// <summary>The wire name, the prefix of every canonical id (the contract's rule: upper-case member name).</summary>
+    private static string Wire(CatalystFamily family) => family.ToString().ToUpperInvariant();
+
+    private static string FamilyName(CatalystFamily family) => family switch
+    {
+        CatalystFamily.Fomc => "FOMC decision",
+        CatalystFamily.Cpi => "Consumer prices",
+        CatalystFamily.Nfp => "Employment Situation",
+        CatalystFamily.Claims => "Initial claims",
+        CatalystFamily.Gdp => "GDP estimate",
+        CatalystFamily.Pce => "Personal income and outlays",
+        CatalystFamily.Wpsr => "Weekly petroleum status",
+        CatalystFamily.Opec => "OPEC meeting",
+        _ => Fmt.Humanize(family.ToString()),
+    };
+
+    private static string Scheduled(CatalystView row)
+    {
+        var local = TimeZoneInfo.ConvertTime(row.ScheduledAt, MarketTime.NewYork);
+        var day = row.ScheduledDate.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return row.TimeAnnounced ? $"{day} {local.ToString("HH:mm", CultureInfo.InvariantCulture)} ET" : $"{day} · time not announced";
+    }
+
+    private static string ScheduleLabel(CatalystView row) => row.NeverRescheduled switch
+    {
+        true => row.Vintage > 1 ? $"never rescheduled · {row.Vintage} vintages" : "never rescheduled",
+        false => $"rescheduled · {row.Vintage} vintages",
+        null => "unknown (back-filled)",
+    };
+}

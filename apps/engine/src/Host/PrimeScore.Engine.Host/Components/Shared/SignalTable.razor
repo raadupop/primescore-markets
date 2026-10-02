@@ -9,7 +9,7 @@ else
 {
     <div class="table-wrap">
         <table class="data">
-            <thead><tr><th>Observation</th><th>Observed (UTC)</th><th>Directional score</th><th>Data confidence</th><th>Weighted signal</th></tr></thead>
+            <thead><tr><th>Observation</th><th>Observed (UTC)</th><th>Signed severity</th><th>Data confidence</th><th>Weighted signal</th></tr></thead>
             <tbody>
                 @foreach (var signal in Signals)
                 {
@@ -24,7 +24,7 @@ else
             </tbody>
         </table>
     </div>
-    <p class="panel-note">Weighted signal = directional score × data confidence. Positive scores support higher volatility; negative scores support lower volatility. Confidence measures history and recency, not the chance of a return.</p>
+    <p class="panel-note">Weighted signal = signed severity × data confidence. Positive: the observation sits above its reference (its own median, or the consensus for a macro print); negative: below. A rank, not a forecast of direction. Confidence measures history and recency, not the chance of a return.</p>
 }
 
 @code {

@@ -38,6 +38,8 @@ else
         UnavailableReason.InvalidResponse => "Invalid analysis result",
         UnavailableReason.ClassifierRejected => "Observation rejected by analysis",
         UnavailableReason.UnknownIndicator => "Indicator not recognised",
+        UnavailableReason.OutsideClassifiedHistory => "Before classified history",
+        UnavailableReason.DuplicateObservation => "Same-day observation already analysed",
         _ => "Not analysed",
     };
 

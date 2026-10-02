@@ -15,7 +15,7 @@
         <div class="eyebrow">Research settings</div>
         <h1>Model settings</h1>
         <p>
-            The rules that turn observations into a market scenario and decide whether its checks pass.
+            The rules that place each observation in its own history and decide whether the state is extreme.
             New settings apply to the next calculation; each existing decision keeps the version it used.
         </p>
     </div>
@@ -47,7 +47,7 @@ else
 
     <section class="panel" aria-label="Decision requirements">
         <div class="panel-head"><div><div class="kicker">1 · Review conditions</div><h2>When do the checks pass?</h2></div></div>
-        <p>Every requirement must pass for the result to say “Conditions met”. Passing creates a research record; it opens no position and sends no order.</p>
+        <p>Every requirement must pass for the result to say “All checks passed”. Passing creates a research record with no direction; it opens no position and sends no order.</p>
         <div class="table-wrap"><table class="data">
             <thead><tr><th>Check</th><th>Required value</th><th>Meaning</th></tr></thead>
             <tbody>
@@ -55,13 +55,11 @@ else
                 {
                     <tr><td>@DecisionCopy.ConditionName(condition.Name)</td><td>@DecisionCopy.Requirement(condition.Name, condition.Operator, condition.Threshold)</td><td>@DecisionCopy.ConditionMeaning(condition.Name)</td></tr>
                 }
-                <tr><td>Scenario gap</td><td>At least the market's threshold below</td><td>@DecisionCopy.ConditionMeaning(DeployConditionNames.Dislocation)</td></tr>
-                <tr><td>Active waiting periods</td><td>Exactly 0</td><td>@DecisionCopy.ConditionMeaning(DeployConditionNames.Cooldown)</td></tr>
             </tbody>
         </table></div>
     </section>
 
-    <div class="page-head"><div><div class="eyebrow">2 · Market assumptions</div><h2>References, inputs and scenario sensitivity</h2><p>Each market combines its configured inputs around a reference volatility index. A reference index is not a selected trading contract.</p></div></div>
+    <div class="page-head"><div><div class="eyebrow">2 · Market assumptions</div><h2>References, inputs and regimes</h2><p>Each market combines its configured inputs around a reference volatility index. A reference index is not a selected trading contract.</p></div></div>
     <div class="grid grid-2">
         @foreach (var context in settings.Contexts)
         {
@@ -77,12 +75,12 @@ else
                     {
                         <dt>@Fmt.Category(category)</dt><dd>@string.Join("; ", instruments.Select(Fmt.Instrument))</dd>
                     }
-                    <dt>Scenario gap threshold</dt><dd>@Fmt.Number(context.DislocationThreshold, 2) index points in either direction</dd>
-                    <dt>Scenario sensitivity</dt>
+                    <dt>Legacy gap threshold</dt><dd>@Fmt.Number(context.DislocationThreshold, 2) index points · recorded, no longer gates (ADR-0008)</dd>
+                    <dt>Legacy scenario sensitivity</dt>
                     <dd>Low volatility: @Fmt.Number(context.Sensitivity.LowVol, 2) · normal: @Fmt.Number(context.Sensitivity.Normal, 2) · high: @Fmt.Number(context.Sensitivity.HighVol, 2)</dd>
                     <dt>Volatility regime</dt><dd>@Regime(context.Regime)</dd>
                 </dl>
-                <p class="panel-note">Sensitivity scales how far the combined signal score moves the scenario away from the observed index. These multipliers are model assumptions.</p>
+                <p class="panel-note">The regime percentiles decide which states are low, normal and high; the extreme tail comes from the level percentile condition above. Sensitivity and the gap threshold only feed the recorded legacy scenario.</p>
             </section>
         }
     </div>

@@ -12,7 +12,7 @@ function linksAt(origin) {
     {href: "https://primescore.ai/#products"},
     {href: "https://markets.primescore.ai/#platform"},
     {href: "https://markets.primescore.ai/#dashboard", dashboard: true},
-    {href: "https://github.com/raadupop/primescore-ai"},
+    {href: "https://github.com/raadupop/primescore-markets"},
   ].map((link) => ({...link, hasAttribute: () => !!link.dashboard, querySelector: () => null}));
   const notice = {hidden: true};
   vm.runInNewContext(script, {
@@ -29,7 +29,7 @@ test("current previews connect brand, Markets and the dashboard", () => {
       "http://127.0.0.1:8090/#products", "http://127.0.0.1:8091/#platform", "http://127.0.0.1:5080/",
     ]);
     assert.equal(notice.hidden, false);
-    assert.equal(links[3], "https://github.com/raadupop/primescore-ai");
+    assert.equal(links[3], "https://github.com/raadupop/primescore-markets");
   }
 });
 

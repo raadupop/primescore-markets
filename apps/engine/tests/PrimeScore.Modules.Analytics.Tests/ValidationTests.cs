@@ -53,7 +53,7 @@ public sealed class ValidationTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
+            new EngineDatabase(Path.Combine(directory, "engine.db")).ClearPool();
             try { Directory.Delete(directory, recursive: true); }
             catch (IOException) { }
         }

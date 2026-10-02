@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit tests for canonical ids, the curated CSV, schedule vintages over a real ledger, and the calendar adapters. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Catalysts\PrimeScore.Modules.Catalysts\PrimeScore.Modules.Catalysts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Catalysts\PrimeScore.Modules.Catalysts.Contracts\PrimeScore.Modules.Catalysts.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Ingestion\PrimeScore.Modules.Ingestion.Contracts\PrimeScore.Modules.Ingestion.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+    <ProjectReference Include="..\..\src\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Data\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

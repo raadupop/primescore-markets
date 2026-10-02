@@ -5,7 +5,11 @@ namespace PrimeScore.Modules.Decision.Contracts;
 
 public enum DecisionOutcome
 {
-    /// <summary>Every condition held (SRS DEC-001). A research signal in simulation mode; no position is opened in v1.</summary>
+    /// <summary>
+    /// Every condition held (SRS DEC-001): since ADR-0008, the reference level sits in the extreme
+    /// tail of its own history and the evidence is fresh and confirmed. A recorded research state
+    /// with no direction and no position; the API keeps the name <c>DEPLOY</c>.
+    /// </summary>
     Deploy,
 
     /// <summary>At least one condition failed: zero exposure while processing continues (SRS DEC-002).</summary>
@@ -30,9 +34,14 @@ public sealed record DecisionSignal(
 
 /// <summary>One deploy or idle decision for a context, with everything it was computed from.</summary>
 /// <param name="AsOf">Observation time of the signal whose assessment triggered it (the contract's <c>decided_at</c>).</param>
-/// <param name="Scenario"><c>vol-expansion</c>, <c>vol-compression</c> or <c>none</c> (brief §9.7).</param>
+/// <param name="Scenario">
+/// The volatility state: <c>extreme_low</c>, <c>low</c>, <c>normal</c>, <c>high</c>, <c>extreme_high</c> or
+/// <c>unknown</c> (ADR-0008). Decisions recorded earlier hold the directional labels <c>vol-expansion</c>,
+/// <c>vol-compression</c> or <c>none</c>, which the data refuted.
+/// </param>
 /// <param name="TopContributing">Confirmed assessments on the composite's side, strongest first.</param>
 /// <param name="Dissenting">Confirmed assessments against the composite's sign.</param>
+/// <param name="LevelPercentile">The reference level's ECDF percentile within its prior closes; null before ADR-0008 or without history.</param>
 public sealed record DecisionView(
     Guid DecisionId,
     long LedgerSequence,
@@ -55,7 +64,8 @@ public sealed record DecisionView(
     IReadOnlyList<DecisionSignal> Dissenting,
     string Explanation,
     DateTimeOffset AsOf,
-    DateTimeOffset RecordedAt);
+    DateTimeOffset RecordedAt,
+    double? LevelPercentile = null);
 
 /// <summary>
 /// Decisions whose observation time lies in <c>[From, To]</c>, newest first; optionally one context,
@@ -76,10 +86,13 @@ public sealed record GetDecision(Guid DecisionId) : IQuery<DecisionView?>;
 public sealed record GetReplayDecisions(DateTimeOffset From, DateTimeOffset To, long MaxSequence, ConfigVersion Version, string SettingsJson)
     : IQuery<IReadOnlyList<DecisionView>>;
 
-/// <summary>Just the observation time and outcome of a context's decisions, oldest first (History markers).</summary>
+/// <summary>The observation time, outcome, composite score and state of a context's decisions, oldest first (History markers, forward outcomes).</summary>
 public sealed record GetDecisionOutcomes(string Context, DateTimeOffset? From = null, DateTimeOffset? To = null) : IQuery<IReadOnlyList<DecisionOutcomePoint>>;
 
-public sealed record DecisionOutcomePoint(DateTimeOffset AsOf, long LedgerSequence, DecisionOutcome Outcome);
+/// <param name="State">The stored <c>scenario</c> field: a state label since ADR-0008, a directional label before.</param>
+/// <param name="ReferenceInstrument">The instrument whose level the decision placed; outcomes are measured on it.</param>
+public sealed record DecisionOutcomePoint(DateTimeOffset AsOf, long LedgerSequence, DecisionOutcome Outcome, double CompositeScore, string State,
+    string ReferenceInstrument);
 
 /// <summary>Record a decision for every dislocation that has none yet (normally started by the classification pass).</summary>
 public sealed record MakePendingDecisions : ICommand<MakePendingDecisionsAck>;

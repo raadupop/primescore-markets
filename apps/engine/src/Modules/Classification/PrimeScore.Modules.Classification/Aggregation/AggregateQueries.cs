@@ -70,6 +70,7 @@ internal sealed class GetCompositeHistoryHandler(ClassificationReadStore reads) 
                 {
                     dislocation.DislocationId, dislocation.CompositeId, dislocation.MarketObservedIv, dislocation.DislocationValue,
                     dislocation.Threshold, dislocation.ThresholdBreached, dislocation.Regime, dislocation.SensitivityFactor,
+                    dislocation.RegimePercentile,
                 })
                 .ToListAsync(cancellationToken).ConfigureAwait(false))
             .Where(dislocation => ids.Contains(dislocation.CompositeId, StringComparer.Ordinal))
@@ -91,7 +92,8 @@ internal sealed class GetCompositeHistoryHandler(ClassificationReadStore reads) 
                 dislocation?.Threshold,
                 dislocation?.ThresholdBreached,
                 dislocation?.Regime,
-                dislocation?.SensitivityFactor);
+                dislocation?.SensitivityFactor,
+                dislocation?.RegimePercentile);
         }).ToArray();
     }
 }

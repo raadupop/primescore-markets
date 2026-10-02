@@ -36,6 +36,7 @@ public static class ClassificationModule
         services.AddSingleton<ConsensusBook>();
         services.AddSingleton<ClassifierClient>();
         services.AddSingleton<ClassificationGate>();
+        services.AddSingleton(AdapterHistory.Parse(configuration[AdapterHistory.Key]));
         services.AddScoped<SignalClassifier>();
         services.AddScoped<CompositeRunner>();
         services.AddScoped<ClassificationRunner>();

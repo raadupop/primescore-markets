@@ -96,15 +96,19 @@ internal sealed partial class DecisionRunner(
         var id = Guid.NewGuid();
         var composite = aggregate.Composite;
         var dislocation = aggregate.Dislocation;
+        var level = dislocation.RegimePercentile is { } percentile
+            ? string.Create(CultureInfo.InvariantCulture, $"{dislocation.ReferenceInstrument} {dislocation.MarketObservedIv:0.00} at percentile {percentile:0.000}")
+            : string.Create(CultureInfo.InvariantCulture, $"{dislocation.ReferenceInstrument} {dislocation.MarketObservedIv:0.00} without level history");
         var summary = string.Create(CultureInfo.InvariantCulture,
-            $"{dislocation.Context} {(result.Outcome == DecisionOutcome.Deploy ? "DEPLOY" : "IDLE")} as of {dislocation.AsOf.UtcDateTime:yyyy-MM-dd HH:mm} UTC: composite {composite.Score:+0.0000;-0.0000;0}, dislocation {dislocation.DislocationValue:+0.00;-0.00;0} against {dislocation.Threshold:0.00}; {result.Conditions.Count(condition => condition.Passed)} of {result.Conditions.Count} conditions held");
+            $"{dislocation.Context} {(result.Outcome == DecisionOutcome.Deploy ? "DEPLOY" : "IDLE")} as of {dislocation.AsOf.UtcDateTime:yyyy-MM-dd HH:mm} UTC: composite {composite.Score:+0.0000;-0.0000;0}, {level}, state {result.Scenario}; {result.Conditions.Count(condition => condition.Passed)} of {result.Conditions.Count} conditions held");
         return LedgerAppend.Create(LedgerKinds.DecisionMade, id, dislocation.CorrelationId, version, summary,
             new DecisionMadePayload(
                 id, dislocation.Context, result.Outcome, result.Scenario, composite.CompositeId, composite.Score,
                 composite.Contributing.Select(category => SharedKernel.SourceCategoryNames.ToWireName(category.Category)).ToArray(),
                 dislocation.DislocationId, dislocation.LedgerSequence, dislocation.DislocationValue, dislocation.Threshold,
                 dislocation.ReferenceInstrument, dislocation.MarketObservedIv, dislocation.SignalImpliedIv, composite.TriggerSignalId,
-                dislocation.AsOf, conditions, result.Conditions, result.TopContributing, result.Dissenting, result.Explanation));
+                dislocation.AsOf, conditions, result.Conditions, result.TopContributing, result.Dissenting, result.Explanation,
+                dislocation.RegimePercentile));
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Decisions recorded: {Deploy} DEPLOY, {Idle} IDLE")]

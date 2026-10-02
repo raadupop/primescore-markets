@@ -31,8 +31,23 @@ public enum UnavailableReason
     /// <summary>The classifier rejected the request as malformed (its own 400 or 422).</summary>
     ClassifierRejected,
 
-    /// <summary>A macro print whose instrument is not in the indicator registry; it cannot be matched to a consensus row.</summary>
+    /// <summary>
+    /// A macro print whose instrument is not in the indicator registry (it cannot be matched to a consensus row), or
+    /// an adapter-recorded market-data series outside the registry (a context series such as VIX9D; ADR-0010).
+    /// </summary>
     UnknownIndicator,
+
+    /// <summary>
+    /// An adapter-recorded observation dated before <c>Classification:AdapterHistoryFrom</c>; recorded and used in
+    /// reference windows, not assessed. Classifying earlier history needs a research registration first (ADR-0010).
+    /// </summary>
+    OutsideClassifiedHistory,
+
+    /// <summary>
+    /// An adapter-recorded observation whose series already had an earlier-recorded observation on the same New York
+    /// date; that one is the series of record, so the same close is never assessed (or corroborated) twice (ADR-0010).
+    /// </summary>
+    DuplicateObservation,
 }
 
 /// <summary>

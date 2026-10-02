@@ -6,6 +6,7 @@ using PrimeScore.SharedKernel;
 
 namespace PrimeScore.Modules.Decision.Evaluation;
 
+/// <param name="Scenario">The volatility state label (<see cref="VolatilityState"/>); the field keeps its pre-ADR-0008 name for storage compatibility.</param>
 internal sealed record DecisionResult(
     DecisionOutcome Outcome,
     string Scenario,
@@ -15,9 +16,12 @@ internal sealed record DecisionResult(
     string Explanation);
 
 /// <summary>
-/// SRS DEC-001 to DEC-003 with the brief §9.6 and §9.7 resolutions. DEPLOY only when every
-/// condition holds; every condition's required and actual value is recorded either way. Pure:
-/// replay evaluates the same inputs under other settings (ANA-001).
+/// SRS DEC-001 to DEC-003 as resolved in ADR-0008. DEPLOY only when every configured condition
+/// holds; every condition's required and actual value is recorded either way. The gate is the
+/// reference level's position in its own history (<c>level_percentile_tail</c>); the dislocation
+/// and the cooldown placeholder are no longer evaluated, because the first is the level times a
+/// rank of the level and the second was always true. Pure: replay evaluates the same inputs
+/// under other settings (ANA-001).
 /// </summary>
 internal static class DecisionEvaluator
 {
@@ -26,6 +30,9 @@ internal static class DecisionEvaluator
 
     /// <summary>Recorded as the age when no observation contributed, so the age condition fails visibly.</summary>
     public const double NoObservationAge = 9999;
+
+    /// <summary>Recorded as the tail distance when the level has too little history, so the tail condition fails visibly.</summary>
+    public const double NoHistoryTail = 1;
 
     public static DecisionResult Evaluate(AggregateRecord aggregate, IReadOnlyList<DeployCondition> conditions)
     {
@@ -39,16 +46,18 @@ internal static class DecisionEvaluator
         var top = sign == 0 ? [] : Ranked(aggregate.Confirmed.Where(assessment => Math.Sign(assessment.Conviction) == sign)).Take(TopSignals).ToArray();
         var dissenting = sign == 0 ? [] : Ranked(aggregate.Confirmed.Where(assessment => Math.Sign(assessment.Conviction) == -sign)).ToArray();
 
-        var evaluations = new List<ConditionEvaluation>
-        {
-            new(DeployConditionNames.Dislocation, ">=", dislocation.Threshold, Math.Abs(dislocation.DislocationValue), dislocation.ThresholdBreached,
-                Invariant($"|{dislocation.DislocationValue:+0.00;-0.00;0}| index points on {dislocation.ReferenceInstrument} {dislocation.MarketObservedIv:0.00} against the {dislocation.Context} threshold (magnitude, ADR-0004 §6)")),
-        };
+        var tailCondition = conditions.FirstOrDefault(condition => condition.Name == DeployConditionNames.LevelPercentileTail);
+        var state = VolatilityState.Label(dislocation.RegimePercentile, dislocation.RegimeHistory, dislocation.Regime,
+            tailCondition?.Operator ?? "<=", tailCondition?.Threshold ?? VolatilityState.DefaultTail);
 
+        var evaluations = new List<ConditionEvaluation>(conditions.Count);
         foreach (var condition in conditions)
         {
             var (actual, detail) = condition.Name switch
             {
+                DeployConditionNames.LevelPercentileTail => VolatilityState.Tail(dislocation.RegimePercentile, dislocation.RegimeHistory) is { } tail
+                    ? (tail, Invariant($"{dislocation.ReferenceInstrument} {dislocation.MarketObservedIv:0.00} at percentile {dislocation.RegimePercentile:0.000} of {dislocation.RegimeHistory} prior closes ({dislocation.Regime} regime)"))
+                    : (NoHistoryTail, Invariant($"{dislocation.RegimeHistory} prior closes of {dislocation.ReferenceInstrument}; at least {VolatilityState.MinimumHistory} are needed to place the level (recorded as {NoHistoryTail})")),
                 DeployConditionNames.CompositeScore => (Math.Abs(composite.Score), Invariant($"|{composite.Score:+0.0000;-0.0000;0}|")),
                 DeployConditionNames.ContributingSources => (composite.Contributing.Count,
                     composite.Contributing.Count == 0 ? "no category had a confirmed assessment" : string.Join(", ", composite.Contributing.Select(category => category.Category.ToWireName()))),
@@ -61,17 +70,8 @@ internal static class DecisionEvaluator
             evaluations.Add(new ConditionEvaluation(condition.Name, condition.Operator, condition.Threshold, actual, Holds(actual, condition.Operator, condition.Threshold), detail));
         }
 
-        evaluations.Add(new ConditionEvaluation(DeployConditionNames.Cooldown, "==", 0, 0, true,
-            "cooldowns are Milestone B (SRS RSK-001); none can be active in v1"));
-
         var outcome = evaluations.All(evaluation => evaluation.Passed) ? DecisionOutcome.Deploy : DecisionOutcome.Idle;
-        var scenario = dislocation.DislocationValue switch
-        {
-            > 0 => "vol-expansion",
-            < 0 => "vol-compression",
-            _ => "none",
-        };
-        return new DecisionResult(outcome, scenario, evaluations, top, dissenting, Explain(outcome, scenario, aggregate, evaluations, top, dissenting));
+        return new DecisionResult(outcome, state, evaluations, top, dissenting, Explain(outcome, state, aggregate, evaluations, top, dissenting));
     }
 
     public static bool Holds(double actual, string @operator, double threshold) => @operator switch
@@ -108,7 +108,7 @@ internal static class DecisionEvaluator
 
     private static string Explain(
         DecisionOutcome outcome,
-        string scenario,
+        string state,
         AggregateRecord aggregate,
         IReadOnlyList<ConditionEvaluation> evaluations,
         IReadOnlyList<DecisionSignal> top,
@@ -117,10 +117,15 @@ internal static class DecisionEvaluator
         var composite = aggregate.Composite;
         var dislocation = aggregate.Dislocation;
         var head = outcome == DecisionOutcome.Deploy
-            ? $"DEPLOY, {scenario} scenario"
+            ? Invariant($"DEPLOY, {state} state: all {evaluations.Count} conditions held")
             : "IDLE: " + string.Join("; ", evaluations.Where(evaluation => !evaluation.Passed).Select(Failed));
+        var level = (dislocation.RegimePercentile, dislocation.RegimeHistory >= VolatilityState.MinimumHistory) switch
+        {
+            ({ } percentile, true) => Invariant($"{dislocation.ReferenceInstrument} {dislocation.MarketObservedIv:0.00} at percentile {percentile:0.000} of {dislocation.RegimeHistory} prior closes ({dislocation.Regime} regime)"),
+            _ => Invariant($"{dislocation.ReferenceInstrument} {dislocation.MarketObservedIv:0.00} with {dislocation.RegimeHistory} prior closes, too few to place the level"),
+        };
         var body = Invariant(
-            $"Composite {composite.Score:+0.0000;-0.0000;0} ({(composite.Contributing.Count == 0 ? "no contributing category" : string.Join(", ", composite.Contributing.Select(category => category.Category.ToWireName())))}); dislocation {dislocation.DislocationValue:+0.00;-0.00;0} against {dislocation.Threshold:0.00} on {dislocation.ReferenceInstrument} {dislocation.MarketObservedIv:0.00}.");
+            $"Composite {composite.Score:+0.0000;-0.0000;0} ({(composite.Contributing.Count == 0 ? "no contributing category" : string.Join(", ", composite.Contributing.Select(category => category.Category.ToWireName())))}); {level}. The state describes where the level sits, not where it goes.");
         var signals = top.Count == 0
             ? " No contributing signal."
             : " Top: " + string.Join(", ", top.Select(Describe)) + ".";

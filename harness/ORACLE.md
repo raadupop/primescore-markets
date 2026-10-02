@@ -48,7 +48,7 @@ Python 3.12 with
 10 SDK ([`global.json`](../apps/engine/global.json)); Git and Bash. The engine
 acceptance suite starts the classifier with the gate's interpreter
 (`PRIMESCORE_PYTHON`); engine settings and secrets in the environment
-(`Engine__*`, `Auth__*`, `Fred__*`, `Classifier__*`, `Registry__*`) are removed
+(`Engine__*`, `Auth__*`, `Fred__*`, `Sources__*`, `Classifier__*`, `Registry__*`) are removed
 before any stage runs. Claude adapters and the steering regression tests additionally require
 `jq`. CI exercises Ubuntu and Windows. On Windows use Git Bash; the Windows
 system `bash.exe` may launch WSL.

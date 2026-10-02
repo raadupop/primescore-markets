@@ -75,7 +75,7 @@ def test_engine_stage_runs_last_through_the_engine_script(monkeypatch) -> None:
 
 
 def test_engine_settings_and_secrets_do_not_reach_the_gate(monkeypatch) -> None:
-    for name in ("Fred__ApiKey", "Auth__ApiTokens__0__Sha256", "Engine__DatabasePath"):
+    for name in ("Fred__ApiKey", "Sources__Cboe__Enabled", "Auth__ApiTokens__0__Sha256", "Engine__DatabasePath"):
         monkeypatch.setenv(name, "operator-value")
     env = checks.check_environment()
     assert not any(key.lower().startswith(checks.ENGINE_SETTING_PREFIXES) for key in env)

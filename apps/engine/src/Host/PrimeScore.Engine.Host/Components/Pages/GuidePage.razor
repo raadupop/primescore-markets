@@ -2,7 +2,7 @@
 <PageTitle>How it works · PrimeScore Markets</PageTitle>
 <div class="page-head"><div><div class="eyebrow">PrimeScore AI / Markets</div>
     <h1>Follow the evidence.</h1>
-    <p>From a recorded observation to a research result. Select a stage to inspect the data behind it.</p>
+    <p>From a recorded observation to a measured outcome. Select a stage to inspect the data behind it.</p>
 </div></div>
 <WorkflowGuide Current="" />
 <div class="guide-stages">
@@ -14,25 +14,31 @@
     </div></section>
     <section class="panel guide-stage"><span class="step-number">02</span><div>
         <div class="kicker">Observation → classified signal</div><h2>How unusual is it?</h2>
-        <p>The classifier compares each observation with earlier history. Severity is signed from −1 to +1. Statistical confidence describes that classification; it is not the probability of a profitable trade.</p>
+        <p>The classifier ranks each observation against its own history. Severity is signed from −1 to +1 and says where the level sits, not where it goes. Statistical confidence describes that ranking; it is not the probability of a profitable trade.</p>
         <p class="example">Signal contribution = severity × confidence. Supporting signals are combined by market; missing categories contribute no invented evidence.</p>
         <a class="button button-ghost" href="tape">Inspect signal analysis →</a>
     </div></section>
     <section class="panel guide-stage"><span class="step-number">03</span><div>
-        <div class="kicker">Combined signals → scenario</div><h2>How does the model compare with the market?</h2>
-        <p>The combined signal score is applied to observed volatility using a configured sensitivity. The result is a model scenario. The gap is the scenario minus the observed level, in index points.</p>
-        <p class="example">Illustration: 20 observed × (1 + 0.5 score × 0.5 sensitivity) = 25 scenario; the gap is +5 points. Sensitivity is an assumption, not a fitted forecast.</p>
-        <a class="button button-ghost" href="./">Compare markets →</a>
+        <div class="kicker">Level → state</div><h2>Where does the level sit in its own history?</h2>
+        <p>The reference index close is placed at a percentile of its previous five years of closes. The state is Compressed, Normal or Stretched, and Extreme when the level is within the configured tail at either end.</p>
+        <p class="example">Illustration: VIX 37.32 at or above 1,259 of its 1,260 prior closes (the 99.9th percentile) is an extremely stretched state. In this record stretched levels have tended to revert; that is in sample, priced in VX futures, and says nothing about when or by how much.</p>
+        <a class="button button-ghost" href="./">See the current state →</a>
     </div></section>
     <section class="panel guide-stage"><span class="step-number">04</span><div>
-        <div class="kicker">Scenario → condition checks</div><h2>Does this observation pass the research rules?</h2>
-        <p>The engine checks the gap, signal strength, source coverage, confidence and freshness. “Conditions met” means every configured check passed. “Wait” means at least one failed.</p>
-        <p class="example">The recorded API code DEPLOY means conditions met. No order is sent, no position is opened, and no option contract, strike, expiry or size is selected.</p>
+        <div class="kicker">State → condition checks</div><h2>Does this observation pass the research rules?</h2>
+        <p>The engine checks the level's tail distance, source coverage, confidence and freshness. “All checks passed” means every configured check passed, so the level was in the extreme tail. “Checks not met” means at least one failed.</p>
+        <p class="example">The recorded API code DEPLOY means the checks passed. It asserts no direction. No order is sent, no position is opened, and no option contract, strike, expiry or size is selected.</p>
         <a class="button button-ghost" href="decisions">Review conditions →</a>
+    </div></section>
+    <section class="panel guide-stage"><span class="step-number">05</span><div>
+        <div class="kicker">Decision → outcome</div><h2>What happened next?</h2>
+        <p>For every recorded decision the engine measures the reference index change 1, 5, 10 and 21 trading days later, for extreme-state days against all days and per state. Figures come straight from the ledger and are published whatever they show.</p>
+        <p class="example">The first outcome test (27 September 2026) found the earlier directional reading right 34 to 41 percent of the time on signalled days; that reading was retired (ADR-0008).</p>
+        <a class="button button-ghost" href="outcomes">Read the outcomes record →</a>
     </div></section>
 </div>
 <section class="panel"><div class="panel-head"><div><div class="kicker">Research feedback</div><h2>Test the rules against history</h2></div><a class="button button-ghost" href="replay">Historical replay →</a></div>
-    <p>Replay recalculates scenarios using recorded inputs and temporary settings. Validation compares results with ten event targets. A target match measures rule behavior; returns and trading performance are not measured.</p>
+    <p>Replay recalculates states and decisions using recorded inputs and temporary settings. The event list checks whether the rules fire on known volatility spikes; because those dates were chosen after the spikes, matching them shows recognition of the past, not prediction. Returns and trading performance are not measured.</p>
 </section>
 <section class="panel"><h2>Where does this run?</h2>
     <p>PrimeScore AI is the brand. PrimeScore Markets is this research application. The brand and product websites are separate from this operator dashboard; this session runs on the engine host shown in your browser address. There is no broker connection or execution service.</p>

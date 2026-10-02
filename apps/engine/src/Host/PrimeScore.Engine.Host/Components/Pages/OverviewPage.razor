@@ -12,13 +12,13 @@
 @inject IQueryHandler<GetComposite, CompositeView?> CompositeQuery
 @inject IQueryHandler<GetDislocation, DislocationView?> DislocationQuery
 @inject IQueryHandler<GetDecisions, IReadOnlyList<DecisionView>> DecisionQuery
-@inject IQueryHandler<GetValidationReport, IReadOnlyList<ValidationEventResult>> ReportQuery
+@inject IQueryHandler<GetForwardOutcomes, ForwardOutcomesReport?> OutcomesQuery
 @inject IClock Clock
 
 <PageTitle>Market overview · PrimeScore Markets</PageTitle>
 <div class="page-head">
     <div><div class="eyebrow">Research workspace</div><h1>Understand the market. Trace the signal.</h1>
-        <p>Compare observed volatility with the model scenario, then inspect the evidence and conditions behind it.</p></div>
+        <p>Place today's reference level in its own history, inspect the evidence and conditions behind the result, then read what happened after similar states.</p></div>
     <a class="button button-ghost" href="guide">How it works →</a>
 </div>
 <WorkflowGuide />
@@ -43,28 +43,29 @@ else
                     @onclick="() => _selected = item.Context.Name">
                 <span class="kicker">@item.Context.ReferenceInstrument reference index</span>
                 <strong>@Fmt.Context(item.Context.Name)</strong>
-                <span>@(item.Decision is { } decision ? DecisionCopy.Outcome(decision.Outcome) : "Awaiting analysis")</span>
+                <span>@(item.Decision is { } decision ? DecisionCopy.Scenario(decision.Scenario) : "Awaiting analysis")</span>
             </button>
         }
     </div>
     var card = _cards.FirstOrDefault(item => item.Context.Name == _selected) ?? _cards[0];
     @if (card.Decision is { } analysis)
     {
+        var history = card.Dislocation is { } matching && matching.DislocationId == analysis.DislocationId ? matching.RegimeHistory : (int?)null;
         <section class="panel market-analysis" aria-label="Latest completed market analysis">
             <div class="panel-head">
                 <div><div class="kicker">Latest completed analysis · @Fmt.Instrument(analysis.ReferenceInstrument)</div>
                     <h2>@DecisionCopy.Scenario(analysis.Scenario)</h2>
                     <p class="analysis-date">As of @Fmt.Utc(analysis.AsOf) · @Fmt.Age(analysis.AsOf, Clock.UtcNow)</p></div>
-                <DecisionBadge Outcome="analysis.Outcome" />
+                <DecisionBadge Outcome="analysis.Outcome" Scenario="@analysis.Scenario" />
             </div>
             <div class="scenario-comparison">
                 <div class="scenario-value"><span class="kicker">Observed market level</span><strong>@Fmt.Number(analysis.MarketObservedIv)</strong><span>@analysis.ReferenceInstrument index points</span></div>
                 <div class="comparison-arrow" aria-hidden="true">→</div>
-                <div class="scenario-value"><span class="kicker">Model scenario</span><strong>@Fmt.Number(analysis.SignalImpliedIv)</strong><span>Under configured assumptions</span></div>
-                <div class="scenario-gap"><span class="kicker">Scenario gap</span><strong>@Fmt.Signed(analysis.DislocationValue, 2) <small>pts</small></strong>
-                    <span>Review threshold: ±@Fmt.Number(analysis.DislocationThreshold) pts</span></div>
+                <div class="scenario-value"><span class="kicker">Place in its own history</span><strong>@(analysis.LevelPercentile is { } percentile ? Fmt.Ordinal(percentile * 100) : "—")</strong><span>@DecisionCopy.Percentile(analysis.LevelPercentile, analysis.Scenario, history)</span></div>
+                <div class="scenario-gap"><span class="kicker">Volatility state</span><strong>@DecisionCopy.Scenario(analysis.Scenario)</strong>
+                    <span>Extreme tail: @(analysis.Conditions.FirstOrDefault(condition => condition.Name == DeployConditionNames.LevelPercentileTail) is { } tail ? DecisionCopy.ConditionRequirement(tail) : "not configured")</span></div>
             </div>
-            <p class="scenario-explanation">The model scenario is @Fmt.Number(Math.Abs(analysis.DislocationValue)) points @(analysis.DislocationValue >= 0 ? "above" : "below") the observed level. It applies a sensitivity multiplier to the combined signal score; it is not a predicted price or an option quote.</p>
+            <p class="scenario-explanation">@DecisionCopy.StateMeaning(analysis.Scenario) The state is a rank of the level in its own history; it is not a predicted level or an option quote.</p>
             <div class="analysis-summary">
                 <div><span class="kicker">Research result</span><h3>@DecisionCopy.Summary(analysis)</h3>
                     <p>@analysis.Conditions.Count(condition => condition.Passed) of @analysis.Conditions.Count checks passed · combined signal score @Fmt.Signed(analysis.CompositeScore, 2)</p></div>
@@ -77,7 +78,7 @@ else
             <div class="degraded">Newer source data is available (@Fmt.Utc(newer.ObservedAt)). This completed analysis uses the earlier inputs shown above.</div>
         }
         <div class="grid grid-2">
-            <section class="panel"><div class="panel-head"><div><div class="kicker">Evidence</div><h2>What supports this scenario?</h2></div></div>
+            <section class="panel"><div class="panel-head"><div><div class="kicker">Evidence</div><h2>What supports this state?</h2></div></div>
                 @if (analysis.TopContributing.Count == 0)
                 { <p>No confirmed supporting signals were recorded for this analysis.</p> }
                 else
@@ -105,15 +106,15 @@ else
                     { <details class="technical-details"><summary>Why some evidence is missing</summary>@foreach (var absent in composite.Absent) { <p><strong>@Fmt.Category(absent.Category):</strong> @absent.Reason</p> }</details> }
                 }
                 else { <p>Coverage for this snapshot is listed with its recorded conditions.</p> }
-                <p class="panel-note">Configuration v@(analysis.ConfigVersion.Value). Scenario sensitivity has not been established as a predictive model. <a href="configuration">Review assumptions</a>.</p>
+                <p class="panel-note">Configuration v@(analysis.ConfigVersion.Value). The state is a rank of the reference level; no predictive model has been established. <a href="configuration">Review assumptions</a>.</p>
                 <div class="action-bar"><a href="history?context=@card.Context.Name">Explore this market over time →</a></div>
             </section>
         </div>
         @if (card.Dislocation is { } calculation && calculation.DislocationId == analysis.DislocationId)
         {
             <details class="panel technical-details"><summary>How these numbers were calculated</summary>
-                <p>Observed @Fmt.Number(calculation.MarketObservedIv) × (1 + signal score @Fmt.Signed(calculation.CompositeScore, 4) × sensitivity @Fmt.Number(calculation.SensitivityFactor)) = scenario @Fmt.Number(calculation.SignalImpliedIv).</p>
-                <p>Scenario − observed = @Fmt.Signed(calculation.DislocationValue, 2) index points. Sensitivity uses the @Fmt.Humanize(calculation.Regime) regime.</p>
+                <p>Level percentile: share of the previous @Fmt.Count(calculation.RegimeHistory) @calculation.ReferenceInstrument closes at or below @Fmt.Number(calculation.MarketObservedIv) = @(calculation.RegimePercentile is { } p ? Fmt.Number(p, 4) : "—") (@Fmt.Humanize(calculation.Regime) regime).</p>
+                <p>Legacy scenario arithmetic, recorded but not used by the decision (ADR-0008): observed @Fmt.Number(calculation.MarketObservedIv) × (1 + signal score @Fmt.Signed(calculation.CompositeScore, 4) × sensitivity @Fmt.Number(calculation.SensitivityFactor)) = @Fmt.Number(calculation.SignalImpliedIv); gap @Fmt.Signed(calculation.DislocationValue, 2) index points. The gap is the level times a rank of the level and carries no independent information.</p>
                 <p>Reference observation: @Fmt.Utc(calculation.IvObservedAt). <a href="ledger/@calculation.LedgerSequence">Open calculation audit record →</a></p>
             </details>
         }
@@ -127,18 +128,21 @@ else
             <div class="actions"><a class="button button-primary" href="sources">Check data sources →</a><a class="button button-ghost" href="tape">Inspect signals</a></div>
         </section>
     }
-    <section class="research-note"><div><strong>Historical validation</strong>
-        @if (_report.All(row => row.ReplayId is null))
-        { <p>No baseline evaluation is saved yet. Use historical replay to check the event targets.</p> }
+    <section class="research-note"><div><strong>Outcomes record</strong>
+        @if (card.Outcomes is { DeployDays: > 0 } outcomes && outcomes.Horizons.FirstOrDefault(row => row.TradingDays == 21) is { DeployCount: > 0 } month)
+        {
+            <p>@Fmt.Count(month.DeployCount) of @Fmt.Count(outcomes.DeployDays) extreme-state days have a 21-day outcome; the @card.Context.ReferenceInstrument had moved back toward its median on @Fmt.Percent(month.DeployRevertShare) of them. Index changes in sample, not trading returns@(card.Context.ReferenceInstrument == "VIX" ? ": the VIX futures test found this reversion priced." : "; no futures test covers this market.")</p>
+        }
+        else if (card.Outcomes is { Days: > 0 } recorded)
+        { <p>@Fmt.Count(recorded.Days) decision days measured, @Fmt.Count(recorded.LegacyDays) of them under the refuted gate. No extreme state under the current gate has a 21-day outcome yet; nothing is estimated.</p> }
         else
-        { <p>@_report.Count(row => row.Verdict == "Matches target") of @_report.Count event targets matched in the stored report; @_report.Count(row => row.Verdict is "Not evaluated" or "Not evaluable") missing evaluation or data. These are rule checks, not measured trading returns.</p> }
-    </div><a class="button button-ghost" href="replay">Review validation →</a></section>
+        { <p>No decision has a later reference close yet. The record fills in as observations arrive; nothing is estimated.</p> }
+    </div><a class="button button-ghost" href="outcomes?context=@card.Context.Name">Read the record →</a></section>
 }
 
 @code {
-    private sealed record Card(ContextSettings Context, SignalView? Latest, CompositeView? Composite, DislocationView? Dislocation, DecisionView? Decision);
+    private sealed record Card(ContextSettings Context, SignalView? Latest, CompositeView? Composite, DislocationView? Dislocation, DecisionView? Decision, ForwardOutcomesReport? Outcomes);
     private List<Card>? _cards;
-    private IReadOnlyList<ValidationEventResult> _report = [];
     private string _selected = "equity";
     private string? _error;
     [SupplyParameterFromQuery(Name = "context")] public string? ContextQuery { get; set; }
@@ -156,10 +160,10 @@ else
                 var composite = await CompositeQuery.HandleAsync(new GetComposite(context.Name), CancellationToken.None);
                 var dislocation = await DislocationQuery.HandleAsync(new GetDislocation(context.Name), CancellationToken.None);
                 var decision = (await DecisionQuery.HandleAsync(new GetDecisions(Context: context.Name, Take: 1), CancellationToken.None)).FirstOrDefault();
-                cards.Add(new Card(context, latest, composite, dislocation, decision));
+                var outcomes = await OutcomesQuery.HandleAsync(new GetForwardOutcomes(context.Name), CancellationToken.None);
+                cards.Add(new Card(context, latest, composite, dislocation, decision, outcomes));
             }
             _cards = cards;
-            _report = await ReportQuery.HandleAsync(new GetValidationReport(), CancellationToken.None);
         }
         catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException or IOException)
         { _error = exception.Message; }

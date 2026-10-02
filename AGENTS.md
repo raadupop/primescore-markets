@@ -1,6 +1,6 @@
 # PrimeScore Markets
 
-PrimeScore Markets is a product of PrimeScore AI. This repository owns its .NET engine, login and dashboard, Python classifier, product presentation site and validation harness; see [README.md](README.md) for implemented scope. Active development stays in `D:\Work\invex`; `D:\Work\primescore` owns the brand site and includes this repository at `products/markets` as a Git submodule.
+PrimeScore Markets is a product of PrimeScore AI. This repository owns its .NET engine, login and dashboard, Python classifier, product presentation site and validation harness; see [README.md](README.md) for implemented scope. Active development stays in `D:\Work\primescore-markets`; `D:\Work\primescore` owns the brand site and includes this repository at `products/markets` as a Git submodule.
 
 The architecture research programme formerly called DeltaFeed is deferred. Preserve its design and existing product checks; do not start architecture iterations or expand the generic harness without an explicit research task. There are no comparative results.
 
@@ -30,6 +30,7 @@ This rule overrides verbosity defaults in any other doc or skill. When in doubt,
 | --- | --- |
 | [SRS](doc/srs/PrimeScore-SRS.md) | Requirements — what the system must do |
 | [PrimeScore-API-v1.yaml](doc/PrimeScore-API-v1.yaml) | External interface contract — message content, format, schemas |
+| [doc/slices/](doc/slices/) | Build order and one spec per demoable slice: SRS IDs, design links, UI tests and click-through. Holds no requirement or decision of its own. |
 | [doc/adr/](doc/adr/) | Project-wide architectural decisions. Start with [ADR-0001](doc/adr/0001-agent-harness-architecture.md) — the agent harness architecture (five layers — context, cognitive tools, permissions, feedback oracles, decision durability). |
 | AGENTS.md (per component) | Agent context. `CLAUDE.md` exists at each level as a pointer stub so Claude Code's auto-discovery still resolves. |
 | Per-component `doc/adr/` and `HARNESS.md` | Component-specific architectural decisions and the regenerable per-component harness inventory. |
@@ -68,84 +69,75 @@ Lives in `apps/classification/` with its own `AGENTS.md`. The Markets engine cal
 <claude-mem-context>
 # Memory Context
 
-# [invex] recent context, 2026-09-27 12:45am GMT+3
+# [invex] recent context, 2026-09-27 4:27pm GMT+3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (24,276t read) | 379,676t work | 94% savings
+Stats: 50 obs (33,251t read) | 446,686t work | 93% savings
 
-### Sep 26, 2026
-12664 8:27p ✅ Final report optimized and verified; decision brief trimmed; deliverables finalized
-12665 8:28p ✅ Decision brief optimized through targeted editing; final version 754 words (7% reduction)
-12666 " ✅ Decision brief final-passed; 720 words, within 3% of 700-word target
-12667 " ✅ Decision brief finalized at 704 words (0.6% over 700-word target)
-12668 8:29p ✅ Decision brief achieved 700-word target (701 words, 0.1% overage)
-12669 11:44p 🔵 Researched product umbrella architecture patterns
-12670 11:46p 🔵 Examined existing agent harness architecture and project implementation status
-12671 11:47p 🔵 Harness design aligns with Anthropic's published long-running agent patterns
-12672 " 🔵 ADR-0003 engine architecture implements Anthropic's published harness design patterns
 ### Sep 27, 2026
-12673 12:04a 🔵 Systematic market screening of 12 premium finance product names
-12674 12:05a 🔵 Competitive landscape analysis of 8 candidate fintech product names
-12675 12:06a 🔵 Screening of second batch: 10 additional premium finance product name candidates
-12676 12:07a 🔵 Competitive landscape deep-dive: 7 second-batch candidate names in fintech ecosystem
-12677 12:08a 🔵 Certitude name carries significant financial services brand presence globally
-12679 12:09a 🔵 Screening of third batch: 6 additional premium finance product name candidates
-12680 " 🔵 Third-batch competitive landscape: Quotient has established fintech competitor
-12681 " 🔵 Git Submodules: Architecture and Usage Model
-S3132 User rejected "Loupe" as insufficiently premium for finance product name; systematic screening and selection of replacement name from premium-word candidates (Sep 27, 12:10 AM)
-12682 12:11a 🔵 Completed systematic product naming research: 28+ premium words screened, Aplomb recommended
-S3133 Understanding Git submodules and how changes committed in INVEX synchronize with the primescore markets repository (Sep 27, 12:12 AM)
-S3134 Resolve naming strategy challenge: "What connects to PrimeScore?" — determine whether to position a household finance product under the PrimeScore umbrella or as a standalone brand (Sep 27, 12:19 AM)
-12686 12:20a 🔵 PrimeScore product variants have no public web presence
-12687 " 🔵 Cadence Money identified as privacy-first personal finance app
-12688 " 🔵 Multiple Atlas fintech products identified in market
-12689 12:21a 🔵 PrimeScore Loan Scheme identified as Peoples Bank Sri Lanka product
-S3135 Decision checkpoint: Is the six-architecture measurement study still relevant, or should focus shift to product strategy and customer validation? (Sep 27, 12:22 AM)
-12690 12:22a 🔵 Investigated infrastructure noise and harness design relevance to measurement strategy
-12691 12:23a 🔵 Anthropic research identifies infrastructure noise as first-class experimental variable; harness complexity should match model capability
-S3136 Strategic evaluation of PrimeScore.AI as domain and product umbrella; clarification on forecasting expectations for PrimeScore Cashflow (Sep 27, 12:23 AM)
-S3137 User requested strategic guidance to move forward with PrimeScore Markets v1 development; Claude provided a six-step action plan with clear sequencing and done criteria. (Sep 27, 12:27 AM)
-12692 12:27a 🔵 PrimeScore Markets v1 Project State and Build Brief Review
-S3138 Assess harness framework relevance and determine repository organization strategy for PrimeScore AI and Markets development (Sep 27, 12:28 AM)
-12693 12:34a 🔵 Repository restructuring: brand and Markets sites consolidated in invex root
-S3139 Assess harness framework relevance for INVEX R&D programme and establish repository organization strategy for Markets product development across PrimeScore and INVEX (Sep 27, 12:35 AM)
-12694 12:35a 🔵 Git subtree import and repository consolidation architecture
-12695 " 🔵 Markets harness steering architecture with retry budgets and state management
-S3140 Implement repository separation infrastructure: remove brand site from INVEX, create umbrella launchers in PrimeScore, establish cross-repository integration patterns (Sep 27, 12:36 AM)
-12696 12:36a 🔵 Backup script failure: invalid git diff --output syntax
-12697 " ✅ Separate brand site from Markets infrastructure in INVEX; retire port 8090
-12699 " 🔵 Confirmed: PrimeScore repository currently has no Markets-specific code or launchers
-12698 " 🔵 Backup successful; Git line-ending configuration mismatch across working tree
-12700 " 🔵 Development environment fully configured with PostToolUse and Stop hooks wired
-12701 12:37a ✅ Brand site and Wrangler configuration migrated from invex to primescore
-12702 12:38a 🟣 Add umbrella repository launchers and navigation tests for brand + Markets integration
-12704 " ✅ Documentation restructured: Markets product scope clarified, architecture study deferred
-12703 " 🔵 Navigation script generates dashboard URL without /login path; tests fail with assertion mismatch
-12705 " 🔵 Root cause found: navigation.js generates dashboard URL without /login path suffix
-12706 12:39a 🔵 Tool chain complete; umbrella launcher orchestrates brand and Markets together
-12708 " 🔵 Website launcher integration test passed: both repositories serve content and shut down cleanly
-12709 12:40a 🔵 Code quality and syntax validation passed for repository infrastructure changes
-12710 " 🔵 Patch application failed: duplicate file operation validation
-12711 " ✅ Umbrella repository (primescore) configured as Git submodule wrapper for Markets
-12712 12:42a 🔵 Migration reconciliation complete: invex Markets product and primescore umbrella both configured
-12713 12:43a 🔵 Path normalization fails on relative segments within product directories
-12714 12:44a ✅ CI workflow extended with Node.js testing; trailing whitespace normalized
-12715 " 🔵 Path normalization refactored to use realpath but boundary checking incomplete
-12718 " ✅ Markets hook delegator implementation with comprehensive path normalization and test coverage
-12716 " 🔵 Markets hook checks for submodule initialization via .git directory
-12717 " 🔴 Markets hook path normalization fixed by reordering cygpath conversions
-S3141 Fix path delegation between invex workspace and primescore product; ensure markets product references and path handling work correctly across Windows/Git Bash environments (Sep 27, 12:44 AM)
-**Investigated**: Markets hook path normalization logic; relative path segment handling; Windows path format conversions (cygpath); product scope boundary validation; submodule initialization checks
+S3164 Define social media account strategy for PrimeScore AI and its products across platforms, balancing resource constraints with audience presence (Sep 27, 2:17 AM)
+S3167 Repository structure and cross-project references: understanding how to organize the markets product alongside PrimeScore, and how PrimeScore should reference the markets product repo (Sep 27, 2:19 AM)
+12759 3:08p 🔵 Repository inventory: M0-M6 milestones implemented with modular engine architecture
+S3168 Inventory current state of PrimeScore products, platforms and naming strategy; evaluate ChatGPT brand analysis against prior research and decision record (Sep 27, 3:09 PM)
+12760 3:09p 🔵 Engine modules follow 7-file consistent architecture; demo app Python-based; separate PrimeScore umbrella project
+12761 " 🔵 V1 scope complete (M0-M6); positions/exits/risk deferred to M7+ pending options pricing data; geopolitical/LLM classifier out of scope
+S3169 Technical documentation prose review for PrimeScore Markets README.md diff using chief-architect-grade discipline (Sep 27, 3:09 PM)
+12762 3:16p 🔵 Repository architecture: Umbrella vs. product separation with Git submodule integration
+12763 3:17p ⚖️ PrimeScore product portfolio naming finalized with trademark evidence and legal framework
+12764 " 🔵 Stop hook steering loop implements Case A/Case B validation protocol from ADR-0001
+12765 3:18p ✅ Brand trademark research and decision documents migrated from invex to primescore umbrella
+12766 " ✅ Documentation updated to establish clear navigation and ownership for brand vs. product work
+12767 " 🔵 Documentation changes validated; brand decision record discoverable and cross-linked
+12768 3:19p 🔵 Pre-commit hook activated on README.md during brand research migration commit
+S3170 How to organize and synchronize a prompt/product (Markets) that runs on D:\Work\invex with umbrella brand decisions in D:\Work\primescore; solution to keep them coordinated without duplication. (Sep 27, 3:19 PM)
+12769 " 🔵 Brand research documents staged in primescore; invex pre-commit hook signaled to complete
+12770 3:20p 🔵 Invex pre-commit hook still active; AGENTS.md has uncommitted working-tree changes
+12771 " 🔵 Pre-commit hook session blocked; repeated EOF signals not completing hook
+12772 " 🔵 Pre-commit hook timed out; invex commit succeeded with fail-safe allow
+12773 " ✅ Cross-repository synchronization completed; primescore submodule pinned to brand research migration
+12774 3:21p 🔵 Architecture migration validated; single source of truth established for brand research
+S3171 Determine appropriate repository name for invex codebase following integration as PrimeScore Markets product into primescore umbrella (Sep 27, 3:21 PM)
+S3172 Rename PrimeScore Markets repository from primescore-ai to primescore-markets and update all workspace references from D:\Work\invex to D:\Work\primescore-markets (Sep 27, 3:39 PM)
+12777 3:41p 🔵 PrimeScore Markets architecture and single-operator constraints documented
+12778 3:43p 🔵 PrimeScore Markets validation baseline: four failing tests and design gaps documented
+12779 " 🔵 PrimeScore Markets product positioning: research-only volatility intelligence with local operator access
+12780 " 🔵 Shortest path to end-to-end demonstration: 22–31 hours estimated, with classifier and CI repairs blocking dashboard work
+12783 " 🔵 .NET engine modular architecture with eight specialized Claude agent skills and three validation hooks
+12781 " 🔵 Primescore-AI host process not running
+12782 " 🔵 Primescore-AI repository URL distribution across codebase
+12785 " 🔵 PrimeScore Markets v1 build brief defines product scope, honesty rules and architecture decision
+12784 " ✅ Repository and working directory renamed for Markets product separation
+12787 3:44p ✅ Completed path migration and umbrella repository submodule synchronization
+12786 " 🔵 Existing "How it works" guide page and WorkflowGuide component document four-stage research workflow for customers
+12788 " 🔵 Test fixtures reference outdated primescore-ai repository URL
+12789 3:45p ✅ Navigation test fixture updated to reference primescore-markets repository
+12790 3:46p 🔵 Test fixture setup fails due to missing scipy dependency
+12791 3:48p 🔵 Repository check suite hangs or exceeds 120-second timeout
+12792 " 🔵 Repository check suite completed successfully despite initial timeout appearance
+S3173 Rename project from INVEX to primescore-markets; update all references across umbrella and active development repositories; resolve brand/trademark investigation and prepare for directory/repository rename (Sep 27, 3:49 PM)
+12793 3:49p 🔵 PrimeScore Markets platform architecture and requirements landscape
+12794 3:50p 🔵 Engine validation results against ten historical market events
+12795 3:53p 🔵 Repository structure confirms INVEX-to-PrimeScore rebranding timeline and submodule setup
+12797 3:54p ⚖️ Customer learning module architecture: Four explicit domain-literacy levels with honesty constraints tied to product scope
+12796 " 🔵 Brand decision document updated with 2026-09-27 edits; HARNESS_PYTHON environment variable unset
+12798 " 🔵 No Cloudflare Pages deployment configured; CI/CD limited to Python 3.12 checks on two platforms
+12799 3:55p 🔵 Existing in-product teaching surfaces, constraints and gaps for customer education
+12800 3:56p 🔵 Directory rename D:\Work\invex → D:\Work\primescore-markets blocked by active process lock
+12801 " 🔵 Markets migration subtree→submodule completed 2026-09-27; validation passed; pre-commit review timed out and needs rerun
+12802 3:57p 🔵 11 hardcoded GitHub repository references to raadupop/primescore-ai across umbrella; mostly documentation and footer/tests
+12803 " 🔵 Concept inventory: what exists in the codebase, what is missing, and what contradicts between sources
+12804 3:58p ✅ Updated umbrella repository for directory rename D:\Work\invex → D:\Work\primescore-markets; all tests pass
+12805 " 🔵 Navigation test suites passing in both umbrella and INVEX after URL updates
+S3174 Create a comprehensive prompt for designing an interactive, customizable learning module for the markets product that educates customers from beginner to advanced levels. (Sep 27, 3:59 PM)
+12806 4:02p ✅ Markets Learning Module Brief Created
+12807 4:08p 🔵 PrimeScore Engine V1 Requirements and Known Limitations Reviewed
+12808 4:10p ⚖️ PrimeScore Markets v2 Product Brief: Transform Research to Paid Offering
+12809 4:11p ✅ Learning Module Brief Redesigned for v2 Paid Product Onboarding
+S3175 Transform PrimeScore Markets from research workspace to paid product: create product and learning module briefs with customer value proposition, five-milestone roadmap, and onboarding strategy (Sep 27, 4:12 PM)
+12810 4:27p ⚖️ Product strategy for PrimeScore Markets: three-tier SaaS with phased rollout
 
-**Learned**: Path normalization requires realpath -m to resolve ".." components properly; cygpath format conversions must occur before boundary checks to ensure path format consistency; markets hook includes safety check for missing .git submodule before delegating operations; Windows vs Unix path format conversions need careful ordering to avoid JSON decode errors
-
-**Completed**: Added 6 regression tests to test_markets_hook.py covering absolute paths, relative segments, boundary escaping, product-relative paths, Stop commands, and uninitialized products; refactored .claude/hooks/markets.sh to use realpath -m for path normalization; fixed cygpath conversion ordering; all 6 tests passing with exit code 0
-
-**Next Steps**: Deploy fixed markets hook; validate integration with invex; confirm path delegation working end-to-end between workspaces
-
-
-Access 380k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 447k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

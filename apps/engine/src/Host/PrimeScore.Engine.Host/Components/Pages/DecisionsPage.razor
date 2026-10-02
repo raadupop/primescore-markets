@@ -11,7 +11,7 @@
     <div>
         <div class="eyebrow">Research · Step 4</div>
         <h1>Decision journal</h1>
-        <p>Which market scenarios met the configured checks, and why. Open a record to see its observations, thresholds and analysis.</p>
+        <p>Which observations placed the reference level in an extreme state, and why. Open a record to see its observations, thresholds and analysis.</p>
     </div>
 </div>
 
@@ -19,8 +19,9 @@
 
 <div class="callout">
     <strong>These are recorded research decisions.</strong>
-    “Conditions met” means the checks passed at the observation time. No order was sent, no position was opened,
-    and no tradable contract, size or trading venue was selected. VIX and OVX are reference indices for the analysis.
+    “All checks passed” means the level sat in the extreme tail of its history and the evidence was fresh at the observation
+    time. It asserts no direction. Records marked “legacy gate” came from the refuted composite gate (ADR-0008). No order was sent, no position was opened, and no tradable contract, size or trading venue
+    was selected. VIX and OVX are reference indices for the analysis.
 </div>
 
 <div class="filters" role="group" aria-label="Decision filters">
@@ -38,8 +39,8 @@
         Outcome
         <select @bind="_outcome" @bind:after="LoadAsync">
             <option value="">All outcomes</option>
-            <option value="Deploy">Conditions met</option>
-            <option value="Idle">Wait</option>
+            <option value="Deploy">Passed (including legacy gate)</option>
+            <option value="Idle">Not passed (including legacy gate)</option>
         </select>
     </label>
     <label>
@@ -70,15 +71,16 @@ else
 {
     <div class="metric-grid" aria-label="Filtered records">
         <div class="metric"><span>Records shown</span><strong>@Fmt.Count(_decisions.Count)</strong></div>
-        <div class="metric"><span>Conditions met</span><strong>@Fmt.Count(_decisions.Count(decision => decision.Outcome == DecisionOutcome.Deploy))</strong></div>
-        <div class="metric"><span>Waiting for conditions</span><strong>@Fmt.Count(_decisions.Count(decision => decision.Outcome == DecisionOutcome.Idle))</strong></div>
+        <div class="metric"><span>All checks passed</span><strong>@Fmt.Count(_decisions.Count(decision => decision.Outcome == DecisionOutcome.Deploy && !DecisionCopy.IsLegacy(decision.Scenario)))</strong></div>
+        <div class="metric"><span>Legacy gate records</span><strong>@Fmt.Count(_decisions.Count(decision => DecisionCopy.IsLegacy(decision.Scenario)))</strong></div>
+        <div class="metric"><span>Checks not met</span><strong>@Fmt.Count(_decisions.Count(decision => decision.Outcome == DecisionOutcome.Idle && !DecisionCopy.IsLegacy(decision.Scenario)))</strong></div>
     </div>
     <p class="panel-note">Newest observation first. Each new assessment can create a record, so several records may share a date. Counts describe the filtered records shown, not distinct opportunities or trades.</p>
     <div class="table-wrap">
         <table class="data">
             <thead>
                 <tr>
-                    <th>Observed (UTC)</th><th>Market / reference</th><th>Outcome</th><th>Model scenario</th><th>Checks</th><th>Analysis</th>
+                    <th>Observed (UTC)</th><th>Market / reference</th><th>Outcome</th><th>State</th><th>Checks</th><th>Analysis</th>
                 </tr>
             </thead>
             <tbody>
@@ -87,7 +89,7 @@ else
                     <tr>
                         <td class="mono">@Fmt.Utc(decision.AsOf)</td>
                         <td>@Fmt.Context(decision.Context)<div class="panel-note">@decision.ReferenceInstrument</div></td>
-                        <td><DecisionBadge Outcome="decision.Outcome" /></td>
+                        <td><DecisionBadge Outcome="decision.Outcome" Scenario="@decision.Scenario" /></td>
                         <td>@DecisionCopy.Scenario(decision.Scenario)</td>
                         <td>
                             <strong>@decision.Conditions.Count(condition => condition.Passed) of @decision.Conditions.Count passed</strong>

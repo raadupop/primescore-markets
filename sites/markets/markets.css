@@ -22,3 +22,4 @@
 @media (min-width: 901px) { .market-pipeline { grid-template-columns: repeat(4, minmax(0, 1fr)); } .market-pipeline li { padding-inline: 25px; } .market-pipeline p { min-height: 92px; } }
 @media (max-width: 900px) { .workspace-access { grid-template-columns: 1fr; gap: 28px; padding: 30px; margin-bottom: 48px; } .node-output { grid-column: 2; } }
 @media (max-width: 560px) { .workspace-access { padding: 25px; } .action-group { align-items: stretch; width: 100%; } .action-group .button { flex: 1 1 180px; justify-content: space-between; } .workspace-entry { min-width: 0; } }
+#state-value{font-size:19px;letter-spacing:-.02em;line-height:1.9}

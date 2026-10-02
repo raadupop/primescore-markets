@@ -25,8 +25,11 @@ public sealed class RunningEngine : IAsyncDisposable
 
     private readonly string _workDirectory;
     private readonly List<Process> _processes = [];
+    private readonly List<ProcessLog> _logs = [];
     private Process? _classifier;
     private Process? _engine;
+    private IReadOnlyDictionary<string, string> _engineSettings = new Dictionary<string, string>();
+    private int _engineStarts;
     private readonly Dictionary<Role, string> _tokens = new()
     {
         [Role.Read] = RandomToken(),
@@ -42,7 +45,8 @@ public sealed class RunningEngine : IAsyncDisposable
 
     public Uri ClassifierBase { get; private set; } = null!;
 
-    public string EngineLogPath => Path.Combine(_workDirectory, "engine.log");
+    /// <summary>The current engine process's log; a restarted engine writes a numbered log of its own.</summary>
+    public string EngineLogPath => Path.Combine(_workDirectory, _engineStarts <= 1 ? "engine.log" : $"engine-{_engineStarts}.log");
 
     /// <summary>The engine's SQLite file, for storage-level tests (SRS AUD-002).</summary>
     public string DatabasePath => Path.Combine(_workDirectory, "engine.db");
@@ -100,6 +104,11 @@ public sealed class RunningEngine : IAsyncDisposable
             process.Dispose();
         }
 
+        foreach (var log in _logs)
+        {
+            log.Close();
+        }
+
         try
         {
             Directory.Delete(_workDirectory, recursive: true);
@@ -152,6 +161,8 @@ public sealed class RunningEngine : IAsyncDisposable
 
     private async Task StartEngineAsync(IReadOnlyDictionary<string, string> engineSettings)
     {
+        _engineSettings = engineSettings;
+        _engineStarts++;
         var port = FreePort();
         ApiBase = new Uri($"http://127.0.0.1:{port}/api/");
         var start = new ProcessStartInfo("dotnet")
@@ -206,8 +217,19 @@ public sealed class RunningEngine : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Stops the engine and starts it again with the same settings and database, as an operator
+    /// restart would (start-up pulls run again). The API moves to a new port: take clients afterwards.
+    /// </summary>
+    public async Task RestartEngineAsync()
+    {
+        await StopEngineAsync().ConfigureAwait(false);
+        await StartEngineAsync(_engineSettings).ConfigureAwait(false);
+    }
+
     /// <summary>Runs an engine CLI command (e.g. <c>verify-ledger</c>) against this engine's database.</summary>
-    public async Task<(int ExitCode, string Output)> RunEngineCommandAsync(params string[] arguments)
+    /// <returns>The exit code, standard output followed by standard error, and standard output alone (a verb's JSON).</returns>
+    public async Task<(int ExitCode, string Output, string StandardOutput)> RunEngineCommandAsync(params string[] arguments)
     {
         var start = new ProcessStartInfo("dotnet")
         {
@@ -234,7 +256,8 @@ public sealed class RunningEngine : IAsyncDisposable
         var output = process.StandardOutput.ReadToEndAsync();
         var errors = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync(new CancellationTokenSource(TimeSpan.FromSeconds(60)).Token).ConfigureAwait(false);
-        return (process.ExitCode, await output.ConfigureAwait(false) + await errors.ConfigureAwait(false));
+        var standardOutput = await output.ConfigureAwait(false);
+        return (process.ExitCode, standardOutput + await errors.ConfigureAwait(false), standardOutput);
     }
 
     /// <summary>Runs a short Python script with the classifier's interpreter (used to reach the database at storage level).</summary>
@@ -269,6 +292,7 @@ public sealed class RunningEngine : IAsyncDisposable
         key.StartsWith("Engine__", StringComparison.OrdinalIgnoreCase)
         || key.StartsWith("Auth__", StringComparison.OrdinalIgnoreCase)
         || key.StartsWith("Fred__", StringComparison.OrdinalIgnoreCase)
+        || key.StartsWith("Sources__", StringComparison.OrdinalIgnoreCase)
         || key.StartsWith("Consensus__", StringComparison.OrdinalIgnoreCase)
         || key.StartsWith("Classification__", StringComparison.OrdinalIgnoreCase)
         || key.StartsWith("Classifier__", StringComparison.OrdinalIgnoreCase)
@@ -286,12 +310,11 @@ public sealed class RunningEngine : IAsyncDisposable
 
     private Process Launch(ProcessStartInfo start, string logPath)
     {
-        var log = new StreamWriter(logPath, append: false, Encoding.UTF8) { AutoFlush = true };
+        var log = new ProcessLog(logPath);
         var process = new Process { StartInfo = start, EnableRaisingEvents = true };
-        var gate = new object();
-        process.OutputDataReceived += (_, line) => { if (line.Data is not null) { lock (gate) { log.WriteLine(line.Data); } } };
-        process.ErrorDataReceived += (_, line) => { if (line.Data is not null) { lock (gate) { log.WriteLine(line.Data); } } };
-        process.Exited += (_, _) => { lock (gate) { log.Dispose(); } };
+        process.OutputDataReceived += (_, line) => log.Receive(line.Data);
+        process.ErrorDataReceived += (_, line) => log.Receive(line.Data);
+        _logs.Add(log);
         if (!process.Start())
         {
             throw new InvalidOperationException($"Could not start {start.FileName}.");
@@ -365,4 +388,49 @@ public sealed class RunningEngine : IAsyncDisposable
     private static string RandomToken() => Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
 
     private static string Sha256(string token) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    /// <summary>
+    /// A child process's combined output. Closed once both pipes report end of file, not on Exited:
+    /// .NET can deliver the last lines after the exit event, and writing them to a closed writer threw
+    /// on a pool thread, which xUnit reported as a catastrophic failure after every test had passed.
+    /// </summary>
+    private sealed class ProcessLog(string path)
+    {
+        private readonly object _gate = new();
+        private readonly StreamWriter _writer = new(path, append: false, Encoding.UTF8) { AutoFlush = true };
+        private int _openStreams = 2;
+        private bool _closed;
+
+        public void Receive(string? line)
+        {
+            lock (_gate)
+            {
+                if (_closed)
+                {
+                    return;
+                }
+
+                if (line is not null)
+                {
+                    _writer.WriteLine(line);
+                }
+                else if (--_openStreams == 0)
+                {
+                    Close();
+                }
+            }
+        }
+
+        public void Close()
+        {
+            lock (_gate)
+            {
+                if (!_closed)
+                {
+                    _closed = true;
+                    _writer.Dispose();
+                }
+            }
+        }
+    }
 }

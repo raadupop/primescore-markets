@@ -42,6 +42,24 @@ internal static class EnginePaths
         }
     }
 
+    /// <summary>
+    /// <c>Sources:OpecCalendar:File</c> when configured; otherwise <c>apps/engine/data/catalysts/opec.csv</c>,
+    /// the operator-curated OPEC and JMMC meeting dates (ADR-0011).
+    /// </summary>
+    public static void ApplyDefaultOpecFile(IConfigurationManager configuration, string contentRoot)
+    {
+        if (!string.IsNullOrWhiteSpace(configuration["Sources:OpecCalendar:File"]))
+        {
+            return;
+        }
+
+        var engineRoot = FindUpwards(contentRoot, SolutionFile) ?? FindUpwards(AppContext.BaseDirectory, SolutionFile);
+        if (engineRoot is not null)
+        {
+            configuration["Sources:OpecCalendar:File"] = Path.Combine(engineRoot, "data", "catalysts", "opec.csv");
+        }
+    }
+
     private static string? FindUpwards(string start, string fileName)
     {
         for (var directory = new DirectoryInfo(start); directory is not null; directory = directory.Parent)

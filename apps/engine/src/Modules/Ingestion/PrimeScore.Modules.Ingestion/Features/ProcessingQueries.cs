@@ -77,6 +77,12 @@ internal sealed class GetObservationSeriesHandler(IngestionReadStore reads) : IQ
             rows = rows.Where(row => row.Variant == variant);
         }
 
+        if (!string.IsNullOrEmpty(query.SourcePrefix))
+        {
+            var prefix = query.SourcePrefix;
+            rows = rows.Where(row => row.SourceIdentifier.StartsWith(prefix));
+        }
+
         // Overlapping sources can repeat a date; read enough rows that the window still fills after collapsing them.
         var recent = await rows
             .OrderByDescending(row => row.ObservedAtMs).ThenBy(row => row.Sequence)

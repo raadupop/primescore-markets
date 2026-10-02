@@ -81,20 +81,27 @@ internal sealed class GetValidationReportHandler(
             return new(item, replay.ReplayId, "Not evaluable", "No classifiable equity input and reference IV in the target window; absent routes are not estimated.");
         }
 
+        if (decisions.Any(decision => decision.Scenario is "vol-expansion" or "vol-compression" or "none"))
+        {
+            return new(item, replay.ReplayId, "Legacy baseline, re-run",
+                "Recorded under the refuted composite gate (ADR-0008); run the validation set again to evaluate the state gate.");
+        }
+
+        // ADR-0008: the dislocation no longer gates, so "no deploy expected" is checked on the outcome itself.
         var held = item.ExpectDeploy ? decisions.Any(decision => decision.Outcome == DecisionOutcome.Deploy)
-            : decisions.All(decision => Math.Abs(decision.DislocationValue) < decision.DislocationThreshold);
+            : decisions.All(decision => decision.Outcome == DecisionOutcome.Idle);
         string detail;
         if (!item.ExpectDeploy)
         {
-            var breach = decisions.FirstOrDefault(decision => Math.Abs(decision.DislocationValue) >= decision.DislocationThreshold);
-            detail = breach is null ? "Every observed dislocation stayed below threshold on the target date."
-                : string.Create(CultureInfo.InvariantCulture, $"Dislocation {breach.DislocationValue:+0.00;-0.00;0} breached ±{breach.DislocationThreshold:0.00} on {MarketTime.NewYorkDate(breach.AsOf):yyyy-MM-dd}.");
+            var fired = decisions.FirstOrDefault(decision => decision.Outcome == DecisionOutcome.Deploy);
+            detail = fired is null ? "No decision reached DEPLOY on the target date."
+                : string.Create(CultureInfo.InvariantCulture, $"DEPLOY ({fired.Scenario} state) on {MarketTime.NewYorkDate(fired.AsOf):yyyy-MM-dd}.");
         }
         else
         {
             var deploy = decisions.FirstOrDefault(decision => decision.Outcome == DecisionOutcome.Deploy);
             detail = deploy is null ? "No DEPLOY; last decision failed " + string.Join(", ", decisions[^1].Conditions.Where(condition => !condition.Passed).Select(condition => condition.Name)) + "."
-                : $"First DEPLOY: {MarketTime.NewYorkDate(deploy.AsOf):yyyy-MM-dd}.";
+                : $"First DEPLOY ({deploy.Scenario} state): {MarketTime.NewYorkDate(deploy.AsOf):yyyy-MM-dd}.";
         }
 
         return new(item, replay.ReplayId, held ? "Matches target" : "Misses target", detail);

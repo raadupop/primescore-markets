@@ -1,34 +1,48 @@
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using PrimeScore.Ledger;
 using PrimeScore.Modules.Ingestion.Contracts;
-using PrimeScore.Modules.Ingestion.Sources.Fred;
 using PrimeScore.Modules.Ingestion.Storage;
 using PrimeScore.SharedKernel;
+using PrimeScore.SharedKernel.Json;
 using PrimeScore.SharedKernel.Messaging;
 
 namespace PrimeScore.Modules.Ingestion.Sources;
 
-/// <summary>On-demand pull requests and the scheduler's live state, shared with the status query.</summary>
-internal sealed class SourcePullQueue
+/// <summary>Live state of one adapter's loop and its on-demand pull requests.</summary>
+internal sealed class SourceState
 {
-    private readonly Channel<string> _requests = Channel.CreateBounded<string>(new BoundedChannelOptions(4)
+    private readonly Channel<bool> _requests = Channel.CreateBounded<bool>(new BoundedChannelOptions(4)
     {
         FullMode = BoundedChannelFullMode.DropWrite,
         SingleReader = true,
     });
 
-    public bool Running { get; set; }
+    private volatile bool _running;
+
+    public bool Running
+    {
+        get => _running;
+        set => _running = value;
+    }
 
     public DateTimeOffset? NextRunAt { get; set; }
 
-    public ChannelReader<string> Requests => _requests.Reader;
+    public ChannelReader<bool> Requests => _requests.Reader;
 
-    public bool TryRequest(string source) => _requests.Writer.TryWrite(source);
+    public bool TryRequest() => _requests.Writer.TryWrite(true);
+}
+
+/// <summary>Per-adapter live state keyed by adapter name (any letter case), shared by the scheduler, pull command and status query.</summary>
+internal sealed class SourceRuntime
+{
+    private readonly ConcurrentDictionary<string, SourceState> _states = new(StringComparer.OrdinalIgnoreCase);
+
+    public SourceState For(string source) => _states.GetOrAdd(source, _ => new SourceState());
 }
 
 /// <summary>Operational record of adapter runs (not ledger facts; the recorded signals are).</summary>
@@ -44,13 +58,24 @@ internal sealed class SourceRunStore(EngineDatabase database)
     }
 
     /// <param name="partial">The run recorded what it could; <paramref name="error"/> lists what it could not.</param>
-    public async Task FinishAsync(long id, DateTimeOffset finishedAt, SourceRunCounts? counts, string? error, CancellationToken cancellationToken, bool partial = false)
+    /// <param name="flags">Operational findings (a cross-check disagreement); kept on the run row, never in the ledger.</param>
+    public async Task FinishAsync(
+        long id,
+        DateTimeOffset finishedAt,
+        SourceRunCounts? counts,
+        string? error,
+        CancellationToken cancellationToken,
+        bool partial = false,
+        IReadOnlyList<string>? flags = null,
+        string? note = null)
     {
         await using var context = new IngestionDbContext(database.ContextOptions<IngestionDbContext>(IngestionDbContext.HistoryTable));
         var run = await context.SourceRuns.SingleAsync(row => row.Id == id, cancellationToken).ConfigureAwait(false);
         run.FinishedAtMs = finishedAt.ToUnixTimeMilliseconds();
         run.Succeeded = error is null || partial;
         run.Error = error;
+        run.Flags = flags is { Count: > 0 } ? CanonicalJson.Serialize(flags) : null;
+        run.Note = note;
         if (counts is not null)
         {
             (run.Accepted, run.Duplicates, run.Revised, run.Missing, run.Rejected) =
@@ -62,102 +87,175 @@ internal sealed class SourceRunStore(EngineDatabase database)
 }
 
 /// <summary>
-/// Runs the FRED pull daily at <c>Fred:DailyRunUtc</c> and whenever the UI requests it. A
-/// failed run is recorded with its (redacted) error; nothing a run does can stop the engine.
+/// Runs every registered <see cref="ISourceAdapter"/> on its own loop, concurrently: an optional
+/// startup pull (which first waits for the startup pulls of adapters registered before it, so a
+/// cross-check sees what an earlier adapter just recorded), then each <see cref="SourceSchedule"/>
+/// slot and each on-demand request. Every iteration is isolated: a throwing adapter, schedule or
+/// option is logged (redacted), recorded as a failed run, and retried after a back-off doubling
+/// from <see cref="InitialBackoff"/> to one hour; nothing a run does can stop the engine.
+/// Recorded ids are announced as <see cref="SignalBatchAccepted"/> by one coalescing publisher
+/// loop, so classifying a large backfill never blocks another adapter or a pull request; ids still
+/// queued at shutdown are picked up by the classification scheduler's pending run.
 /// </summary>
 internal sealed partial class SourceScheduler(
-    IServiceScopeFactory scopes,
-    SourcePullQueue queue,
+    IEnumerable<ISourceAdapter> adapters,
+    SourceRuntime runtime,
     SourceRunStore runs,
-    IOptions<FredOptions> options,
+    IServiceScopeFactory scopes,
     IClock clock,
     ILogger<SourceScheduler> logger) : BackgroundService
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        var settings = options.Value;
-        if (settings.DisabledReason() is { } reason)
-        {
-            LogDisabled(reason);
-        }
-        else if (settings.RunOnStartup)
-        {
-            await RunAsync(stoppingToken).ConfigureAwait(false);
-        }
+    private static readonly TimeSpan MaxBackoff = TimeSpan.FromHours(1);
 
+    /// <summary>How often a disabled adapter, or one without scheduled runs, re-reads its state without a request.</summary>
+    private static readonly TimeSpan Recheck = TimeSpan.FromHours(1);
+
+    private readonly ISourceAdapter[] _adapters = [.. adapters];
+    private readonly Channel<IReadOnlyList<Guid>> _recorded = Channel.CreateUnbounded<IReadOnlyList<Guid>>(new UnboundedChannelOptions { SingleReader = true });
+
+    /// <summary>First wait after a failed iteration; settable for tests.</summary>
+    public TimeSpan InitialBackoff { get; set; } = TimeSpan.FromMinutes(1);
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var startup = _adapters.Select(_ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).ToArray();
+        return Task.WhenAll([PublishLoopAsync(stoppingToken), .. _adapters.Select((adapter, index) => LoopAsync(adapter, startup, index, stoppingToken))]);
+    }
+
+    private async Task LoopAsync(ISourceAdapter adapter, TaskCompletionSource[] startup, int index, CancellationToken stoppingToken)
+    {
+        await Task.Yield();
+        var state = runtime.For(adapter.Name);
+        var backoff = TimeSpan.Zero;
+        var first = true;
+        DateTimeOffset? lastSlot = null;
         while (!stoppingToken.IsCancellationRequested)
         {
-            var now = clock.UtcNow;
-            var next = NextRun(now, settings.DailyRunUtc);
-            queue.NextRunAt = settings.DisabledReason() is null ? next : null;
-            using var wake = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-            var delay = Task.Delay(Max(next - now, TimeSpan.Zero), wake.Token);
-            var request = queue.Requests.WaitToReadAsync(wake.Token).AsTask();
             try
             {
-                await Task.WhenAny(delay, request).ConfigureAwait(false);
-            }
-            finally
-            {
-                await wake.CancelAsync().ConfigureAwait(false);
-            }
+                if (first)
+                {
+                    first = false;
+                    try
+                    {
+                        await StartupAsync(adapter, state, startup, index, stoppingToken).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        startup[index].TrySetResult();
+                    }
+                }
 
-            if (stoppingToken.IsCancellationRequested)
+                var now = clock.UtcNow;
+                var next = adapter.DisabledReason is null ? adapter.Schedule.NextAfter(Later(now, lastSlot)) : null;
+                state.NextRunAt = next;
+                var requested = await WaitAsync(state, next is { } at ? Positive(at - now) : Recheck, stoppingToken).ConfigureAwait(false);
+                if (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                while (state.Requests.TryRead(out _))
+                {
+                    // Coalesce queued requests into the run below.
+                }
+
+                lastSlot = requested ? lastSlot : next;
+                if ((requested || next is not null) && adapter.DisabledReason is null)
+                {
+                    await RunAsync(adapter, state, stoppingToken).ConfigureAwait(false);
+                }
+
+                backoff = TimeSpan.Zero;
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 break;
             }
-
-            while (queue.Requests.TryRead(out _))
+            catch (Exception exception)
             {
-                // Coalesce queued requests into the run below.
-            }
-
-            if (settings.DisabledReason() is null)
-            {
-                await RunAsync(stoppingToken).ConfigureAwait(false);
+                var message = Redact(adapter, exception.Message);
+                LogLoopFailed(adapter.Name, message);
+                await RecordFailureAsync(adapter.Name, message).ConfigureAwait(false);
+                backoff = backoff == TimeSpan.Zero ? InitialBackoff : Min(backoff * 2, MaxBackoff);
+                state.NextRunAt = null;
+                try
+                {
+                    await WaitAsync(state, backoff, stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
             }
         }
     }
 
-    internal static DateTimeOffset NextRun(DateTimeOffset now, TimeOnly dailyUtc)
+    private async Task StartupAsync(ISourceAdapter adapter, SourceState state, TaskCompletionSource[] startup, int index, CancellationToken stoppingToken)
     {
-        var today = new DateTimeOffset(DateOnly.FromDateTime(now.UtcDateTime).ToDateTime(dailyUtc), TimeSpan.Zero);
-        return today > now ? today : today.AddDays(1);
+        if (adapter.DisabledReason is { } reason)
+        {
+            LogDisabled(adapter.Name, reason);
+            return;
+        }
+
+        if (!adapter.RunOnStartup)
+        {
+            return;
+        }
+
+        await Task.WhenAll(startup.Take(index).Select(earlier => earlier.Task)).WaitAsync(stoppingToken).ConfigureAwait(false);
+        await RunAsync(adapter, state, stoppingToken).ConfigureAwait(false);
     }
 
-    private static TimeSpan Max(TimeSpan left, TimeSpan right) => left > right ? left : right;
-
-    private async Task RunAsync(CancellationToken stoppingToken)
+    /// <returns>True when a pull request woke the loop; false when the delay elapsed.</returns>
+    private static async Task<bool> WaitAsync(SourceState state, TimeSpan delay, CancellationToken stoppingToken)
     {
-        queue.Running = true;
+        using var wake = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        var elapsed = Task.Delay(delay, wake.Token);
+        var request = state.Requests.WaitToReadAsync(wake.Token).AsTask();
+        try
+        {
+            await Task.WhenAny(elapsed, request).ConfigureAwait(false);
+            return request.IsCompletedSuccessfully;
+        }
+        finally
+        {
+            await wake.CancelAsync().ConfigureAwait(false);
+        }
+    }
+
+    private async Task RunAsync(ISourceAdapter adapter, SourceState state, CancellationToken stoppingToken)
+    {
+        state.Running = true;
         long? runId = null;
         try
         {
-            runId = await runs.StartAsync(FredOptions.SourceName, clock.UtcNow, stoppingToken).ConfigureAwait(false);
-            await using var scope = scopes.CreateAsyncScope();
-            var result = await scope.ServiceProvider.GetRequiredService<FredPuller>().PullAsync(stoppingToken).ConfigureAwait(false);
-            var detail = result.SeriesErrors.Count == 0 ? null : $"{result.SeriesErrors.Count} series not pulled: {string.Join(" | ", result.SeriesErrors)}";
+            runId = await runs.StartAsync(adapter.Name, clock.UtcNow, stoppingToken).ConfigureAwait(false);
+            var result = await adapter.PullAsync(stoppingToken).ConfigureAwait(false);
+            var detail = result.ItemErrors.Count == 0
+                ? null
+                : Redact(adapter, $"{result.ItemErrors.Count} of {result.ItemsAttempted} not pulled: {string.Join(" | ", result.ItemErrors)}");
 
-            // Partial when some series were pulled; failed when none was.
-            await runs.FinishAsync(runId.Value, clock.UtcNow, result.Counts, detail, stoppingToken, partial: detail is not null && !result.NothingPulled)
-                .ConfigureAwait(false);
+            // Partial when some items were pulled; failed when none was.
+            await runs.FinishAsync(
+                runId.Value, clock.UtcNow, result.Counts, detail, stoppingToken,
+                partial: detail is not null && !result.NothingPulled, result.Flags, result.Note).ConfigureAwait(false);
             if (detail is not null)
             {
-                LogPartial(detail);
+                LogPartial(adapter.Name, detail);
             }
 
-            LogCompleted(result.Counts.Accepted, result.Counts.Duplicates, result.Counts.Revised, result.Counts.Missing);
-            if (result.Recorded.Count > 0)
+            LogCompleted(adapter.Name, result.Counts.Accepted, result.Counts.Duplicates, result.Counts.Revised, result.Counts.Missing);
+            if (result.RecordedSignals.Count > 0)
             {
-                await scope.ServiceProvider.GetRequiredService<IIntegrationEventPublisher>()
-                    .PublishAsync(new SignalBatchAccepted(CorrelationId.New(), result.Recorded), stoppingToken).ConfigureAwait(false);
+                _recorded.Writer.TryWrite(result.RecordedSignals);
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
         {
-            var key = options.Value.ApiKey;
-            var message = string.IsNullOrEmpty(key) ? exception.Message : exception.Message.Replace(key, "***", StringComparison.Ordinal);
-            LogFailed(message);
+            var message = Redact(adapter, exception.Message);
+            LogFailed(adapter.Name, message);
             if (runId is { } id)
             {
                 try
@@ -167,28 +265,99 @@ internal sealed partial class SourceScheduler(
                 catch (Exception recordFailure)
                 {
                     // The database itself may be the fault (full disk); the engine keeps running.
-                    LogRecordFailed(recordFailure.Message);
+                    LogRecordFailed(adapter.Name, recordFailure.Message);
                 }
             }
         }
         finally
         {
-            queue.Running = false;
+            state.Running = false;
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "FRED adapter disabled: {Reason}")]
-    private partial void LogDisabled(string reason);
+    /// <summary>A loop iteration failed outside a pull (schedule, options): recorded as a failed run.</summary>
+    private async Task RecordFailureAsync(string source, string message)
+    {
+        try
+        {
+            var id = await runs.StartAsync(source, clock.UtcNow, CancellationToken.None).ConfigureAwait(false);
+            await runs.FinishAsync(id, clock.UtcNow, null, message, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception recordFailure)
+        {
+            LogRecordFailed(source, recordFailure.Message);
+        }
+    }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "FRED pull recorded {Accepted} signals ({Duplicates} duplicates, {Revised} revised values kept as first recorded, {Missing} missing values skipped)")]
-    private partial void LogCompleted(int accepted, int duplicates, int revised, int missing);
+    /// <summary>Announces recorded ids off the adapter loops, one event for everything queued meanwhile.</summary>
+    private async Task PublishLoopAsync(CancellationToken stoppingToken)
+    {
+        await Task.Yield();
+        try
+        {
+            while (await _recorded.Reader.WaitToReadAsync(stoppingToken).ConfigureAwait(false))
+            {
+                var ids = new List<Guid>();
+                while (_recorded.Reader.TryRead(out var batch))
+                {
+                    ids.AddRange(batch);
+                }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "FRED pull partial: {Detail}")]
-    private partial void LogPartial(string detail);
+                try
+                {
+                    await using var scope = scopes.CreateAsyncScope();
+                    await scope.ServiceProvider.GetRequiredService<IIntegrationEventPublisher>()
+                        .PublishAsync(new SignalBatchAccepted(CorrelationId.New(), ids), stoppingToken).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                {
+                    LogPublishFailed(ids.Count, exception.Message);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Shutdown; pending signals are classified by the classification scheduler's next run.
+        }
+    }
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "FRED pull failed: {Error}")]
-    private partial void LogFailed(string error);
+    private static string Redact(ISourceAdapter adapter, string text)
+    {
+        try
+        {
+            return adapter.Redact(text);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // Never log text an adapter could not redact.
+            return "error text withheld: redaction failed";
+        }
+    }
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "FRED run record could not be written: {Error}")]
-    private partial void LogRecordFailed(string error);
+    private static DateTimeOffset Later(DateTimeOffset now, DateTimeOffset? lastSlot) => lastSlot is { } slot && slot > now ? slot : now;
+
+    private static TimeSpan Positive(TimeSpan span) => span > TimeSpan.Zero ? span : TimeSpan.Zero;
+
+    private static TimeSpan Min(TimeSpan left, TimeSpan right) => left < right ? left : right;
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Source {Source} disabled: {Reason}")]
+    private partial void LogDisabled(string source, string reason);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Source {Source} recorded {Accepted} signals ({Duplicates} duplicates, {Revised} revised values kept as first recorded, {Missing} missing values skipped)")]
+    private partial void LogCompleted(string source, int accepted, int duplicates, int revised, int missing);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Source {Source} pull partial: {Detail}")]
+    private partial void LogPartial(string source, string detail);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Source {Source} pull failed: {Error}")]
+    private partial void LogFailed(string source, string error);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Source {Source} scheduling failed: {Error}; retrying after a back-off")]
+    private partial void LogLoopFailed(string source, string error);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Source {Source} run record could not be written: {Error}")]
+    private partial void LogRecordFailed(string source, string error);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Announcing {Count} recorded signals failed: {Error}; the classification scheduler picks them up")]
+    private partial void LogPublishFailed(int count, string error);
 }

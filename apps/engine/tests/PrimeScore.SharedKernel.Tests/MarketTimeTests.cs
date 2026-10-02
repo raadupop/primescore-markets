@@ -12,6 +12,32 @@ public sealed class MarketTimeTests
             MarketTime.AtNewYork(new DateOnly(year, month, day), new TimeOnly(16, 15)));
 
     [Theory]
+    // Before 1987 the US rule differed from the one Windows applies to every year before 2006:
+    // 1974 from 6 January, 1975 from 23 February, 1976-1986 from the last Sunday of April (25 April
+    // 1976, 27 April 1986); 1987 from the first Sunday of April (5 April). EDT 16:15 = 20:15Z, EST = 21:15Z.
+    [InlineData(1974, 1, 7, 20)]
+    [InlineData(1975, 2, 21, 21)]
+    [InlineData(1975, 3, 3, 20)]
+    [InlineData(1976, 4, 20, 21)]
+    [InlineData(1976, 4, 26, 20)]
+    [InlineData(1986, 4, 21, 21)]
+    [InlineData(1986, 4, 28, 20)]
+    [InlineData(1986, 10, 27, 21)]
+    [InlineData(1987, 4, 6, 20)]
+    public void Closes_before_1987_follow_the_US_daylight_rule_of_their_year(int year, int month, int day, int utcHour) =>
+        Assert.Equal(new DateTimeOffset(year, month, day, utcHour, 15, 0, TimeSpan.Zero),
+            MarketTime.AtNewYork(new DateOnly(year, month, day), new TimeOnly(16, 15)));
+
+    [Theory]
+    // 04:30Z is 00:30 EDT the same date, or 23:30 EST the day before.
+    [InlineData("1975-03-04T04:30:00Z", "1975-03-04")]
+    [InlineData("1976-04-21T04:30:00Z", "1976-04-20")]
+    [InlineData("1976-04-27T04:30:00Z", "1976-04-27")]
+    public void The_New_York_date_before_1987_follows_the_same_rule(string instant, string expected) =>
+        Assert.Equal(DateOnly.Parse(expected, System.Globalization.CultureInfo.InvariantCulture),
+            MarketTime.NewYorkDate(DateTimeOffset.Parse(instant, System.Globalization.CultureInfo.InvariantCulture)));
+
+    [Theory]
     [InlineData("2026-02-27", "2026-03-02", 1)]
     [InlineData("2026-02-26", "2026-02-27", 1)]
     [InlineData("2026-02-23", "2026-03-02", 5)]

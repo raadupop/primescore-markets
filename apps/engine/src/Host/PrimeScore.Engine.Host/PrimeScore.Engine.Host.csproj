@@ -17,6 +17,8 @@
     <ProjectReference Include="..\..\Modules\Decision\PrimeScore.Modules.Decision.Contracts\PrimeScore.Modules.Decision.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Analytics\PrimeScore.Modules.Analytics\PrimeScore.Modules.Analytics.csproj" />
     <ProjectReference Include="..\..\Modules\Analytics\PrimeScore.Modules.Analytics.Contracts\PrimeScore.Modules.Analytics.Contracts.csproj" />
+    <ProjectReference Include="..\..\Modules\Catalysts\PrimeScore.Modules.Catalysts\PrimeScore.Modules.Catalysts.csproj" />
+    <ProjectReference Include="..\..\Modules\Catalysts\PrimeScore.Modules.Catalysts.Contracts\PrimeScore.Modules.Catalysts.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Configuration\PrimeScore.Modules.Configuration\PrimeScore.Modules.Configuration.csproj" />
     <ProjectReference Include="..\..\Modules\Configuration\PrimeScore.Modules.Configuration.Contracts\PrimeScore.Modules.Configuration.Contracts.csproj" />
     <ProjectReference Include="..\..\Modules\Positions\PrimeScore.Modules.Positions.Contracts\PrimeScore.Modules.Positions.Contracts.csproj" />

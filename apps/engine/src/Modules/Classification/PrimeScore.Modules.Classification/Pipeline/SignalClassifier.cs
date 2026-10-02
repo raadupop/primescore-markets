@@ -24,19 +24,91 @@ internal sealed record ClassificationAttempt(
     IReadOnlyList<MacroSurprise>? MacroWindow = null);
 
 /// <summary>
+/// First New York date on which adapter-recorded signals are assessed (<c>Classification:AdapterHistoryFrom</c>,
+/// default 2011-01-01, the start of the history already classified from FRED). Earlier adapter rows are recorded and
+/// feed reference windows; assessing them needs a research registration first (ADR-0010). Read once at startup; an
+/// invalid value stops the start rather than classifying history the operator meant to exclude.
+/// </summary>
+internal sealed record AdapterHistory(DateOnly From)
+{
+    public const string Key = "Classification:AdapterHistoryFrom";
+
+    public static AdapterHistory Parse(string? text) =>
+        string.IsNullOrWhiteSpace(text)
+            ? new(new DateOnly(2011, 1, 1))
+            : DateOnly.TryParseExact(text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var from)
+                ? new(from)
+                : throw new InvalidOperationException($"{Key} must be a date in yyyy-MM-dd form.");
+}
+
+/// <summary>
 /// Builds one point-in-time classifier request per signal: the reference window holds only
 /// observations strictly before the signal (brief §8), a macro print is sent only with a
 /// sourced consensus row for its release date, and nothing missing is ever filled in.
+/// Adapter-recorded signals first pass <see cref="AdapterOutcomeAsync"/> (ADR-0010).
 /// </summary>
 internal sealed class SignalClassifier(
     ClassifierClient client,
     ConsensusBook consensus,
     IndicatorRegistry registry,
-    IQueryHandler<GetObservationSeries, ObservationSeries> series)
+    IQueryHandler<GetObservationSeries, ObservationSeries> series,
+    AdapterHistory adapterHistory)
 {
     /// <summary>Prior prints examined per required macro surprise, so gaps in consensus coverage still leave a window.</summary>
     private const int MacroLookback = 4;
 
+    /// <summary>Points read for the same-date check: one per variant of that date (a macro series spans variants).</summary>
+    private const int SameDayPoints = 4;
+
+    /// <summary>
+    /// The local outcome of an adapter-recorded signal (reserved source prefix, provider not <c>api</c>), or null when it
+    /// goes to the classifier. In order: observed before <c>Classification:AdapterHistoryFrom</c> (default 2011-01-01);
+    /// market data outside the indicator registry (context series such as VIX9D, which the classifier does not rank);
+    /// a series that already has an earlier-recorded observation on the same New York date (e.g. <c>fred:VIXCLS</c>
+    /// before <c>cboe:VIX</c>), so one close is neither assessed twice nor corroborates itself in a composite.
+    /// API submissions keep their behaviour (SRS CLS-009). No classifier call is made.
+    /// </summary>
+    public async Task<ClassificationAttempt?> AdapterOutcomeAsync(SignalView signal, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        if (signal.PayloadType != "STRUCTURED" || !SourcePrefixes.IsAdapterRecorded(signal.SourceIdentifier, signal.Provenance.Provider))
+        {
+            return null;
+        }
+
+        var date = MarketTime.NewYorkDate(signal.ObservedAt);
+        var from = adapterHistory.From;
+        if (date < from)
+        {
+            return Unavailable(UnavailableReason.OutsideClassifiedHistory,
+                string.Create(CultureInfo.InvariantCulture, $"Recorded before {from:yyyy-MM-dd}; kept as reference history, not assessed (ADR-0010)."));
+        }
+
+        if (signal.Category == SourceCategory.MarketData && !registry.TryGetSymbol(signal.Instrument, out _))
+        {
+            return Unavailable(UnavailableReason.UnknownIndicator,
+                $"'{signal.Instrument}' was recorded by a source adapter as a context series; the classifier ranks indicator-registry symbols only (ADR-0010).");
+        }
+
+        if (signal.Category == SourceCategory.Geopolitical)
+        {
+            return null;
+        }
+
+        // Rows recorded before this one, on its New York date. A macro series is its indicator (the variant also
+        // names the reference period); other series are narrowed to the variant, as their reference windows are.
+        var variant = signal.Category == SourceCategory.Macroeconomic ? null : signal.Variant;
+        var sameDay = await series.HandleAsync(
+            new GetObservationSeries(signal.Instrument, signal.Category, variant, MarketTime.AtNewYork(date.AddDays(1), TimeOnly.MinValue),
+                SameDayPoints, signal.LedgerSequence - 1), cancellationToken).ConfigureAwait(false);
+        var first = sameDay.Points.Where(point => MarketTime.NewYorkDate(point.ObservedAt) == date).MinBy(point => point.LedgerSequence);
+        return first is null
+            ? null
+            : Unavailable(UnavailableReason.DuplicateObservation,
+                string.Create(CultureInfo.InvariantCulture, $"Signal {first.SignalId} was recorded first for {date:yyyy-MM-dd} and is the series of record (ADR-0010)."));
+    }
+
+    /// <summary>Routes a signal to the classifier; adapter-recorded signals pass <see cref="AdapterOutcomeAsync"/> first.</summary>
     public async Task<ClassificationAttempt> ClassifyAsync(SignalView signal, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(signal);

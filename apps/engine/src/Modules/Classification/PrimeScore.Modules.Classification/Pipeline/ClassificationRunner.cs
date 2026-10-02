@@ -25,7 +25,8 @@ internal sealed class ClassificationGate : IDisposable
 /// Classifies every signal without a final outcome, oldest observation first. One append per
 /// signal carries its outcome under the signal's correlation id (SRS OBS-001).
 /// <list type="bullet">
-/// <item>Final: a real assessment, or a reason that retrying cannot change (route not in v1, request rejected, unknown indicator).</item>
+/// <item>Final: a real assessment, or a reason that retrying cannot change (route not in v1, request rejected, unknown indicator,
+/// and the adapter-row outcomes of ADR-0010: outside the classified history, duplicate observation).</item>
 /// <item>Retried on later runs: awaiting consensus, classifier unreachable, invalid answer, and fallbacks.</item>
 /// <item>A classifier failure reuses the series' last real assessment, flagged with its staleness (SRS CLS-004);
 /// without one the signal is recorded as unavailable, never silently skipped.</item>
@@ -135,8 +136,21 @@ internal sealed partial class ClassificationRunner(
 
     private async Task ProcessAsync(SignalView signal, AssessmentRow? previous, Tally tally, CancellationToken cancellationToken)
     {
-        ClassificationAttempt attempt;
-        if (tally.Breaker)
+        ClassificationAttempt? attempt;
+        try
+        {
+            // Adapter-row rules are decided locally, even with the breaker open, and leave the failure count alone:
+            // a local outcome says nothing about whether the classifier answers.
+            attempt = await classifier.AdapterOutcomeAsync(signal, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            LogSignalFailed(signal.SignalId, exception.Message);
+            tally.NotSent++;
+            return;
+        }
+
+        if (attempt is null && tally.Breaker)
         {
             tally.NotSent++;
             attempt = new ClassificationAttempt(
@@ -144,7 +158,7 @@ internal sealed partial class ClassificationRunner(
                     "Not sent: the classifier failed three times in a row in this run; retried on the next run."),
                 0, null, null);
         }
-        else
+        else if (attempt is null)
         {
             try
             {
@@ -207,7 +221,9 @@ internal sealed partial class ClassificationRunner(
         && ((previous.Available && !previous.IsFallback)
             || previous.Reason is nameof(UnavailableReason.RouteNotImplemented)
                 or nameof(UnavailableReason.ClassifierRejected)
-                or nameof(UnavailableReason.UnknownIndicator));
+                or nameof(UnavailableReason.UnknownIndicator)
+                or nameof(UnavailableReason.OutsideClassifiedHistory)
+                or nameof(UnavailableReason.DuplicateObservation));
 
     private async Task<Dictionary<string, AssessmentRow>> LatestOutcomesAsync(string[] signalIds, CancellationToken cancellationToken)
     {

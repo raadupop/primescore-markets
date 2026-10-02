@@ -122,7 +122,7 @@ public sealed class ClassificationTests(EngineFixture fixture)
     public async Task A_macro_print_without_sourced_consensus_is_not_assessed()
     {
         var at = new DateTimeOffset(2022, 7, 13, 12, 30, 0, TimeSpan.Zero);
-        var response = await PostAsync(fixture.Engine, Batch(Macroeconomic("bls:CPI_YOY", 9.1, at), MarketData("OVX", 45.0, at)));
+        var response = await PostAsync(fixture.Engine, Batch(Macroeconomic("econ:CPI_YOY", 9.1, at), MarketData("OVX", 45.0, at)));
         var client = fixture.Engine.Client(Role.Read);
 
         Assert.Empty(await client.GetAssessmentsAsync(response.Signals.First().Signal_id, null, Token));

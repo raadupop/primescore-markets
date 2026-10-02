@@ -60,17 +60,18 @@
         {
             <div class="panel-head">
                 <div>
-                    <h3>@source.Source economic and market data</h3>
-                    <p class="panel-note">Scheduled daily imports with history from 2011. Missing provider values remain missing.</p>
+                    <h3>@source.Source</h3>
+                    <p class="panel-note">@source.Description</p>
+                    <p class="panel-note">Schedule: @source.Schedule</p>
                 </div>
                 <div class="actions">
                 @if (!source.Enabled)
                 {
-                    <span class="status status-muted">Import disabled</span>
+                    <span class="status status-muted">Disabled</span>
                 }
                 else if (source.Running)
                 {
-                    <span class="status status-blue">Importing</span>
+                    <span class="status status-blue">Running</span>
                 }
                 else if (source.LastRunPartial)
                 {
@@ -78,7 +79,7 @@
                 }
                 else if (source.LastError is not null)
                 {
-                    <span class="status status-bad">Import failed</span>
+                    <span class="status status-bad">Run failed</span>
                 }
                 else
                 {
@@ -86,21 +87,21 @@
                 }
                 @if (_canAdmin)
                 {
-                    <button class="button button-primary" @onclick="() => PullAsync(source.Source)" disabled="@(!source.Enabled || source.Running)">@(source.Running ? "Importing…" : "Import latest data")</button>
+                    <button class="button button-primary" @onclick="() => PullAsync(source.Source)" disabled="@(!source.Enabled || source.Running)">@(source.Running ? "Running…" : "Run now")</button>
                 }
                 </div>
             </div>
             @if (source.DisabledReason is { } reason)
             {
-                <div class="degraded"><strong>Automatic imports are disabled.</strong> @reason</div>
+                <div class="degraded"><strong>Automatic runs are disabled.</strong> @reason</div>
             }
             <dl class="kv">
-                <dt>Last import started</dt><dd>@Fmt.Utc(source.LastAttemptAt) (@Fmt.Age(source.LastAttemptAt, Clock.UtcNow))</dd>
-                <dt>Latest successful import</dt><dd>@Fmt.Utc(source.LastSuccessAt)</dd>
-                <dt>Next scheduled import</dt><dd>@Fmt.Utc(source.NextRunAt)</dd>
+                <dt>Last run started</dt><dd>@Fmt.Utc(source.LastAttemptAt) (@Fmt.Age(source.LastAttemptAt, Clock.UtcNow))</dd>
+                <dt>Latest successful run</dt><dd>@Fmt.Utc(source.LastSuccessAt)</dd>
+                <dt>Next scheduled run</dt><dd>@Fmt.Utc(source.NextRunAt)</dd>
                 @if (source.LastRun is { } counts)
                 {
-                    <dt>Latest import result</dt>
+                    <dt>Latest run result</dt>
                     <dd>@Fmt.Count(counts.Accepted) new observations · @Fmt.Count(counts.Missing) missing provider values</dd>
                 }
             </dl>
@@ -108,9 +109,25 @@
             {
                 <div class="degraded"><strong>@ImportIssue(source)</strong> Available observations remain in the analysis.</div>
             }
-            @if (_pullMessage is not null)
+            @if (source.Note is { } note)
             {
-                <p class="panel-note" role="status">@_pullMessage</p>
+                <p class="panel-note">Last run: @note</p>
+            }
+            @if (source.Flags is { Count: > 0 } flags)
+            {
+                <div class="degraded">
+                    <strong>Cross-check findings</strong>
+                    <ul>
+                        @foreach (var flag in flags)
+                        {
+                            <li>@flag</li>
+                        }
+                    </ul>
+                </div>
+            }
+            @if (_pullMessage is { Text: not null } pullMessage && string.Equals(pullMessage.Source, source.Source, StringComparison.OrdinalIgnoreCase))
+            {
+                <p class="panel-note" role="status">@pullMessage.Text</p>
             }
             <div class="table-wrap">
                 <table class="data">
@@ -134,7 +151,14 @@
                                 </td>
                                 <td>@Fmt.Utc(series.LatestObservedAt)</td>
                                 <td>
-                                    <a href="https://fred.stlouisfed.org/series/@series.SeriesId" target="_blank" rel="noopener noreferrer">@series.SeriesId</a>
+                                    @if (series.Url is { } url)
+                                    {
+                                        <a href="@url" target="_blank" rel="noopener noreferrer">@series.SeriesId</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="mono">@series.SeriesId</span>
+                                    }
                                     @if (series.MappingVerified)
                                     {
                                         <div class="panel-note">Mapping verified</div>
@@ -151,7 +175,7 @@
                 </table>
             </div>
             <details class="technical-details">
-                <summary>Import diagnostics</summary>
+                <summary>Run diagnostics</summary>
                 <p>A provider mapping identifies a series to request; an unverified mapping has not been confirmed. Data coverage separately shows whether observations have actually been stored.</p>
                 @if (source.LastError is { } rawError)
                 {
@@ -420,7 +444,7 @@
     private Dictionary<SourceCategory, long> _pending = [];
     private DateTimeOffset? _sourcesAsOf;
     private string? _sourcesError;
-    private string? _pullMessage;
+    private (string Source, string? Text)? _pullMessage;
     private Timer? _refresh;
     private LedgerVerification? _verification;
     private string? _verifyError;
@@ -471,14 +495,16 @@
         nameof(UnavailableReason.InvalidResponse) => "Analysis returned an invalid result",
         nameof(UnavailableReason.ClassifierRejected) => "Observation rejected by analysis",
         nameof(UnavailableReason.UnknownIndicator) => "Indicator not recognised",
+        nameof(UnavailableReason.OutsideClassifiedHistory) => "Before classified history",
+        nameof(UnavailableReason.DuplicateObservation) => "Same-day observation already analysed",
         _ => Fmt.Humanize(outcome),
     };
 
     private static string ImportIssue(SourceStatus source) =>
         source.LastError?.Contains("series does not exist", StringComparison.OrdinalIgnoreCase) == true
             ? "The provider could not find one or more configured series."
-            : source.LastRunPartial ? "The last import completed with gaps."
-            : "The last import could not complete.";
+            : source.LastRunPartial ? "The last run completed with gaps."
+            : "The last run could not complete.";
 
     /// <summary>A failed refresh keeps the last status on screen, flagged with its age; it never breaks the circuit.</summary>
     private async Task LoadSourcesAsync()
@@ -521,9 +547,9 @@
 
     private async Task PullAsync(string source)
     {
-        if (await Access.AdministratorAsync() is null) { _pullMessage = "Administrator sign-in is required."; return; }
+        if (await Access.AdministratorAsync() is null) { _pullMessage = (source, "Administrator sign-in is required."); return; }
         var ack = await PullCommand.HandleAsync(new RequestSourcePull(source), CancellationToken.None);
-        _pullMessage = ack.Queued ? ack.Reason ?? "Import queued; progress appears here." : ack.Reason;
+        _pullMessage = (source, ack.Queued ? ack.Reason ?? "Run queued; progress appears here." : ack.Reason);
         await LoadSourcesAsync();
     }
 

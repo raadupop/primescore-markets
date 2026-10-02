@@ -13,7 +13,7 @@ info:
     - Contract-first: this spec exists before implementation.
     - Black-box: no reference to internal types, layers, or persistence.
     - Iteration-stable: identical across all six architecture iterations.
-  version: "1.1.0"
+  version: "1.3.0"
   contact:
     name: PrimeScore AI Project
 
@@ -45,6 +45,13 @@ tags:
     description: Change configurable parameters without code modification.
   - name: Replay
     description: Point-in-time event replay.
+  - name: Analytics
+    description: |
+      What the reference index did after each recorded decision (ADR-0008). Added in 1.2.0.
+  - name: Catalysts
+    description: |
+      Scheduled macro and market catalysts with canonical ids, schedule vintages and the
+      9-day/30-day ratio against its weekday-matched baseline. Added in 1.3.0.
 
 security:
   - BearerAuth: []
@@ -476,7 +483,7 @@ paths:
     put:
       operationId: setDislocationThreshold
       tags: [Configuration]
-      summary: Set IV dislocation threshold for deploy condition
+      summary: Set the recorded IV dislocation threshold and regime settings
       security:
         - BearerAuth: []
       requestBody:
@@ -490,7 +497,7 @@ paths:
                 threshold:
                   type: number
                   format: double
-                  description: Dislocation >= threshold triggers deploy condition.
+                  description: Recorded with each dislocation; since 1.2.0 it no longer gates DEPLOY (ADR-0008).
                 reference_instrument:
                   type: string
                   description: |
@@ -669,6 +676,111 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+
+  /analytics/outcomes:
+    get:
+      operationId: getForwardOutcomes
+      tags: [Analytics]
+      summary: Forward outcomes of recorded decisions
+      description: |
+        The change from the reference close on each decision's New York trading
+        day to the close exactly 1, 5, 10 and 21 NYSE trading days later, for
+        DEPLOY days against all days and per recorded state. One state per date
+        (the last decision by observation time). Holiday-session closes, missing
+        closes and decisions on another reference instrument are left out and
+        counted. Computed from the ledger on read. Index changes, not trading
+        returns (ADR-0008). Added in 1.2.0.
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/Context"
+      responses:
+        "200":
+          description: The outcomes record for the context.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForwardOutcomesReport"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Unknown context.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ────────────────────────────────────────────────────────────────────
+  # CATALYSTS
+  # ────────────────────────────────────────────────────────────────────
+  /catalysts:
+    get:
+      operationId: listCatalysts
+      tags: [Catalysts]
+      summary: List scheduled catalysts in a time range
+      description: |
+        The current schedule (latest vintage) of every catalyst whose scheduled
+        instant lies in [from, to], ordered by instant then id. `from` defaults to
+        now and `to` to 30 days after `from`; there is no range cap. Dates are New
+        York dates. Each catalyst carries the 9-day/30-day ratio (VIX9D ÷ VIX − 1,
+        a term-structure slope) read before it and its rank among weekday-matched
+        placebo days: the derived ratio only, never index levels. Added in 1.3.0.
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - name: family
+          in: query
+          schema:
+            $ref: "#/components/schemas/CatalystFamily"
+          description: Only catalysts of this family.
+      responses:
+        "200":
+          description: Catalysts in the range.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Catalyst"
+        "400":
+          description: "`to` is before `from`, or a parameter could not be read."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /catalysts/{catalyst_id}:
+    get:
+      operationId: getCatalyst
+      tags: [Catalysts]
+      summary: Get one catalyst with every vintage of its schedule
+      description: |
+        A reschedule appends a vintage and keeps the id; vintages are oldest
+        first and the last one is the current schedule. Added in 1.3.0.
+      parameters:
+        - name: catalyst_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Canonical id `FAMILY-YYYY-MM-DD`, e.g. `FOMC-2026-10-28`.
+      responses:
+        "200":
+          description: The catalyst and its vintages.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalystDetail"
+        "404":
+          description: Unknown catalyst id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
 # ══════════════════════════════════════════════════════════════════════
 # COMPONENTS
@@ -1208,6 +1320,20 @@ components:
           description: |
             The regime-adjusted SENSITIVITY_FACTOR used for this computation.
             Included for audit and replay transparency.
+        regime:
+          type: string
+          description: |
+            low_vol, normal or high_vol, from the reference level's position in its
+            prior closes. Added in 1.2.0.
+        regime_percentile:
+          type: number
+          format: double
+          nullable: true
+          description: |
+            Share of the reference instrument's prior closes at or below the observed
+            level (right-continuous ECDF), in either regime mode; null without
+            history. Since ADR-0008 this, not the dislocation, gates decisions
+            (with at least 252 prior closes). Added in 1.2.0.
         computed_at:
           type: string
           format: date-time
@@ -1257,6 +1383,20 @@ components:
           items:
             type: string
             format: uuid
+        state:
+          type: string
+          description: |
+            Where the reference level sits in its own history: extreme_low, low,
+            normal, high, extreme_high or unknown (ADR-0008). A description, not a
+            forecast. Decisions recorded before 1.2.0 hold the refuted directional
+            labels vol-expansion, vol-compression or none. Added in 1.2.0.
+        level_percentile:
+          type: number
+          format: double
+          nullable: true
+          description: |
+            The reference level's ECDF percentile within its prior closes; null for
+            decisions recorded before 1.2.0 or without history. Added in 1.2.0.
         urgency_tier:
           $ref: "#/components/schemas/UrgencyTier"
         requires_approval:
@@ -1517,6 +1657,350 @@ components:
           items:
             $ref: "#/components/schemas/ExitRecord"
 
+    ForwardOutcomesReport:
+      type: object
+      description: |
+        Forward changes of the reference index after recorded decisions (ADR-0008).
+        Index points, close to close; no returns, costs or positions.
+      required: [context, reference_instrument, days, deploy_days, legacy_days, excluded_days, other_instrument_days, horizons, states, computed_at]
+      properties:
+        context:
+          type: string
+        reference_instrument:
+          type: string
+        first_date:
+          type: string
+          format: date
+          nullable: true
+        last_date:
+          type: string
+          format: date
+          nullable: true
+        days:
+          type: integer
+          description: Decision dates measured (NYSE trading days with a reference close, decided on this instrument).
+        deploy_days:
+          type: integer
+          description: Decision dates whose last decision was a DEPLOY in an extreme state (the ADR-0008 gate).
+        legacy_days:
+          type: integer
+          description: |
+            Decision dates whose last decision carries a pre-ADR-0008 directional
+            label; counted in the all-days baseline and the state table only.
+        excluded_days:
+          type: integer
+          description: |
+            Decision dates on this instrument left out because the date is not an
+            NYSE trading day or has no reference close.
+        other_instrument_days:
+          type: integer
+          description: |
+            Decision dates whose decisions were all placed on another reference
+            instrument (for example before a reference change); not measured.
+        horizons:
+          type: array
+          items:
+            $ref: "#/components/schemas/HorizonOutcome"
+        states:
+          type: array
+          items:
+            $ref: "#/components/schemas/StateOutcome"
+        computed_at:
+          type: string
+          format: date-time
+
+    HorizonOutcome:
+      type: object
+      required: [trading_days, deploy_count, all_count]
+      properties:
+        trading_days:
+          type: integer
+        deploy_count:
+          type: integer
+          description: DEPLOY days with both closes; the denominator of every deploy_ figure.
+        all_count:
+          type: integer
+        deploy_median_abs_change:
+          type: number
+          format: double
+          nullable: true
+        all_median_abs_change:
+          type: number
+          format: double
+          nullable: true
+        deploy_revert_share:
+          type: number
+          format: double
+          nullable: true
+          description: |
+            Share of DEPLOY days on which the level moved back toward its median
+            (down after extreme_high, up after extreme_low; unchanged counts as not
+            reverted). Descriptive and in sample, not a tradable edge.
+        deploy_revert_share_low:
+          type: number
+          format: double
+          nullable: true
+          description: Lower 95% bound, circular block bootstrap with blocks of max(21, 2 × horizon) DEPLOY days; null below two blocks.
+        deploy_revert_share_high:
+          type: number
+          format: double
+          nullable: true
+        all_up_share:
+          type: number
+          format: double
+          nullable: true
+        deploy_mean_change_toward_median:
+          type: number
+          format: double
+          nullable: true
+          description: Mean change toward the median on DEPLOY days, index points (positive means reverted).
+
+    StateOutcome:
+      type: object
+      required: [state, count]
+      properties:
+        state:
+          type: string
+        count:
+          type: integer
+        median_change_5:
+          type: number
+          format: double
+          nullable: true
+        median_abs_change_5:
+          type: number
+          format: double
+          nullable: true
+        up_share_5:
+          type: number
+          format: double
+          nullable: true
+        median_change_21:
+          type: number
+          format: double
+          nullable: true
+        median_abs_change_21:
+          type: number
+          format: double
+          nullable: true
+        up_share_21:
+          type: number
+          format: double
+          nullable: true
+
+    # ── Catalysts (added in 1.3.0) ────────────────────────────────
+    CatalystFamily:
+      type: string
+      enum: [FOMC, CPI, NFP, CLAIMS, GDP, PCE, WPSR, OPEC]
+      description: |
+        NFP is the Employment Situation release, CLAIMS weekly initial claims, GDP
+        every GDP estimate release, PCE Personal Income and Outlays, WPSR the EIA
+        Weekly Petroleum Status Report, OPEC the OPEC and JMMC meetings.
+
+    CatalystStatus:
+      type: string
+      enum: [scheduled, cancelled]
+
+    CatalystSourceKind:
+      type: string
+      enum: [listing, archive, curated, rule]
+      description: |
+        Where a schedule came from. Precedence rule < curated < archive < listing:
+        a lower kind never replaces a higher kind's schedule. `archive` pages show
+        the dates releases actually happened; `rule` schedules are derived, not read.
+
+    CatalystChange:
+      type: string
+      enum: [moved, status, time_announced, correction, detail]
+      description: |
+        Why a vintage after the first was appended. Only `moved` (the date, or an
+        announced time, changed) and `status` (scheduled or cancelled) count as
+        reschedules; `time_announced` adds a time on the same date, `correction`
+        replaces a rule-derived schedule, `detail` changes only the SEP or
+        tentative marker.
+
+    CatalystSource:
+      type: object
+      required: [adapter, kind, url, retrieved_at]
+      properties:
+        adapter:
+          type: string
+          description: The calendar adapter's name, or `import` for an operator CSV import.
+        kind:
+          $ref: "#/components/schemas/CatalystSourceKind"
+        url:
+          type: string
+          description: The page, file or rule identifier the schedule was read from.
+        retrieved_at:
+          type: string
+          format: date-time
+        file_sha256:
+          type: string
+          nullable: true
+          description: SHA-256 of the fetched or imported file; absent for rule-derived schedules.
+
+    CatalystRatio:
+      type: object
+      description: |
+        The 9-day/30-day ratio VIX9D ÷ VIX − 1, the slope of the short end of the
+        S&P 500 volatility term structure, on the latest NYSE trading day before the
+        catalyst with both Cboe closes. The percentile ranks it among the same ratio
+        read the same number of days before same-weekday days one to three weeks
+        ahead of past events of the family, leaving out days within one trading day
+        of a scheduled FOMC, CPI, NFP, GDP, PCE or OPEC event. A rank, not a
+        forecast. Absent members mean not available, never zero.
+      required: [baseline_n, missing_closes]
+      properties:
+        as_of:
+          type: string
+          format: date
+          nullable: true
+          description: New York date the ratio was read on.
+        value:
+          type: number
+          format: double
+          nullable: true
+        baseline_percentile:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0.0
+          maximum: 1.0
+          description: Share of baseline values at or below `value` (ties count); absent below 10 baseline values.
+        baseline_n:
+          type: integer
+          description: Placebo values in the baseline.
+        missing_closes:
+          type: integer
+          description: Placebo days without both closes on their read date; left out, never filled.
+        no_baseline_reason:
+          type: string
+          nullable: true
+          description: Why `baseline_percentile` is absent.
+
+    Catalyst:
+      type: object
+      description: A catalyst's current schedule (its latest vintage).
+      required: [catalyst_id, family, title, scheduled_at, scheduled_date, time_announced, status, tentative, vintage, backfilled, first_announced_at, source, ledger_sequence, ledger_hash]
+      properties:
+        catalyst_id:
+          type: string
+          description: |
+            `FAMILY-YYYY-MM-DD` from the New York date of the first recorded
+            schedule; fixed for life, so a reschedule keeps the id.
+        family:
+          $ref: "#/components/schemas/CatalystFamily"
+        title:
+          type: string
+        reference_period:
+          type: string
+          nullable: true
+          description: The period the release covers, e.g. `September 2026`.
+        scheduled_at:
+          type: string
+          format: date-time
+        scheduled_date:
+          type: string
+          format: date
+          description: New York date of `scheduled_at`.
+        time_announced:
+          type: boolean
+          description: False when the source gives only a date; `scheduled_at` is then 00:00 New York.
+        status:
+          $ref: "#/components/schemas/CatalystStatus"
+        sep:
+          type: boolean
+          nullable: true
+          description: FOMC only; the meeting is associated with a Summary of Economic Projections.
+        tentative:
+          type: boolean
+        vintage:
+          type: integer
+          description: Number of the current vintage; 1 until the schedule changes.
+        never_rescheduled:
+          type: boolean
+          nullable: true
+          description: |
+            False when any vintage moved the catalyst or changed its status. Absent
+            (unknown) when the first vintage was back-filled: the engine did not see
+            the schedule before the event. Otherwise true.
+        backfilled:
+          type: boolean
+          description: The first vintage's scheduled instant was not after the time the engine recorded it.
+        derivation:
+          type: string
+          nullable: true
+          description: "`standard-weekday`, `rule` or `curated`; absent when read from a listed row."
+        first_announced_at:
+          type: string
+          format: date-time
+          description: When the engine first recorded the catalyst.
+        actual_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the release actually happened; absent until prints are recorded.
+        source:
+          $ref: "#/components/schemas/CatalystSource"
+        ledger_sequence:
+          type: integer
+          format: int64
+          description: Ledger entry of the current vintage.
+        ledger_hash:
+          type: string
+        ratio:
+          $ref: "#/components/schemas/CatalystRatio"
+
+    CatalystVintage:
+      type: object
+      required: [vintage, scheduled_at, scheduled_date, time_announced, status, tentative, recorded_at, source, ledger_sequence, ledger_hash]
+      properties:
+        vintage:
+          type: integer
+        change:
+          $ref: "#/components/schemas/CatalystChange"
+        scheduled_at:
+          type: string
+          format: date-time
+        scheduled_date:
+          type: string
+          format: date
+        time_announced:
+          type: boolean
+        status:
+          $ref: "#/components/schemas/CatalystStatus"
+        sep:
+          type: boolean
+          nullable: true
+        tentative:
+          type: boolean
+        derivation:
+          type: string
+          nullable: true
+        recorded_at:
+          type: string
+          format: date-time
+          description: Ledger time of the vintage.
+        source:
+          $ref: "#/components/schemas/CatalystSource"
+        ledger_sequence:
+          type: integer
+          format: int64
+        ledger_hash:
+          type: string
+
+    CatalystDetail:
+      type: object
+      required: [catalyst, vintages]
+      properties:
+        catalyst:
+          $ref: "#/components/schemas/Catalyst"
+        vintages:
+          type: array
+          description: Oldest first; `change` is absent on the first vintage.
+          items:
+            $ref: "#/components/schemas/CatalystVintage"
+
     DeployConditionsConfig:
       type: object
       required: [conditions]
@@ -1529,7 +2013,13 @@ components:
             properties:
               name:
                 type: string
-                description: "Condition name (e.g., 'composite_score', 'dislocation', 'risk_budget')."
+                description: |
+                  Condition name: level_percentile_tail (operator <= or < only),
+                  composite_score (optional), contributing_sources,
+                  top_signal_certainty or newest_observation_age_trading_days
+                  (ADR-0008). Each listed condition replaces the one of the same
+                  name; the optional composite_score is removed through the
+                  configuration editor.
               operator:
                 type: string
                 enum: [">=", "<=", "==", ">", "<"]

@@ -38,6 +38,9 @@ public sealed class SecurityTests(EngineFixture fixture)
         { "PUT", "config/execution-mode" },
         { "PUT", "config/approval-threshold" },
         { "POST", "replay" },
+        { "GET", "analytics/outcomes" },
+        { "GET", "catalysts" },
+        { "GET", "catalysts/FOMC-2026-10-28" },
     };
 
     /// <summary>Operations the contract reserves for ADMIN.</summary>

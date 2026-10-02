@@ -202,7 +202,7 @@ internal static class SettingsValidator
             return;
         }
 
-        foreach (var name in DeployConditionNames.Configurable.Where(name => !conditions.Any(condition => condition.Name == name)))
+        foreach (var name in DeployConditionNames.Required.Where(name => !conditions.Any(condition => condition.Name == name)))
         {
             errors.Add($"deploy_conditions.{name}: missing");
         }
@@ -226,9 +226,15 @@ internal static class SettingsValidator
             {
                 errors.Add($"{path}.operator: must be one of {string.Join(" ", DeployConditionNames.Operators)}");
             }
+            else if (group.Key == DeployConditionNames.LevelPercentileTail && condition.Operator is not ("<=" or "<"))
+            {
+                // A DEPLOY must record an extreme state (ADR-0008); any other operator would fire on ordinary days.
+                errors.Add($"{path}.operator: must be <= or < (a DEPLOY records an extreme state)");
+            }
 
             var (min, max) = group.Key switch
             {
+                DeployConditionNames.LevelPercentileTail => (0.0, 0.25),
                 DeployConditionNames.CompositeScore or DeployConditionNames.TopSignalCertainty => (0.0, 1.0),
                 DeployConditionNames.ContributingSources => (0.0, 4.0),
                 _ => (0.0, 260.0),

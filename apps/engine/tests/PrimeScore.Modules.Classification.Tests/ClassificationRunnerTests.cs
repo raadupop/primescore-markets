@@ -57,7 +57,7 @@ public sealed class ClassificationRunnerTests : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         await _services.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        new EngineDatabase(Path.Combine(_directory, "engine.db")).ClearPool();
         try
         {
             Directory.Delete(_directory, recursive: true);
@@ -384,6 +384,119 @@ public sealed class ClassificationRunnerTests : IAsyncLifetime
         Assert.Equal(0.37, after.Score, 12);
     }
 
+    [Fact]
+    public async Task An_adapter_context_series_outside_the_registry_is_an_unknown_indicator_without_a_call()
+    {
+        await RecordAdapterAsync("cboe:VIX9D", "Cboe", "VIX9D", "IMPLIED_VOLATILITY:9D", 14.2, Day1);
+
+        var first = await RunAsync();
+        var again = await RunAsync();
+        var outcome = (await Query<GetAssessments, IReadOnlyList<AssessmentView>>(new GetAssessments())).Single();
+
+        Assert.Empty(_classifier.Requests);
+        Assert.Equal(UnavailableReason.UnknownIndicator, outcome.Reason);
+        Assert.Contains("context series", outcome.Detail, StringComparison.Ordinal);
+        Assert.Equal((1, 0), (first.Unavailable, again.Unavailable));
+    }
+
+    [Fact]
+    public async Task Adapter_rows_before_the_classified_history_are_kept_as_reference_history_but_not_assessed()
+    {
+        // 2010-12-31 16:15 EST = 21:15Z (New York date 2010-12-31, before the default 2011-01-01); 2011-01-03 is on it.
+        var lastOf2010 = new DateTimeOffset(2010, 12, 31, 21, 15, 0, TimeSpan.Zero);
+        var firstOf2011 = new DateTimeOffset(2011, 1, 3, 21, 15, 0, TimeSpan.Zero);
+        await RecordAdapterAsync("cboe:VIX", "Cboe", "VIX", "IMPLIED_VOLATILITY", 17.75, lastOf2010);
+        await RecordAdapterAsync("cboe:VIX", "Cboe", "VIX", "IMPLIED_VOLATILITY", 17.61, firstOf2011);
+
+        await RunAsync();
+        var again = await RunAsync();
+        var outcomes = await Query<GetAssessments, IReadOnlyList<AssessmentView>>(new GetAssessments());
+
+        Assert.Equal(UnavailableReason.OutsideClassifiedHistory, outcomes.Single(view => view.ObservedAt == lastOf2010).Reason);
+        Assert.True(outcomes.Single(view => view.ObservedAt == firstOf2011).Available);
+        Assert.Equal(0, again.Unavailable + again.Classified);
+
+        // The unassessed 2010 close still forms the 2011 close's reference window.
+        var request = Assert.Single(_classifier.Requests);
+        Assert.Equal([17.75], request["reference_window"]!["values"]!.AsArray().Select(value => value!.GetValue<double>()));
+    }
+
+    [Fact]
+    public async Task An_API_signal_keeps_its_treatment_even_under_a_now_reserved_prefix()
+    {
+        // CLS-009: an API submission of an unregistered symbol still reaches the classifier.
+        await IngestAsync(Market("VIX9D", 14.2, Day1));
+
+        // A row recorded through the API before "bls:" was reserved (provider api), dated before 2011: not adapter-recorded.
+        await RecordAdapterAsync("bls:X", SourcePrefixes.ApiProvider, "MYSTERY", "IMPLIED_VOLATILITY", 3.0, new DateTimeOffset(2005, 3, 1, 21, 15, 0, TimeSpan.Zero));
+        await RunAsync();
+
+        Assert.Equal(["VIX9D", "MYSTERY"], _classifier.Requests.Select(request => request["structured_payload"]!["symbol"]!.GetValue<string>()));
+        Assert.All(await Query<GetAssessments, IReadOnlyList<AssessmentView>>(new GetAssessments()), view => Assert.True(view.Available));
+    }
+
+    [Fact]
+    public async Task A_second_source_for_the_same_New_York_date_is_a_duplicate_and_does_not_corroborate_the_first()
+    {
+        await RecordAdapterAsync("fred:VIXCLS", "FRED", "VIX", "IMPLIED_VOLATILITY", 11.0, Day1);
+        await RecordAdapterAsync("cboe:VIX", "Cboe", "VIX", "IMPLIED_VOLATILITY", 11.0, Day1);
+        await RunAsync();
+
+        var signals = (await Query<GetSignals, SignalPage>(new GetSignals(new SignalFilter()))).Signals;
+        var fred = signals.Single(signal => signal.SourceIdentifier == "fred:VIXCLS");
+        var outcomes = await Query<GetAssessments, IReadOnlyList<AssessmentView>>(new GetAssessments());
+        var duplicate = outcomes.Single(view => view.SignalId != fred.SignalId);
+        var thursday = (await Query<GetComposite, CompositeView?>(new GetComposite("equity", Day1)))!;
+
+        Assert.Single(_classifier.Requests);
+        Assert.Equal(UnavailableReason.DuplicateObservation, duplicate.Reason);
+        Assert.Contains(fred.SignalId.ToString("D"), duplicate.Detail, StringComparison.Ordinal);
+
+        // One composite, triggered by the FRED close, and unconfirmed: the Cboe copy of the same close is no corroboration
+        // (had it been assessed, 0.25 × 0.8 = 0.2 twice would confirm each other and score 0.2).
+        Assert.Equal((fred.CorrelationId, 0.0), (thursday.CorrelationId, thursday.Score));
+        Assert.Contains("unconfirmed", Assert.Single(thursday.Absent, absent => absent.Category == SourceCategory.MarketData).Reason, StringComparison.Ordinal);
+
+        // The next date has no earlier row: classified.
+        await RecordAdapterAsync("cboe:VIX", "Cboe", "VIX", "IMPLIED_VOLATILITY", 12.0, Day1.AddDays(1));
+        var next = await RunAsync();
+
+        Assert.Equal((1, 2), (next.Classified, _classifier.Requests.Count));
+    }
+
+    [Fact]
+    public async Task Local_adapter_outcomes_neither_reset_nor_wait_for_the_breaker()
+    {
+        // Observation order: GVZ fails, GVZ fails, VIX9D local, GVZ fails (third in a row: breaker), GVZ not sent, VIX9D local.
+        // Had the local outcome reset the count, the fourth GVZ would have been sent (4 requests).
+        _classifier.Down = true;
+        await RecordAdapterAsync("desk:gvz", SourcePrefixes.ApiProvider, "GVZ", "IMPLIED_VOLATILITY", 20.0, Day1);
+        await RecordAdapterAsync("desk:gvz", SourcePrefixes.ApiProvider, "GVZ", "IMPLIED_VOLATILITY", 21.0, Day1.AddDays(1));
+        await RecordAdapterAsync("cboe:VIX9D", "Cboe", "VIX9D", "IMPLIED_VOLATILITY:9D", 14.0, Day1.AddDays(2));
+        await RecordAdapterAsync("desk:gvz", SourcePrefixes.ApiProvider, "GVZ", "IMPLIED_VOLATILITY", 22.0, Day1.AddDays(3));
+        await RecordAdapterAsync("desk:gvz", SourcePrefixes.ApiProvider, "GVZ", "IMPLIED_VOLATILITY", 23.0, Day1.AddDays(4));
+        await RecordAdapterAsync("cboe:VIX9D", "Cboe", "VIX9D", "IMPLIED_VOLATILITY:9D", 15.0, Day1.AddDays(5));
+
+        var ack = await RunAsync();
+        var vix9d = await Query<GetAssessments, IReadOnlyList<AssessmentView>>(new GetAssessments(Instrument: "VIX9D"));
+
+        Assert.Equal((3, 1), (_classifier.Requests.Count, ack.Remaining));
+        Assert.Equal([UnavailableReason.UnknownIndicator, UnavailableReason.UnknownIndicator], vix9d.Select(view => view.Reason));
+    }
+
+    [Theory]
+    [InlineData(null, "2011-01-01")]
+    [InlineData(" ", "2011-01-01")]
+    [InlineData("1990-01-02", "1990-01-02")]
+    public void The_adapter_history_start_defaults_to_2011_and_reads_an_iso_date(string? configured, string expected) =>
+        Assert.Equal(DateOnly.Parse(expected, System.Globalization.CultureInfo.InvariantCulture), Pipeline.AdapterHistory.Parse(configured).From);
+
+    [Theory]
+    [InlineData("01/02/1990")]
+    [InlineData("1990")]
+    public void An_adapter_history_start_that_is_not_an_iso_date_stops_the_start(string configured) =>
+        Assert.Contains("Classification:AdapterHistoryFrom", Assert.Throws<InvalidOperationException>(() => Pipeline.AdapterHistory.Parse(configured)).Message, StringComparison.Ordinal);
+
     private async Task<SettingsChangeAck> CommandAsync<TCommand>(TCommand command) where TCommand : ICommand<SettingsChangeAck>
     {
         using var scope = _services.CreateScope();
@@ -416,6 +529,17 @@ public sealed class ClassificationRunnerTests : IAsyncLifetime
         return await scope.ServiceProvider.GetRequiredService<IQueryHandler<TQuery, TResult>>().HandleAsync(query, Token);
     }
 
+    /// <summary>Appends a signal as a source adapter records it (reserved prefix, own provider), bypassing API validation.</summary>
+    private async Task RecordAdapterAsync(string source, string provider, string instrument, string variant, double value, DateTimeOffset at)
+    {
+        var id = Guid.NewGuid();
+        var time = at.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture);
+        var payload = JsonDocument.Parse($$$"""{"asset_class":"equity_index","instrument":"{{{instrument}}}","metric_type":"IMPLIED_VOLATILITY","value":{{{value.ToString(System.Globalization.CultureInfo.InvariantCulture)}}},"unit":"points","observed_at":"{{{time}}}"}""").RootElement.Clone();
+        var signal = new AdapterSignal(id, SourceCategory.MarketData, source, instrument, variant, at, "STRUCTURED", value, payload, new SignalProvenance(provider));
+        await _services.GetRequiredService<ILedger>().AppendAsync(
+            [LedgerAppend.Create(LedgerKinds.SignalIngested, id, CorrelationId.New(), ConfigVersion.None, $"{instrument} {time} ({source})", signal)], Token);
+    }
+
     private static string Market(string instrument, double value, DateTimeOffset at)
     {
         var time = at.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture);
@@ -433,6 +557,19 @@ public sealed class ClassificationRunnerTests : IAsyncLifetime
         var time = at.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture);
         return $$$"""{"source_category":"CROSS_ASSET_FLOW","source_identifier":"desk:corr","timestamp":"{{{time}}}","payload_type":"STRUCTURED","structured_payload":{"flow_type":"CORRELATION_BREAKDOWN","asset_pair":"{{{pair}}}","value":{{{value.ToString(System.Globalization.CultureInfo.InvariantCulture)}}},"baseline_value":-0.6,"lookback_period":"90d"}}""";
     }
+
+    /// <summary>The shape of Ingestion's <c>SignalIngested</c> payload (internal to that module).</summary>
+    private sealed record AdapterSignal(
+        Guid SignalId,
+        SourceCategory Category,
+        string SourceIdentifier,
+        string Instrument,
+        string Variant,
+        DateTimeOffset ObservedAt,
+        string PayloadType,
+        double? Value,
+        JsonElement Payload,
+        SignalProvenance Provenance);
 
     private sealed class FixedClock(DateTimeOffset now) : IClock
     {

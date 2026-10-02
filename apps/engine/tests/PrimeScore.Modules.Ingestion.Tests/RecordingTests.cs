@@ -1,5 +1,3 @@
-using System.Net;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
@@ -9,7 +7,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using PrimeScore.Ledger;
 using PrimeScore.Modules.Ingestion.Contracts;
 using PrimeScore.Modules.Ingestion.Recording;
-using PrimeScore.Modules.Ingestion.Sources.Fred;
 using PrimeScore.SharedKernel;
 using PrimeScore.SharedKernel.Cqrs;
 
@@ -18,9 +15,7 @@ namespace PrimeScore.Modules.Ingestion.Tests;
 /// <summary>Idempotent recording and point-in-time reads against a real engine database.</summary>
 public sealed class RecordingTests : IAsyncLifetime
 {
-    private const string ApiKey = "test-key-never-stored";
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "primescore-ingestion-tests", Guid.NewGuid().ToString("N"));
-    private readonly FakeFred _fred = new();
     private ServiceProvider _services = null!;
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
@@ -31,11 +26,6 @@ public sealed class RecordingTests : IAsyncLifetime
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Engine:DatabasePath"] = Path.Combine(_directory, "engine.db"),
-            ["Fred:ApiKey"] = ApiKey,
-            ["Fred:CacheHours"] = "0",
-            ["Fred:RequestsPerMinute"] = "6000",
-            ["Fred:BackfillStart"] = "2026-09-01",
-            ["Fred:RetryDelaySeconds"] = "0",
         }).Build();
         var services = new ServiceCollection()
             .AddSingleton<IClock>(new TestClock(new DateTimeOffset(2026, 9, 25, 12, 0, 0, TimeSpan.Zero)))
@@ -44,8 +34,6 @@ public sealed class RecordingTests : IAsyncLifetime
             .AddSharedKernel(configuration)
             .AddLedger(configuration)
             .AddIngestionModule(configuration);
-        services.Configure<FredOptions>(options => options.BasketSeries = []);
-        services.AddHttpClient(FredOptions.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => _fred);
         _services = services.BuildServiceProvider();
         await EngineDatabaseInitializer.InitializeAsync(_services, CancellationToken.None);
     }
@@ -53,7 +41,7 @@ public sealed class RecordingTests : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         await _services.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        new EngineDatabase(Path.Combine(_directory, "engine.db")).ClearPool();
         try
         {
             Directory.Delete(_directory, recursive: true);
@@ -115,6 +103,21 @@ public sealed class RecordingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_source_prefix_narrows_a_series_before_the_earliest_recorded_row_of_a_date_is_kept()
+    {
+        // fred:VIX is recorded first for 1 September, cboe:VIX second for the same New York date.
+        var recorder = _services.GetRequiredService<SignalRecorder>();
+        await recorder.RecordAsync([Candidate(18.0, day: 1, source: "fred:VIXCLS", provider: "FRED")], Token);
+        await recorder.RecordAsync([Candidate(18.5, day: 1, source: "cboe:VIX", provider: "Cboe")], Token);
+
+        var every = await Query<GetObservationSeries, ObservationSeries>(Series(before: At(day: 3)));
+        var cboe = await Query<GetObservationSeries, ObservationSeries>(Series(before: At(day: 3)) with { SourcePrefix = "cboe:" });
+
+        Assert.Equal([18.0], every.Points.Select(point => point.Value));
+        Assert.Equal([18.5], cboe.Points.Select(point => point.Value));
+    }
+
+    [Fact]
     public async Task The_tape_filter_matches_instruments_in_any_letter_case()
     {
         await _services.GetRequiredService<SignalRecorder>().RecordAsync([Candidate(18.0)], Token);
@@ -122,6 +125,21 @@ public sealed class RecordingTests : IAsyncLifetime
         var page = await Query<GetSignals, SignalPage>(new GetSignals(new SignalFilter(Instrument: "vix")));
 
         Assert.Equal("VIX", Assert.Single(page.Signals).Instrument);
+    }
+
+    [Fact]
+    public async Task The_tape_filters_by_source_prefix_and_by_provider_in_any_letter_case()
+    {
+        await _services.GetRequiredService<SignalRecorder>().RecordAsync(
+            [Candidate(18.0, day: 1), Candidate(19.0, day: 2, source: "cboe:VIX", provider: "Cboe")], Token);
+
+        var cboe = await Query<GetSignals, SignalPage>(new GetSignals(new SignalFilter(SourcePrefix: "cboe:")));
+        var byProvider = await Query<GetSignals, SignalPage>(new GetSignals(new SignalFilter(Provider: "CBOE")));
+        var api = await Query<GetSignals, SignalPage>(new GetSignals(new SignalFilter(Provider: "api")));
+
+        Assert.Equal("cboe:VIX", Assert.Single(cboe.Signals).SourceIdentifier);
+        Assert.Equal(19.0, Assert.Single(byProvider.Signals).Value);
+        Assert.Equal("cboe_vix", Assert.Single(api.Signals).SourceIdentifier);
     }
 
     [Fact]
@@ -156,76 +174,6 @@ public sealed class RecordingTests : IAsyncLifetime
         Assert.Equal(37.32, Assert.Single(page.Signals).Value);
     }
 
-    [Fact]
-    public async Task A_FRED_pull_records_observations_skips_missing_values_and_is_idempotent_on_repeat()
-    {
-        _fred.Series["VIXCLS"] = """
-            {"observations":[
-              {"realtime_start":"2026-09-23","realtime_end":"2026-09-23","date":"2026-09-18","value":"14.81"},
-              {"realtime_start":"2026-09-23","realtime_end":"2026-09-23","date":"2026-09-21","value":"."},
-              {"realtime_start":"2026-09-23","realtime_end":"2026-09-23","date":"2026-09-22","value":"14.21"}]}
-            """;
-        var puller = _services.CreateScope().ServiceProvider.GetRequiredService<FredPuller>();
-
-        var first = await puller.PullAsync(Token);
-        var second = await puller.PullAsync(Token);
-
-        Assert.Equal(2, first.Counts.Accepted);
-        Assert.Equal(1, first.Counts.Missing);
-        Assert.Equal(0, second.Counts.Accepted);
-        Assert.Equal(2, second.Counts.Duplicates);
-        Assert.All(_fred.Requests, request => Assert.Contains("api_key=" + ApiKey, request, StringComparison.Ordinal));
-        var page = await Query<GetSignals, SignalPage>(new GetSignals(new SignalFilter(Instrument: "VIX")));
-        Assert.All(page.Signals, signal =>
-        {
-            Assert.DoesNotContain(ApiKey, signal.Payload, StringComparison.Ordinal);
-            Assert.Equal("FRED", signal.Provenance.Provider);
-            Assert.Equal("https://fred.stlouisfed.org/series/VIXCLS", signal.Provenance.Url);
-        });
-    }
-
-    [Fact]
-    public async Task Rows_from_other_providers_never_move_the_adapters_resume_point()
-    {
-        // Recorded directly, bypassing the API's reservation of the prefix, to prove the second guard.
-        await _services.GetRequiredService<SignalRecorder>().RecordAsync([Candidate(15.0, day: 20, source: "fred:VIXCLS")], Token);
-        var puller = _services.CreateScope().ServiceProvider.GetRequiredService<FredPuller>();
-
-        await puller.PullAsync(Token);
-
-        Assert.Contains(_fred.Requests, request => request.Contains("series_id=VIXCLS", StringComparison.Ordinal)
-            && request.Contains("observation_start=2026-09-01", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task A_failing_series_is_reported_with_the_key_redacted_and_the_others_are_still_pulled()
-    {
-        _fred.Failures["OVXCLS"] = (HttpStatusCode.BadRequest, $$"""{"error_code":400,"error_message":"Bad request for api_key={{ApiKey}}"}""");
-        _fred.Timeouts.Add("VIXCLS");
-        _fred.Series["CPIAUCSL"] = """{"observations":[{"realtime_start":"2026-09-11","realtime_end":"9999-12-31","date":"2026-08-01","value":"322.1"}]}""";
-        var puller = _services.CreateScope().ServiceProvider.GetRequiredService<FredPuller>();
-
-        var result = await puller.PullAsync(Token);
-
-        Assert.False(result.NothingPulled);
-        Assert.Contains(result.SeriesErrors, error => error.Contains("OVXCLS", StringComparison.Ordinal));
-        Assert.Contains(result.SeriesErrors, error => error.Contains("VIXCLS", StringComparison.Ordinal));
-        Assert.All(result.SeriesErrors, error => Assert.DoesNotContain(ApiKey, error, StringComparison.Ordinal));
-        Assert.Equal(4, _fred.Requests.Count(request => request.Contains("series_id=VIXCLS", StringComparison.Ordinal)));
-    }
-
-    [Fact]
-    public async Task A_run_in_which_every_series_fails_pulled_nothing()
-    {
-        _fred.FailEverything = true;
-        var puller = _services.CreateScope().ServiceProvider.GetRequiredService<FredPuller>();
-
-        var result = await puller.PullAsync(Token);
-
-        Assert.True(result.NothingPulled);
-        Assert.Equal(result.SeriesAttempted, result.SeriesErrors.Count);
-    }
-
     private async Task<IngestSignalsAck> Ingest(params string[] documents)
     {
         using var scope = _services.CreateScope();
@@ -249,42 +197,9 @@ public sealed class RecordingTests : IAsyncLifetime
         string source = "cboe_vix",
         string variant = "IMPLIED_VOLATILITY",
         SourceCategory category = SourceCategory.MarketData,
-        DateTimeOffset? at = null) => new(
+        DateTimeOffset? at = null,
+        string provider = "api") => new(
         category, source, "VIX", variant, at ?? At(day), "STRUCTURED", value,
         JsonDocument.Parse($$"""{"instrument":"VIX","value":{{value.ToString(System.Globalization.CultureInfo.InvariantCulture)}}}""").RootElement.Clone(),
-        new SignalProvenance("api"));
-
-    private sealed class FakeFred : HttpMessageHandler
-    {
-        public Dictionary<string, string> Series { get; } = [];
-
-        public Dictionary<string, (HttpStatusCode Status, string Body)> Failures { get; } = [];
-
-        /// <summary>Series whose requests time out the way HttpClient reports it: a cancellation nobody requested.</summary>
-        public HashSet<string> Timeouts { get; } = [];
-
-        public bool FailEverything { get; set; }
-
-        public List<string> Requests { get; } = [];
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            var uri = request.RequestUri!.ToString();
-            lock (Requests)
-            {
-                Requests.Add(uri);
-            }
-
-            var id = System.Web.HttpUtility.ParseQueryString(request.RequestUri.Query)["series_id"] ?? "";
-            if (Timeouts.Contains(id))
-            {
-                throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout.", new TimeoutException());
-            }
-
-            var (status, body) = FailEverything
-                ? (HttpStatusCode.BadRequest, """{"error_code":400,"error_message":"Bad Request."}""")
-                : Failures.TryGetValue(id, out var failure) ? failure : (HttpStatusCode.OK, Series.GetValueOrDefault(id, """{"observations":[]}"""));
-            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
-        }
-    }
+        new SignalProvenance(provider));
 }

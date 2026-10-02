@@ -12,7 +12,7 @@ internal sealed record DislocationParameters(
     double? LowVolUpper,
     double? HighVolLower);
 
-/// <param name="RegimePercentile">Share of the previous levels at or below the observed level; null in level mode or without history.</param>
+/// <param name="RegimePercentile">Share of the previous levels at or below the observed level, in either regime mode (ADR-0008); null without history.</param>
 internal sealed record DislocationResult(
     double MarketObservedIv,
     string Regime,
@@ -41,20 +41,13 @@ internal static class DislocationCalculator
     {
         ArgumentNullException.ThrowIfNull(history);
         ArgumentNullException.ThrowIfNull(parameters);
-        double? percentile = null;
+        // Right-continuous ECDF, as SRS §3 defines it for severity. Computed in both regime modes because the
+        // decision's state gate reads it (ADR-0008); only the regime label depends on the mode.
+        double? percentile = history.Count == 0 ? null : history.Count(level => level <= observedIv) / (double)history.Count;
         string regime;
         if (parameters.PercentileMode)
         {
-            if (history.Count == 0)
-            {
-                regime = Normal;
-            }
-            else
-            {
-                // Right-continuous ECDF, as SRS §3 defines it for severity.
-                percentile = history.Count(level => level <= observedIv) / (double)history.Count;
-                regime = percentile < parameters.LowBelow ? Low : percentile > parameters.HighAbove ? High : Normal;
-            }
+            regime = percentile is not { } rank ? Normal : rank < parameters.LowBelow ? Low : rank > parameters.HighAbove ? High : Normal;
         }
         else
         {

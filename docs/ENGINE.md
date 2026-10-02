@@ -63,19 +63,108 @@ the engine at port 5080. To preview only the Markets presentation website, use
 `.\scripts\start-websites.ps1` instead; do not run both launchers together.
 The brand site belongs to the sibling [PrimeScore umbrella](../../primescore/README.md)
 at `D:\Work\primescore`. Its launcher can also start Markets from this checkout with
-`-MarketsRoot D:\Work\invex`.
+`-MarketsRoot D:\Work\primescore-markets`.
 
 ## Load observations
 
-Configure `Fred:ApiKey` in the Host's user-secrets with `dotnet user-secrets set`, or supply
-`Fred__ApiKey` in the environment. Restart, then use **Data & health → Import latest data**.
-The adapter backfills from 2011 on an empty database and subsequently pulls daily at
-13:30 UTC. `Fred__DailyRunUtc` changes that schedule; `Fred__Enabled=false` disables pulls.
+Source adapters are configured under `Sources:<Name>` (user-secrets, or environment variables
+with `__` separators) and stay off unless `Enabled` is true. **Data & health** lists every
+adapter with its schedule, last run, flags and a **Run now** button.
 
-No FRED key is needed to inspect existing data or to ingest through the API.
+**Cboe index history** needs no key. `Sources__Cboe__Enabled=true` polls each file every
+`PollInterval` (15 minutes) from `WindowStartNewYork` (18:00) to `WindowEndNewYork` (08:00, next
+day) New York time and records each new close, stamped 16:15 New York (SPX 16:00) on its data date.
+`Symbols` replaces the default list (VIX, VIX9D, VIX3M, VIX6M, VVIX, OVX, GVZ, VXN, RVX, SPX);
+`RunOnStartup=true` pulls at start. Other keys: `BaseUrl`, `OverlapRows`, `RetryDelaySeconds`,
+`TimeoutSeconds`. An invalid value keeps the adapter disabled and the page names the key. The
+first run records the full history, about 55,000 signals, and classification takes minutes.
+Do not enable it on the live ledger until the live-start dates are settled (TODO-016 in
+[the registry](../doc/todo/registry.yaml); [limits](../apps/engine/LIMITATIONS.md#data-coverage-cboe)).
+
+**FRED** is a read-only cross-check and records nothing ([ADR-0009](../doc/adr/0009-cboe-index-history-and-fred-cross-check.md)).
+Set `Sources:Fred:ApiKey` with `dotnet user-secrets set` (or `Sources__Fred__ApiKey`) and
+`Sources:Fred:Enabled=true`. Daily at `DailyRunNewYork` (08:15 New York) it compares the last
+`CompareDays` (5) Cboe closes per index with FRED's values and flags a difference above
+max(`AbsoluteTolerance` 0.005, `RelativeTolerance` 0.0001 × close), or a FRED date Cboe lacks,
+under **Cross-check findings**. `ExcludedSymbols` skips indices, for example VVIX, whose FRED
+mapping does not exist. The former `Fred:ApiKey` is no longer read; the page says to move it.
+
+Adapter rows dated before `Classification:AdapterHistoryFrom` (default 2011-01-01) are recorded
+but not assessed ([ADR-0010](../doc/adr/0010-classification-of-adapter-context-series.md)); an
+earlier date needs a research registration first.
+
+Operator steps after this upgrade: move the FRED key and enable the cross-check; delete the old
+FRED response cache in `apps/engine/var/cache/fred`; enable `Sources:Cboe` once TODO-016 is settled.
+
+Read-only verbs print stored data as JSON; `--database <absolute path>` selects another database
+(the launch profile starts in the project folder, so a relative path is refused if it names no file):
+
+```powershell
+dotnet run --project apps/engine/src/Host/PrimeScore.Engine.Host --no-build -- sources
+dotnet run --project apps/engine/src/Host/PrimeScore.Engine.Host --no-build -- signals --instrument VIX --source-prefix cboe: --take 5
+```
+
+`sources` prints each adapter's last stored run (error, counts, flags, note) and coverage;
+enabled state and next run belong to the running engine and appear only on the page. `signals`
+filters by `--instrument`, `--source-prefix` and `--provider` (default `--take 100`) and prints
+provenance, including the file SHA-256 and the reconstructed marker.
+
+Cboe and SPX series are licensed for internal use only. Raw levels reach the signed-in operator
+and READ or ADMIN API tokens (`market_observed_iv` on dislocations and replays, index-point
+changes in the outcomes record) and the `signals` output; issue READ tokens for internal use
+only. No public surface serves raw series.
+
+No key is needed to inspect existing data or to ingest through the API.
 Macro consensus CSVs require sourced entries in [data/consensus](../apps/engine/data/consensus/README.md).
 Missing consensus stays missing. [Provider and timing limits](../apps/engine/LIMITATIONS.md)
 describe unavailable series, stale data and release timestamps.
+
+### Catalyst calendars
+
+Six calendar sources record scheduled events with canonical ids such as `FOMC-2026-10-28`
+([ADR-0011](../doc/adr/0011-catalyst-calendar-ids-vintages-and-sources.md)). Each runs once per
+weekday at `DailyRunNewYork` (06:00 New York) and is off unless `Enabled`:
+
+| Section | Family | Extra keys |
+| --- | --- | --- |
+| `Sources:FedCalendar` | FOMC | `HistoryFromYear` (2013; 0 = none) |
+| `Sources:BlsCalendar` | CPI, NFP | `HistoryFromYear` (2013); needs a contact `UserAgent` |
+| `Sources:BeaCalendar` | GDP, PCE | |
+| `Sources:EiaCalendar` | WPSR | |
+| `Sources:ClaimsCalendar` | CLAIMS (derived by rule, no fetch) | `HorizonDays` (63), `LookbackWeeks` (60) |
+| `Sources:OpecCalendar` | OPEC | `File` (default `apps/engine/data/catalysts/opec.csv`) |
+
+Each also takes `RunOnStartup`; the four page sources take `BaseUrl`, `UserAgent`,
+`RetryDelaySeconds` (5) and `TimeoutSeconds` (60). BLS refuses robots without contact details, so `BlsCalendar` stays disabled
+until `UserAgent` contains an e-mail address or URL; set it in user-secrets or
+`Sources__BlsCalendar__UserAgent`, never in a committed file, for example
+`PrimeScoreMarkets/0.1 (calendar reader; contact: <your address>)`. The first Fed run reads 8
+historical pages (2013–2020) and the first BLS run 13 yearly archives (2013–2025); after that a
+page is read again only until one of its rows is recorded. All six together record about 700
+ledger entries on first enablement.
+
+A changed schedule appends a vintage; the id never changes. Precedence is listing > archive >
+curated > rule: a lower source that disagrees, a catalyst that disappears from its source and a
+date replaced by TBD are not recorded but appear as run flags on **Data & health**; decide them
+by hand. OPEC dates are typed into the [curated CSV](../apps/engine/data/catalysts/README.md);
+confirm the publisher's terms first. The same format back-fills any family, with the engine stopped:
+
+```powershell
+dotnet run --project apps/engine/src/Host/PrimeScore.Engine.Host --no-build -- import-catalysts --file <csv>
+```
+
+It prints `scheduled`, `rescheduled`, `unchanged`, `flags` and `errors` as JSON; exit 1 means the
+file was rejected (every error names its line; nothing recorded). `--force` lets the file replace
+a listing or archive date and is recorded as forced; `--database <path>` selects another database.
+
+**Catalyst calendar** (`/catalysts`) lists the next 30 days with the 9-day/30-day ratio and its
+weekday-matched baseline percentile and n ([ADR-0012](../doc/adr/0012-pre-catalyst-ratio-against-weekday-matched-placebo-days.md));
+the ratio needs `Sources:Cboe`. `GET /api/catalysts?from=&to=&family=` (default: now to 30 days
+later) and `GET /api/catalysts/{catalyst_id}` (every vintage) serve the same data to READ tokens.
+
+Operator steps: set the BLS contact `UserAgent`; enable `FedCalendar`, `BlsCalendar`,
+`BeaCalendar`, `EiaCalendar` and `ClaimsCalendar`; curate `opec.csv`, then enable `OpecCalendar`;
+import earlier history as needed (TODO-019). [Limits](../apps/engine/LIMITATIONS.md#catalyst-calendars).
 
 ## API access
 

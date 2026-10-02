@@ -1,11 +1,15 @@
 @using PrimeScore.Modules.Decision.Contracts
 
-<span class="status @(Outcome == DecisionOutcome.Deploy ? "" : "status-muted")"
-      title="@(Outcome == DecisionOutcome.Deploy ? "All recorded checks passed. This is a research result; no position or order was created." : "One or more checks did not pass. No position or order was created.")">
-    @DecisionCopy.Outcome(Outcome)
+<span class="status @(Outcome == DecisionOutcome.Deploy && !DecisionCopy.IsLegacy(Scenario) ? "" : "status-muted")"
+      title="@DecisionCopy.OutcomeTooltip(Outcome, Scenario)">
+    @DecisionCopy.Outcome(Outcome, Scenario)
 </span>
 
 @code {
     [Parameter, EditorRequired]
     public DecisionOutcome Outcome { get; set; }
+
+    /// <summary>The decision's stored state (the <c>scenario</c> field); legacy labels render as legacy outcomes.</summary>
+    [Parameter, EditorRequired]
+    public string Scenario { get; set; } = "";
 }

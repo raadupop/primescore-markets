@@ -67,10 +67,15 @@ internal static class DefaultSettings
         Calibration: Uncalibrated,
         DeployConditions: Conditions());
 
-    /// <summary>Brief §9.6: |composite| ≥ 0.5, at least one contributing category, top signal certainty ≥ 0.5, newest contributing observation at most 2 trading days old.</summary>
+    /// <summary>
+    /// ADR-0008: the reference level within 5 percent of either end of its five-year history
+    /// (about one day in ten by construction, which satisfies DEC-002's idle discipline), at least one
+    /// contributing category, top signal certainty ≥ 0.5, newest contributing observation at most 2
+    /// trading days old. No composite-score gate: it is a rank of the same level and fired on half of all days.
+    /// </summary>
     public static IReadOnlyList<DeployCondition> Conditions() =>
     [
-        new(DeployConditionNames.CompositeScore, ">=", 0.5),
+        new(DeployConditionNames.LevelPercentileTail, "<=", 0.05),
         new(DeployConditionNames.ContributingSources, ">=", 1),
         new(DeployConditionNames.TopSignalCertainty, ">=", 0.5),
         new(DeployConditionNames.NewestObservationAge, "<=", 2),

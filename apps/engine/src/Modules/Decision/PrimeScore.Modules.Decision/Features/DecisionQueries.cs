@@ -63,9 +63,10 @@ internal sealed class GetDecisionOutcomesHandler(DecisionReadStore reads) : IQue
         var rows = await db.Decisions
             .Where(row => row.Context == context && row.AsOfMs >= from && row.AsOfMs <= to)
             .OrderBy(row => row.AsOfMs).ThenBy(row => row.Sequence)
-            .Select(row => new { row.AsOfMs, row.Sequence, row.Outcome })
+            .Select(row => new { row.AsOfMs, row.Sequence, row.Outcome, row.CompositeScore, row.Scenario, row.ReferenceInstrument })
             .ToListAsync(cancellationToken).ConfigureAwait(false);
-        return rows.Select(row => new DecisionOutcomePoint(DateTimeOffset.FromUnixTimeMilliseconds(row.AsOfMs), row.Sequence, Enum.Parse<DecisionOutcome>(row.Outcome))).ToArray();
+        return rows.Select(row => new DecisionOutcomePoint(DateTimeOffset.FromUnixTimeMilliseconds(row.AsOfMs), row.Sequence,
+            Enum.Parse<DecisionOutcome>(row.Outcome), row.CompositeScore, row.Scenario, row.ReferenceInstrument)).ToArray();
     }
 }
 
@@ -149,7 +150,8 @@ internal static class DecisionViews
             payload.Dissenting,
             payload.Explanation,
             payload.AsOf,
-            DateTimeOffset.FromUnixTimeMilliseconds(row.RecordedAtMs));
+            DateTimeOffset.FromUnixTimeMilliseconds(row.RecordedAtMs),
+            payload.LevelPercentile);
     }
 
     /// <summary>Input: what the decision read. Output: what it produced. Both straight from the ledger payload.</summary>

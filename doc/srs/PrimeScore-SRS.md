@@ -1,10 +1,10 @@
 # PrimeScore AI — Software Requirements Specification
 
 These requirements describe the intended event classification, aggregation and position-management behavior. See [implemented scope](../../README.md) for what can be run today.
-| Version: | 2.3.3 |
+| Version: | 2.4.0 |
 | --- | --- |
 | Standard: | Structure informed by ISO/IEC/IEEE 29148:2018 |
-| Date: | April 27, 2026 |
+| Date: | October 2, 2026 |
 | Priority: | MoSCoW (Must / Should / Could) |
 | Source: | Markdown-native. Previous versions authored in Word; v2.3.2 is the first revision in Markdown-first format. See ADR-0002. |
 
@@ -24,11 +24,13 @@ These requirements describe the intended event classification, aggregation and p
 
 **v2.3.3** is the Iteration 1 pre-work bundle. It (a) re-anchors CLS-001 severity to a long-horizon ECDF reference window with a binomial-SE-bounded minimum size `N_L ≥ 278`, (b) migrates the classifier `score` schema from `[0, 1]` to a signed `[-1, +1]` topology with explicit per-strategy sign conventions, (c) introduces a parametric-fit fallback for indicator classes whose long-horizon sample size is unattainable (monthly macro), (d) amends CLS-002 to operate on signed scores, replaces the static `d_c = 0.7` source-dropout penalty with a duration-scaled function, replaces the same-category corroboration rule with a percentile-bounded high-conviction bypass plus event-typology-dependent corroboration windows, (e) clarifies CLS-006 implications under signed composite scores (negative composite ⇒ vol-compression dislocation), and (f) adds EXT-004 specifying catalyst-relative exit and an explicit Vega-crush gate for positions held across known catalysts. Adds §3 definitions: long-horizon reference window `H_L` and length `N_L`, signed deviation, sign convention, parametric fallback, high-conviction bypass percentile, corroboration window, catalyst-relative exit, expected Gamma–Vega ledger. Rationale: closes the regime-blindness false-positive class at CLS-001 (window-absorption pathology surfaced by the 2017-10-05 / 2019-07-15 anchor fixtures), makes severity directional so downstream CLS-006 / DEC-001 / POS-001 can natively distinguish vol-expansion from vol-compression opportunities without re-deriving direction from auxiliary fields, and aligns CLS-002 corroboration timing with realistic PrimeScore AI latency budgets (HTTP-coupled .NET → Python boundary, 1–5 s intraday and 30–60 min macro) rather than HFT figures. The bundle is coordinated: the OpenAPI score range, the CLS-001 formula, the CLS-002 aggregation, and the EXT-004 exit rule all change together because shipping any in isolation leaves the contract incoherent. See `doc/research/srs-revision-v2.3.3-answers.md` for the source analysis and refinements.
 
+**v2.4.0** brings the requirements in line with ADR-0008 to ADR-0012. CLS-006 becomes descriptive: the dislocation is recorded and gates nothing. DEC-001 asserts no direction. Adds DEC-005 (volatility state and the tail gate), ANA-003 (outcomes record), SIG-006 (scheduled source adapters with provenance and licence limits), CLS-010 (adapter-recorded series not assessed), and §5.12 Catalysts: CAT-001 (calendar and canonical ids), CAT-002 (schedule vintages), CAT-003 (pre-event 9-day/30-day ratio against weekday-matched placebo days). ANA-001 verification and §11 move from Iran February 2026 to the hand-calculated Volmageddon replay. §9 events become a regression record: the state gate fires on or after a shock, never before it, so their "deploy by" targets are not requirements. Rationale: the directional reading was refuted (signalled direction right 34 to 41 percent of the time; ADR-0008). Slice specs citing these IDs live in `doc/slices/`.
+
 # Table of Contents
 
 # 1. Purpose
 
-This specification defines the planned **PrimeScore Markets** product under the PrimeScore AI brand. Its proposed .NET engine will ingest market, macroeconomic, geopolitical and cross-asset events; call the Python classifier; aggregate assessments; and compare a volatility estimate with observed implied volatility. Options construction, position management and capital limits are requirements for future implementation. The current single-event scenario is an arithmetic demonstration, not a validated forecast; see [known design limits](../../LIMITATIONS.md).
+This specification defines the planned **PrimeScore Markets** product under the PrimeScore AI brand. Its proposed .NET engine will ingest market, macroeconomic, geopolitical and cross-asset events; call the Python classifier; aggregate assessments; place the reference volatility level in its own history and record what followed (ADR-0008); and record scheduled macroeconomic and market catalysts. Options construction, position management and capital limits are requirements for future implementation. No predictive signal has been validated; see [known design limits](../../LIMITATIONS.md).
 
 The accompanying architecture study, formerly called **DeltaFeed**, proposes six implementations of that engine behind one external API contract. The study will compare dependency-rule violations, acceptance-test results, repair attempts and development cost as the internal architecture changes. No engine iteration or comparative measurement exists yet.
 
@@ -170,6 +172,14 @@ The system shall handle signal volume spikes of at least 10x normal rate without
 
 **Verification:** Load test at 10x and 50x. Verify no crash. Verify buffer overflow behaviour.
 
+### SIG-006 [Must]
+
+Each external source shall be read by a scheduled adapter that is off unless configured, stamps every observation at its observation time (New York wall time converted to UTC), records provenance (source URL, fetch time, file SHA-256, and whether the source back-calculated the value), and reports every run (counts, errors, flags) on the operator's status page. A source whose terms forbid storage shall not be recorded: FRED is a read-only cross-check that flags disagreement without keeping FRED's values. Licensed series shall reach only the authenticated operator and READ or ADMIN tokens.
+
+**Rationale:** Point-in-time stamping keeps replays free of look-ahead; provenance makes every figure traceable to a file; FRED's terms prohibit storing its content (ADR-0009).
+
+**Verification:** Serve a Cboe VIX file from a stub; verify the close for date D is recorded at 16:15 New York on D with `cboe:` provenance and the file hash, and that a FRED pull records nothing.
+
 ## 5.2 Classification
 
 ### CLS-001 [Must]
@@ -259,11 +269,11 @@ The AI classification component shall defend against prompt injection. External 
 
 The system shall compute the IV dislocation as: Dislocation = SignalImpliedIV − MarketObservedIV. SignalImpliedIV = MarketObservedIV × (1 + CompositeScore × SENSITIVITY_FACTOR), where SENSITIVITY_FACTOR is a configurable, regime-aware multiplier. SENSITIVITY_FACTOR shall be higher in low-volatility environments (more room for repricing) and lower in high-volatility environments (diminishing marginal signal impact). The mapping from current volatility level to SENSITIVITY_FACTOR shall be configurable. MarketObservedIV is the most recent implied volatility value from the MARKET_DATA source category for the configured reference instrument. The reference instrument shall be configurable per deployment context (e.g., VIX for equity events, OVX for oil events, currency vol indices for FX events). Default: VIX. The dislocation shall update as signals or market data change.
 
-Under v2.3.3 CompositeScore lies in `[−1.0, +1.0]`, so SignalImpliedIV may be below MarketObservedIV when CompositeScore is negative. A negative dislocation is an admissible output and signals a vol-compression opportunity (market overpricing implied volatility relative to the signal-implied fair value); a positive dislocation continues to signal a vol-expansion opportunity. Downstream consumers (DEC-001, POS-001) shall interpret the sign of the dislocation when selecting position type.
+Under v2.3.3 CompositeScore lies in `[−1.0, +1.0]`, so SignalImpliedIV may be below MarketObservedIV. Under v2.4.0 (ADR-0008) the dislocation is descriptive: it is recorded with every decision, gates no decision, and shall not be presented as a forecast, a fair value, a mispricing or a position type. Its sign follows CompositeScore.
 
-**Rationale:** IV dislocation is the primary measure of exploitable opportunity windows. Permitting negative dislocations under signed CompositeScore preserves the directional information added by v2.3.3 without adding a separate field; the existing arithmetic relationship between SignalImpliedIV, MarketObservedIV, and Dislocation is unchanged.
+**Rationale:** The dislocation is the level times a rank of the level, so it carries no information the level and its percentile do not; read as an opportunity it was right 34 to 41 percent of the time on signalled days (ADR-0008). It stays recorded so decisions made before ADR-0008 remain reproducible.
 
-**Verification:** During event replay of Iran Feb 2026, verify dislocation crosses threshold by Feb 27. Verify the dislocation output contains signal_implied_iv, market_observed_iv, and dislocation_value with correct arithmetic relationship. With a CompositeScore of equal magnitude but opposite sign, verify Dislocation flips sign and SignalImpliedIV moves to the opposite side of MarketObservedIV.
+**Verification:** Verify the dislocation output contains signal_implied_iv, market_observed_iv, and dislocation_value with correct arithmetic relationship. With a CompositeScore of equal magnitude but opposite sign, verify Dislocation flips sign and SignalImpliedIV moves to the opposite side of MarketObservedIV.
 
 ### CLS-007 [Should]
 
@@ -298,11 +308,19 @@ In either case, `certainty` shall be multiplied by a configurable degradation fa
 2. Submit a signal whose symbol is absent from the registry. Verify `computed_metrics.unknown_indicator = true`, `score = 0.0`, and the degraded certainty envelope.
 3. Verify that no CLS-004 fallback-activation log entry is produced by either case (CLS-009 and CLS-004 are disjoint paths).
 
+### CLS-010 [Must]
+
+A source-adapter observation shall be recorded as an unavailable assessment, without calling the classifier, when it is dated before the configured classified-history start (default 2011-01-01), when it is market data outside the indicator registry, or when its series already has an earlier-recorded observation for the same New York date. The reason shall be recorded.
+
+**Rationale:** A close recorded by two sources must not corroborate itself, context series (VIX9D, VIX3M, VIX6M, SPX) are analytics inputs, and history not yet examined must not be spent before a registration names it (ADR-0010).
+
+**Verification:** Record a Cboe close for a date FRED already recorded; verify `DuplicateObservation` naming the earlier signal and no new composite. Record a VIX9D close; verify `UnknownIndicator`.
+
 ## 5.3 Decision Engine
 
 ### DEC-001 [Must]
 
-The system shall generate a deploy decision only when all configurable conditions are simultaneously satisfied. Each condition’s evaluated value shall be recorded.
+The system shall generate a deploy decision only when all configurable conditions are simultaneously satisfied. Each condition’s evaluated value shall be recorded. A deploy decision asserts that the conditions held, including the extreme state of DEC-005; it asserts no direction (ADR-0008).
 
 **Rationale:** Multi-condition gating prevents deployment on incomplete information.
 
@@ -331,6 +349,14 @@ The system shall classify deploy decisions into urgency tiers. Decisions above a
 **Rationale:** Human-in-the-loop governance. Introduced as cross-boundary workflow task (CT-05).
 
 **Verification:** Trigger signal requiring approval. Verify position construction blocks until approval received.
+
+### DEC-005 [Must]
+
+Every decision shall record the reference level's percentile among its prior closes (up to five years, at least 252) and a state derived from it: `extreme_low`, `low`, `normal`, `high`, `extreme_high`, or `unknown` when the history is shorter. The deploy conditions shall include the level lying within a configurable tail of either end of that history (default 5%, operator `<=` or `<`, range 0 to 25%), so `extreme_*` states and DEPLOY agree. The state describes where the level sits, not where it goes.
+
+**Rationale:** The level's rank is the one quantity the engine can state without a forecast. Requiring the tail in the gate keeps the dashboard label and the decision consistent (ADR-0008).
+
+**Verification:** Volmageddon: VIX 37.32 at or above 1,259 of 1,260 prior closes gives percentile 0.99921, tail 0.000794, state `extreme_high`, DEPLOY; the close before (17.31) sits at percentile 0.8594, state `high`, IDLE. A history of fewer than 252 closes gives `unknown` and IDLE.
 
 ## 5.4 Position Construction
 
@@ -444,7 +470,7 @@ The system shall replay any historical event using point-in-time data, producing
 
 **Rationale:** Point-in-time replay validates classifier without look-ahead bias.
 
-**Verification:** Replay Iran Feb 2026. Verify deploy on Feb 27 ± 1 day. Replay with higher threshold. Verify signal delayed.
+**Verification:** Replay 2018-02-02 to 2018-02-05 (Volmageddon). Verify the hand-calculated composites, IDLE in state `high` on 2 February and DEPLOY in state `extreme_high` on 5 February. Replay with a 20% tail: verify 2 February becomes DEPLOY and the live decisions are unchanged. Verify observations recorded after a replay's ledger boundary do not enter it.
 
 ### ANA-002 [Should]
 
@@ -453,6 +479,14 @@ The system shall decompose returns into signal alpha, timing alpha, and executio
 **Rationale:** Attribution identifies which system part needs improvement. Introduced as task (CT-09).
 
 **Verification:** Verify attribution components present and summing correctly per trade.
+
+### ANA-003 [Must]
+
+For each market context, and for the live journal or any stored replay, the system shall publish the change of the reference index from the close on each decision's NYSE trading day to the close exactly 1, 5, 10 and 21 trading days later: for extreme-state DEPLOY days and for all days, the median absolute change, the share of DEPLOY days that moved back toward the median with a block-bootstrap 95% interval, and per state the median change and share up. One state per day (the last decision of the day). Days under the pre-ADR-0008 gate, days without a reference close and days on another instrument shall be counted separately, a horizon without a later close shall not be measured, and the record shall be shown whatever it shows.
+
+**Rationale:** A descriptive state is only useful with its record; publishing it unconditionally is the protocol that replaces the refuted validation (ADR-0008).
+
+**Verification:** Through the API, verify the record counts the same extreme days as the decision journal and leaves the last close unmeasured at every horizon. On the dashboard, verify the Outcomes record shows the same counts.
 
 ## 5.8 Observability
 
@@ -549,6 +583,32 @@ Each transition between iterations shall be documented with: (a) which component
 **Rationale:** Migration documentation captures the quantifiable evidence this project exists to produce.
 
 **Verification:** Document exists for each transition with all seven elements.
+
+## 5.12 Catalysts
+
+### CAT-001 [Must]
+
+The system shall record scheduled FOMC decisions, CPI, Employment Situation, initial claims, GDP, Personal Income and Outlays, EIA weekly petroleum status and OPEC meetings from their originators (or a published rule, or an operator-curated file, each labelled), under a canonical id `FAMILY-YYYY-MM-DD` fixed at the first recorded schedule, and list the events of the next 30 days with their time, source and ledger reference.
+
+**Rationale:** Scheduled events are the join key for decisions, outcomes and briefs; an id that never changes keeps joins valid after a reschedule (ADR-0011).
+
+**Verification:** Serve the Federal Reserve calendar from a stub; verify `FOMC-2026-10-28` at 14:00 New York with its source URL, file hash and ledger reference, through the API and the Catalyst calendar page.
+
+### CAT-002 [Must]
+
+Every change of a recorded event's time, status, SEP marker or tentative marker shall append a new schedule vintage and never overwrite one; a source of lower precedence (rule, curated, archive, listing, ascending) shall not replace a higher one; each event shall state whether it was ever rescheduled: true, false, or unknown when first recorded after it happened.
+
+**Rationale:** Tests over events must be able to report the subset never rescheduled, from what was known at the time (ADR-0011).
+
+**Verification:** Move `FOMC-2026-10-28` to 4 November in the stub; verify vintage 2 with change `moved`, the id unchanged, and never-rescheduled false.
+
+### CAT-003 [Must]
+
+For each upcoming event the system shall show VIX9D ÷ VIX − 1 on the latest NYSE trading day before it with both Cboe closes, and its percentile among the same ratio read the same number of calendar days before same-weekday placebo days one to three weeks before past events of the family, excluding placebo and read days within one trading day of a scheduled FOMC, CPI, NFP, GDP, PCE or OPEC event. The percentile shall be withheld below 10 baseline values, excluded and missing candidates shall be counted, weekly families (claims, WPSR) shall get no baseline, families whose calendar does not reach the earliest read date shall be named, and no index level shall be served.
+
+**Rationale:** The short end of the term structure before an event is compared only with like days: same weekday, same reading distance, no other event (ADR-0012).
+
+**Verification:** From stub files, verify for `FOMC-2026-10-28` the as-of date 2026-09-24, value −0.055, n = 10, three missing closes and percentile 0.5, as hand-derived in the acceptance test.
 
 # 6. Non-Functional Requirements
 
@@ -939,6 +999,8 @@ Ten historical events. Includes true positives, false positives, and one correct
 | Liberation Day | Apr 2, 2025 | Macro Shock | Deploy by Apr 1. True positive. |
 | Iran Strikes | Feb 28, 2026 | Geopolitical | Deploy by Feb 27. True positive. |
 
+Under v2.4.0 these events are a regression record of software behaviour, not requirements. They were chosen after the spikes, and the state gate (DEC-005) fires once a level is extreme, on or after a shock, never before it, so the "deploy by" targets describe the refuted directional design (ADR-0008). Predictive claims are judged only by forward-registered tests.
+
 # 10. Change Task Register
 
 Controlled requirement implementations. Each has a type, governing which measurement dimensions it produces.
@@ -967,7 +1029,7 @@ Controlled requirement implementations. Each has a type, governing which measure
 
 - The API acceptance test suite (EVO-001a) passes on all completed iterations without test code modification.
 - Structural tests (EVO-002) exist per iteration and record at least one AI-generated violation during development.
-- Event replay of Iran Feb 2026 produces deploy signal on Feb 27 ± 1 day in all iterations.
+- Event replay of Volmageddon produces IDLE (`high`) on 2 February 2018 and DEPLOY (`extreme_high`) on 5 February 2018 in all iterations (ANA-001).
 - All five prompt injection tests (CLS-005) rejected in all iterations.
 - Iteration 3→4 migration documented with exact file count outside Infrastructure.
 - Migration documentation (EVO-003) exists for each transition with all seven elements.
@@ -976,8 +1038,8 @@ Controlled requirement implementations. Each has a type, governing which measure
 - Insight 1 taxonomy table includes both first-pass and post-retry columns.
 - At least 5 dual-condition prompt experiments (ACX-003) recorded per iteration where attempted.
 - The automated CI/CD pipeline successfully captures and records the Operational & Economic Viability telemetry (mutation score, SAST findings, maintainability index) without manual intervention (OEV-001).
-- For CLS-001, CLS-002, CLS-006, and EXT-004, API acceptance tests shall include hand-calculated expected outputs verified against the formulas defined in this specification.
+- For CLS-001, CLS-002, CLS-006, DEC-005, CAT-003 and EXT-004, API acceptance tests shall include hand-calculated expected outputs verified against the formulas defined in this specification.
 
 ---
 
-END OF SRS v2.3.3
+END OF SRS v2.4.0

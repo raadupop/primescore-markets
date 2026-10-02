@@ -23,7 +23,8 @@ internal sealed class GetReplayDecisionsHandler(IQueryHandler<GetReplayAggregate
             return new DecisionView(Guid.NewGuid(), 0, composite.CorrelationId, query.Version, composite.Context, result.Outcome,
                 result.Scenario, composite.CompositeId, composite.Score, dislocation.DislocationId, dislocation.DislocationValue,
                 dislocation.Threshold, dislocation.ReferenceInstrument, dislocation.MarketObservedIv, dislocation.SignalImpliedIv,
-                composite.TriggerSignalId, result.Conditions, result.TopContributing, result.Dissenting, result.Explanation, composite.AsOf, composite.AsOf);
+                composite.TriggerSignalId, result.Conditions, result.TopContributing, result.Dissenting, result.Explanation, composite.AsOf, composite.AsOf,
+                dislocation.RegimePercentile);
         }).ToArray();
     }
 }

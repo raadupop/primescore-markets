@@ -77,7 +77,7 @@ internal sealed class LedgerTestDatabase : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await Services.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        new EngineDatabase(Path.Combine(_directory, "engine.db")).ClearPool();
         try
         {
             Directory.Delete(_directory, recursive: true);

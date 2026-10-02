@@ -39,6 +39,8 @@ internal static class AggregateDtos
         Threshold_breached = view.ThresholdBreached,
         Reference_instrument = view.ReferenceInstrument,
         Sensitivity_factor = view.SensitivityFactor,
+        Regime = view.Regime,
+        Regime_percentile = view.RegimePercentile,
         Computed_at = view.ComputedAt,
     };
 

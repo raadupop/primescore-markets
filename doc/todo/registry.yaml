@@ -163,3 +163,271 @@ todos:
       reminder to invoke /trader and /statistician before claiming the
       SRS section complete. Mirror the existing fixture-reminder.sh
       shape.
+
+  - id: TODO-010
+    title: Register and run a forward test of the catalyst volatility crush
+    status: open
+    priority: high
+    owner: radu
+    source:
+      kind: research
+      ref: doc/research/preregistration-2026-09-27.md
+      section: "Result: catalyst-vx30-crush"
+    related_adr: [ADR-0008]
+    created: 2026-09-28
+    updated: 2026-09-28
+    blocked_by: []
+    notes: >
+      The closest miss (H1 excess -0.101 VX30 points, p 0.095; H3 magnitude
+      ratio 1.26, p 0.0026 against alpha 0.0021). The 2019+ data may not be
+      reused. Pre-register the frozen rule (short VX30 from the settle before
+      each FOMC or CPI release to the release-day settle) and evaluate it only
+      on events after the registration date; needs about 150 events for the
+      registered power.
+
+  - id: TODO-011
+    title: Replay history on the live ledger under the state gate
+    status: open
+    priority: medium
+    owner: radu
+    source:
+      kind: adr
+      ref: ADR-0008
+    related_adr: [ADR-0008]
+    created: 2026-09-28
+    updated: 2026-09-28
+    blocked_by: []
+    notes: >
+      Starting the engine upgrades the configuration automatically. Run
+      `replay --from 2016-01-04 --to <today>` and `outcomes-report --replay <id>`
+      so the record shows history under the current gate. Appends one large,
+      permanent ReplayRun entry, so it is the operator's call.
+
+  - id: TODO-012
+    title: Amend the SRS for ADR-0008 (sign convention, CLS-006, DEC-001, DEC-002, ANA-001)
+    status: done
+    priority: medium
+    owner: radu
+    source:
+      kind: srs
+      ref: CLS-006
+    related_adr: [ADR-0008]
+    created: 2026-09-28
+    updated: 2026-10-02
+    blocked_by: []
+    notes: >
+      Done in SRS v2.4.0: CLS-006 descriptive, DEC-001 without direction,
+      DEC-005, ANA-003, SIG-006, CLS-010, CAT-001 to CAT-003, ANA-001 and §11
+      on Volmageddon. §9 events stay as a regression record (on the
+      2016-2026 replay the state gate fires on or after each shock, never
+      before); replacing them with forward-evaluated tests is slice 6
+      (doc/slices/README.md) with TODO-010.
+
+  - id: TODO-013
+    title: Price the options-data experiment for the catalyst thesis
+    status: open
+    priority: medium
+    owner: radu
+    source:
+      kind: research
+      ref: doc/research/redesign-2026-09-27.md
+    related_adr: [ADR-0008]
+    created: 2026-09-28
+    updated: 2026-09-28
+    blocked_by: [TODO-010]
+    notes: >
+      The original thesis (implied volatility mispriced ahead of scheduled
+      catalysts) needs option implied volatilities around each event, not the
+      index. Decide after TODO-010 whether the forward test justifies paid data.
+
+  - id: TODO-014
+    title: Restore the cross-asset basket and macro prints from their originators
+    status: open
+    priority: high
+    owner: radu
+    source:
+      kind: adr
+      ref: ADR-0009
+      section: Consequences
+    related_adr: [ADR-0009]
+    created: 2026-09-29
+    updated: 2026-09-29
+    blocked_by: []
+    notes: >
+      FRED records nothing since 2026-09-29, so SP500, DGS10, DCOILWTICO,
+      DEXUSEU, CPI and initial claims stopped updating. Waits on the v3 step 3
+      originator adapters (BLS and BEA prints, Treasury, EIA, Fed H.10). Cboe
+      now records SPX while the equity context still lists SP500; decide the
+      context member when the basket is restored.
+
+  - id: TODO-015
+    title: Find a source for EVZ or retire it from the indicator registry
+    status: open
+    priority: low
+    owner: radu
+    source:
+      kind: adr
+      ref: ADR-0009
+      section: Consequences
+    related_adr: [ADR-0009]
+    created: 2026-09-29
+    updated: 2026-09-29
+    blocked_by: []
+    notes: >
+      Cboe publishes no EVZ history file (403, checked 2026-09-29); FRED's
+      EVZCLS ended 2025-03-11, and FRED is no longer recorded (ADR-0009).
+
+  - id: TODO-016
+    title: Settle the VVIX live start and the exact 2003 VIX methodology date
+    status: open
+    priority: high
+    owner: radu
+    source:
+      kind: adr
+      ref: ADR-0009
+      section: Decision (reconstructed marker)
+    related_adr: [ADR-0009]
+    created: 2026-09-29
+    updated: 2026-09-29
+    blocked_by: []
+    notes: >
+      No Cboe primary page dates the VVIX launch, and the VIX historical-data
+      page gives only the year 2003, so those rows carry no reconstructed
+      marker. The ledger marker cannot be corrected later: settle the dates
+      from a Cboe primary source before Sources:Cboe is enabled on the live
+      ledger. Step-3 analytics derive the "reconstructed" label from the
+      catalogue dates, not from the recorded marker.
+
+  - id: TODO-017
+    title: Add the CLI verb pull --source <name> with single-writer coordination
+    status: open
+    priority: low
+    owner: radu
+    source:
+      kind: design-followup
+      ref: doc/briefs/markets-v3-design.md
+      section: "5.5 Dashboard and CLI"
+    related_adr: [ADR-0009]
+    created: 2026-09-29
+    updated: 2026-09-29
+    blocked_by: []
+    notes: >
+      A second process appending to the ledger while the engine runs needs
+      coordination with the running engine. Until then pulls run from the
+      Data & health page (Run now) or through Sources:<Name>:RunOnStartup.
+
+  - id: TODO-018
+    title: Decide the FRED-derived figures in published output, and test that no raw levels are served
+    status: open
+    priority: high
+    owner: radu
+    source:
+      kind: adr
+      ref: ADR-0009
+      section: Decision (existing FRED rows)
+    related_adr: [ADR-0009, ADR-0010]
+    created: 2026-09-29
+    updated: 2026-09-29
+    blocked_by: []
+    notes: >
+      Before the first public brief (v3 step 4): either published derived
+      figures come only from cboe:-sourced windows, or an ADR records a FRED
+      exemption. Add a test that no public or published path serves raw Cboe
+      or SPX levels (design §9).
+
+  - id: TODO-019
+    title: Back-fill GDP, PCE, WPSR, CLAIMS and OPEC calendar history, and the original dates of moved releases
+    status: open
+    priority: medium
+    owner: radu
+    source:
+      kind: adr
+      ref: ADR-0011
+      section: Decision (back-fill)
+    related_adr: [ADR-0011, ADR-0012]
+    created: 2026-09-29
+    updated: 2026-09-29
+    blocked_by: []
+    notes: >
+      Live sources reach back only to 2025-01 (BEA feed), the week ending
+      2024-12-27 (EIA table) and 60 weeks (claims rule); OPEC has no history.
+      Design step 3 needs the last 12 events per family and step 5 the
+      2013-10 to 2018-12 window. Import verified rows with import-catalysts.
+      Also import the originally scheduled dates of the releases moved by the
+      2013 and 2025 shutdowns, so their never_rescheduled becomes false
+      instead of unknown.
+
+  - id: TODO-020
+    title: Replace the claims rule with DOL's published release list once it is reachable
+    status: open
+    priority: low
+    owner: radu
+    source:
+      kind: adr
+      ref: ADR-0011
+      section: Decision (sources)
+    related_adr: [ADR-0011]
+    created: 2026-09-29
+    updated: 2026-09-29
+    blocked_by: []
+    notes: >
+      https://oui.doleta.gov/unemploy/claims.asp answered 403 to every
+      automated client on 2026-09-29, so CLAIMS dates are derived by rule
+      (Thursday 08:30 New York, Wednesday before a federal-holiday Thursday).
+      An originator listing would be recorded as corrections of the rule
+      vintages.
+
+  - id: TODO-021
+    title: Find a machine-readable OPEC meeting source, or keep curating opec.csv
+    status: open
+    priority: low
+    owner: radu
+    source:
+      kind: adr
+      ref: ADR-0011
+      section: Decision (sources)
+    related_adr: [ADR-0011]
+    created: 2026-09-29
+    updated: 2026-09-29
+    blocked_by: []
+    notes: >
+      opec.org listings sit behind a browser challenge the engine does not
+      work around. Until a source is found, OPEC and JMMC dates come only from
+      apps/engine/data/catalysts/opec.csv; confirm the publisher's terms
+      before adding rows.
+
+  - id: TODO-022
+    title: Verify the FOMC statement time for 2013 to 2015 from a primary source
+    status: open
+    priority: low
+    owner: radu
+    source:
+      kind: adr
+      ref: ADR-0011
+      section: Context
+    related_adr: [ADR-0011]
+    created: 2026-09-29
+    updated: 2026-09-29
+    blocked_by: []
+    notes: >
+      Statements from 2016 state 14:00 New York; the 2013-2015 statements say
+      only "for immediate release". Those back-filled catalysts assume 14:00.
+      A different verified time is recorded by a forced import.
+
+  - id: TODO-023
+    title: Add catalyst_id to DecisionRecord when a decision falls inside an event window
+    status: open
+    priority: medium
+    owner: radu
+    source:
+      kind: design-followup
+      ref: doc/briefs/markets-v3-design.md
+      section: "5.4 Contract 1.3.0"
+    related_adr: [ADR-0011]
+    created: 2026-09-29
+    updated: 2026-09-29
+    blocked_by: []
+    notes: >
+      Design §5.4 adds catalyst_id to DecisionRecord; contract 1.3.0 so far
+      adds only the catalyst endpoints. Needs the event-window definition
+      that design step 3 (GetCatalystOutcomes) fixes.

@@ -29,7 +29,7 @@ else
             <p>Reference: @Fmt.Instrument(decision.ReferenceInstrument) · Observed @Fmt.Utc(decision.AsOf)</p>
         </div>
         <div class="action-bar">
-            <DecisionBadge Outcome="decision.Outcome" />
+            <DecisionBadge Outcome="decision.Outcome" Scenario="@decision.Scenario" />
             <a class="button" href="decisions">All decisions</a>
         </div>
     </div>
@@ -37,14 +37,14 @@ else
     <WorkflowGuide Current="conditions" />
 
     <section class="panel analysis-summary" aria-label="Decision summary">
-        <h2>@DecisionCopy.Outcome(decision.Outcome)</h2>
+        <h2>@DecisionCopy.Outcome(decision.Outcome, decision.Scenario)</h2>
         <p>@DecisionCopy.Summary(decision)</p>
         <div class="metric-grid">
             <div class="metric"><span>Observed @decision.ReferenceInstrument</span><strong>@Fmt.Number(decision.MarketObservedIv, 2)</strong><small>Index level at this observation</small></div>
-            <div class="metric"><span>Model scenario</span><strong>@Fmt.Number(decision.SignalImpliedIv, 2)</strong><small>Calculated from signals and sensitivity</small></div>
-            <div class="metric"><span>Scenario gap</span><strong>@Fmt.Signed(decision.DislocationValue, 2)</strong><small>Index points · threshold ±@Fmt.Number(decision.DislocationThreshold, 2)</small></div>
+            <div class="metric"><span>Place in its own history</span><strong>@(decision.LevelPercentile is { } percentile ? Fmt.Ordinal(percentile * 100) : "—")</strong><small>@DecisionCopy.Percentile(decision.LevelPercentile, decision.Scenario)</small></div>
+            <div class="metric"><span>Volatility state</span><strong>@DecisionCopy.Scenario(decision.Scenario)</strong><small>A rank of the level, not a forecast</small></div>
         </div>
-        <p class="panel-note">The scenario applies a configured sensitivity to the combined signal score. The scenario level is an assumption for research, not an independent volatility forecast.</p>
+        <p class="panel-note">@DecisionCopy.StateMeaning(decision.Scenario)</p>
         <div class="callout">
             <strong>Position: none. Execution: none.</strong>
             This record evaluates @decision.ReferenceInstrument as a reference index. No tradable instrument, contract, side, size or venue was selected, and no order was sent.
@@ -81,14 +81,14 @@ else
     <div class="grid grid-2">
         <section class="panel" aria-label="Contributing signals">
             <div class="panel-head">
-                <div><div class="kicker">Evidence for the scenario</div><h2>Strongest supporting observations</h2></div>
+                <div><div class="kicker">Evidence on the combined score's side</div><h2>Strongest supporting observations</h2></div>
             </div>
             <p class="panel-note">Up to three confirmed signals pointing in the combined score's direction. Open an observation to inspect its source and classification.</p>
             <SignalTable Signals="decision.TopContributing" Empty="No supporting confirmed observation was recorded." />
         </section>
         <section class="panel" aria-label="Dissenting signals">
             <div class="panel-head">
-                <div><div class="kicker">Evidence against the scenario</div><h2>Opposing observations</h2></div>
+                <div><div class="kicker">Evidence against the combined score</div><h2>Opposing observations</h2></div>
             </div>
             <SignalTable Signals="decision.Dissenting" Empty="No confirmed observation pointed in the opposite direction." />
         </section>
@@ -114,10 +114,11 @@ else
             </div>
         </div>
         <dl class="kv">
-            <dt>Combined score</dt><dd>@Fmt.Signed(decision.CompositeScore, 4) · −1 to +1; positive supports higher volatility, negative supports lower volatility.</dd>
-            <dt>Scenario gap</dt>
+            <dt>Combined score</dt><dd>@Fmt.Signed(decision.CompositeScore, 4) · −1 to +1; positive means the strongest confirmed input sits above its own median, negative below. A rank, not a direction.</dd>
+            <dt>Legacy scenario gap</dt>
             <dd>
-                @Fmt.Signed(decision.DislocationValue, 4) index points = model scenario @Fmt.Number(decision.SignalImpliedIv, 4) − observed @decision.ReferenceInstrument @Fmt.Number(decision.MarketObservedIv, 2).
+                @Fmt.Signed(decision.DislocationValue, 4) index points = @Fmt.Number(decision.SignalImpliedIv, 4) − observed @decision.ReferenceInstrument @Fmt.Number(decision.MarketObservedIv, 2).
+                Recorded for reproducibility; it is the level times a rank of the level and no longer gates decisions (ADR-0008).
             </dd>
             <dt>Configuration</dt><dd><a href="configuration">version @decision.ConfigVersion.Value</a></dd>
             <dt>Correlation id</dt><dd>@decision.CorrelationId</dd>

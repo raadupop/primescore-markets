@@ -1,13 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using PrimeScore.Modules.Ingestion.Contracts;
 using PrimeScore.Modules.Ingestion.Sources;
-using PrimeScore.Modules.Ingestion.Sources.Fred;
 using PrimeScore.Modules.Ingestion.Storage;
 using PrimeScore.SharedKernel;
 using PrimeScore.SharedKernel.Cqrs;
 using PrimeScore.SharedKernel.Json;
-using PrimeScore.SharedKernel.Registry;
 
 namespace PrimeScore.Modules.Ingestion.Features;
 
@@ -55,6 +52,17 @@ internal sealed class GetSignalsHandler(IngestionReadStore reads) : IQueryHandle
             rows = rows.Where(row => row.Variant == filter.Variant);
         }
 
+        if (!string.IsNullOrEmpty(filter.SourcePrefix))
+        {
+            rows = rows.Where(row => row.SourceIdentifier.StartsWith(filter.SourcePrefix));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Provider))
+        {
+            var provider = filter.Provider.Trim();
+            rows = rows.Where(row => EF.Functions.Collate(row.Provider, "NOCASE") == provider);
+        }
+
         var total = await rows.CountAsync(cancellationToken).ConfigureAwait(false);
         var page = await rows
             .OrderByDescending(row => row.ObservedAtMs).ThenByDescending(row => row.Sequence)
@@ -96,49 +104,69 @@ internal sealed class GetRejectionsHandler(IngestionReadStore reads) : IQueryHan
     }
 }
 
+/// <summary>
+/// One row per registered adapter, enabled or not: live state from <see cref="SourceRuntime"/>,
+/// run history (last error, partial, counts, flags, note) from <c>ing_source_runs</c>, coverage
+/// from the recorded signals of each adapter's series. API rows recorded under an identifier
+/// before its prefix was reserved are not the adapter's, so they are not its coverage
+/// (<see cref="SourcePrefixes.IsAdapterRecorded"/>).
+/// </summary>
 internal sealed class GetSourceStatusHandler(
     IngestionReadStore reads,
-    SourcePullQueue queue,
-    IndicatorRegistry registry,
-    IOptions<FredOptions> options) : IQueryHandler<GetSourceStatus, IReadOnlyList<SourceStatus>>
+    SourceRuntime runtime,
+    IEnumerable<ISourceAdapter> adapters) : IQueryHandler<GetSourceStatus, IReadOnlyList<SourceStatus>>
 {
     public async Task<IReadOnlyList<SourceStatus>> HandleAsync(GetSourceStatus query, CancellationToken cancellationToken)
     {
-        var settings = options.Value;
+        ArgumentNullException.ThrowIfNull(query);
+        var registered = adapters.ToArray();
+        var catalogue = registered.ToDictionary(adapter => adapter, adapter => adapter.Series);
+        var identifiers = catalogue.Values.SelectMany(series => series).Select(series => series.SourceIdentifier).Distinct(StringComparer.Ordinal).ToArray();
         await using var context = reads.Open();
-        var runs = context.SourceRuns.Where(run => run.Source == FredOptions.SourceName);
-        var lastRun = await runs.OrderByDescending(run => run.StartedAtMs).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-        var lastSuccess = await runs.Where(run => run.Succeeded).OrderByDescending(run => run.StartedAtMs)
-            .Select(run => run.FinishedAtMs).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         var perSource = await context.Signals
-            .Where(row => row.Provider == FredOptions.SourceName)
+            .Where(row => identifiers.Contains(row.SourceIdentifier) && EF.Functions.Collate(row.Provider, "NOCASE") != SourcePrefixes.ApiProvider)
             .GroupBy(row => row.SourceIdentifier)
             .Select(group => new { Source = group.Key, Count = group.LongCount(), Latest = group.Max(row => row.ObservedAtMs) })
             .ToDictionaryAsync(group => group.Source, cancellationToken).ConfigureAwait(false);
-        var series = FredSeriesCatalog.Build(registry, settings)
-            .Select(item => new SeriesStatus(
-                item.SeriesId, item.Instrument, item.Category, item.Verified,
-                perSource.TryGetValue(item.SourceIdentifier, out var recorded) ? recorded.Count : 0,
-                perSource.TryGetValue(item.SourceIdentifier, out var latest) ? DateTimeOffset.FromUnixTimeMilliseconds(latest.Latest) : null,
-                item.TimingDescription))
-            .ToArray();
-        return
-        [
-            new SourceStatus(
-                FredOptions.SourceName,
-                settings.DisabledReason() is null,
-                settings.DisabledReason(),
-                queue.Running,
+        var statuses = new List<SourceStatus>(registered.Length);
+        foreach (var adapter in registered)
+        {
+            var state = runtime.For(adapter.Name);
+            var runs = context.SourceRuns.Where(run => run.Source == adapter.Name);
+            var lastRun = await runs.OrderByDescending(run => run.StartedAtMs).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            var lastSuccess = await runs.Where(run => run.Succeeded).OrderByDescending(run => run.StartedAtMs)
+                .Select(run => run.FinishedAtMs).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            var series = catalogue[adapter]
+                .Select(item => new SeriesStatus(
+                    item.SeriesId, item.Instrument, item.Category, item.MappingVerified,
+                    perSource.TryGetValue(item.SourceIdentifier, out var recorded) ? recorded.Count : 0,
+                    perSource.TryGetValue(item.SourceIdentifier, out var latest) ? DateTimeOffset.FromUnixTimeMilliseconds(latest.Latest) : null,
+                    item.Timing,
+                    item.SourceIdentifier,
+                    item.Url))
+                .ToArray();
+            var reason = adapter.DisabledReason;
+            statuses.Add(new SourceStatus(
+                adapter.Name,
+                reason is null,
+                reason,
+                state.Running,
                 lastRun is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(lastRun.StartedAtMs),
                 lastSuccess is { } success ? DateTimeOffset.FromUnixTimeMilliseconds(success) : null,
-                lastRun?.Error ?? (lastRun is { FinishedAtMs: null } && !queue.Running ? "interrupted before finishing" : null),
+                lastRun?.Error ?? (lastRun is { FinishedAtMs: null } && !state.Running && !query.StoredOnly ? "interrupted before finishing" : null),
                 lastRun is { Succeeded: true, Error: not null },
-                queue.NextRunAt,
+                state.NextRunAt,
                 lastRun is { FinishedAtMs: not null, Succeeded: true }
                     ? new SourceRunCounts(lastRun.Accepted, lastRun.Duplicates, lastRun.Revised, lastRun.Missing, lastRun.Rejected)
                     : null,
-                series),
-        ];
+                series,
+                adapter.Description,
+                adapter.Schedule.Describe(),
+                lastRun?.Flags is { } flags ? CanonicalJson.Deserialize<string[]>(flags) : null,
+                lastRun?.Note));
+        }
+
+        return statuses;
     }
 }
 

@@ -163,9 +163,9 @@ internal sealed class SetDeployConditionsHandler(SettingsWriter settings) : ICom
                     var message = (condition.Name ?? "").Trim() switch
                     {
                         DeployConditionNames.Dislocation =>
-                            "the dislocation threshold is set per context through PUT /config/dislocation-threshold",
+                            "the dislocation no longer gates decisions (ADR-0008); its recorded threshold is set per context through PUT /config/dislocation-threshold",
                         DeployConditionNames.Cooldown or "risk_budget" or "cooldown" =>
-                            "cooldowns and risk budgets are Milestone B (SRS RSK-001); v1 always evaluates no active cooldown",
+                            "cooldowns and risk budgets are Milestone B (SRS RSK-001); no cooldown condition is evaluated",
                         _ => null,
                     };
                     if (message is not null)

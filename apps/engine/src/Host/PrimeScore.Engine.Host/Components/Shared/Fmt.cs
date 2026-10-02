@@ -7,13 +7,25 @@ namespace PrimeScore.Engine.Host.Components.Shared;
 /// <summary>One display format for times, numbers and payloads across screens.</summary>
 internal static class Fmt
 {
-    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
+    /// <summary>Display only (Razor encodes the output): relaxed escaping prints "+00:00", not "+00:00".</summary>
+    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public static string Utc(DateTimeOffset? instant) =>
         instant is { } value ? value.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture) : "—";
 
     public static string Date(DateTimeOffset? instant) =>
         instant is { } value ? value.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "—";
+
+    /// <summary>A calendar date, never in the server's culture (which printed 1/4/2016).</summary>
+    public static string Day(DateOnly? date) =>
+        date is { } value ? value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "—";
+
+    /// <summary>A percentile with its ordinal suffix read from the last printed digit: 83.1st, 35.5th, 99.9th.</summary>
+    public static string Ordinal(double percent)
+    {
+        var text = Number(percent, 1);
+        return text + (text[^1] switch { '1' => "st", '2' => "nd", '3' => "rd", _ => "th" });
+    }
 
     public static string Number(double? value, int decimals = 2) =>
         value is { } number ? number.ToString("N" + decimals.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture) : "—";

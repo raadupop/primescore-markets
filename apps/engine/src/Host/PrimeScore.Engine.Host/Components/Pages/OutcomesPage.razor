@@ -1,0 +1,115 @@
+@page "/outcomes"
+@using PrimeScore.Modules.Analytics.Contracts
+@using PrimeScore.Modules.Configuration.Contracts
+@using PrimeScore.SharedKernel.Cqrs
+@inject IQueryHandler<GetActiveSettings, SettingsVersion> SettingsQuery
+@inject IQueryHandler<GetForwardOutcomes, ForwardOutcomesReport?> OutcomesQuery
+
+<PageTitle>Outcomes record · PrimeScore Markets</PageTitle>
+<div class="page-head">
+    <div><div class="eyebrow">Research · Step 5</div><h1>Outcomes record</h1>
+        <p>What the reference index did after every recorded decision. Computed from the ledger on each read, so the page and the <span class="mono">outcomes-report</span> command agree. Published whatever it shows.</p></div>
+</div>
+<WorkflowGuide Current="outcomes" />
+@if (ReplayQuery is { } replayId)
+{ <div class="degraded">Measuring the decisions of replay <span class="mono">@replayId</span>, not the live journal. <a href="outcomes?context=@_context">Show the live journal →</a></div> }
+<div class="callout"><strong>Index changes, not trading returns.</strong> “Moved back” means the close was lower after an extremely stretched state or higher after an extremely compressed one. These figures are in sample and not a tradable edge: the VIX futures test found the reversion priced, and OVX was not tested. The earlier directional reading was right 34 to 41 percent of the time on signalled days and was retired (ADR-0008).</div>
+<div class="filters" role="group" aria-label="Outcome filters">
+    <label>Market
+        <select @bind="_context" @bind:after="LoadAsync">
+            @foreach (var context in _contexts)
+            { <option value="@context.Name">@Fmt.Context(context.Name) · @context.ReferenceInstrument</option> }
+        </select>
+    </label>
+</div>
+@if (_error is not null)
+{ <div class="degraded"><strong>The record could not be read.</strong> @_error</div> }
+else if (_report is null)
+{ <div class="loading">Measuring outcomes…</div> }
+else if (_report.Days == 0)
+{ <EmptyState Title="No measurable decision">No decision of this market has a reference close on its own date yet. Load history in <a href="sources">Data and health</a>.</EmptyState> }
+else
+{
+    <div class="metric-grid" aria-label="Coverage">
+        <div class="metric"><span>Decision days</span><strong>@Fmt.Count(_report.Days)</strong><small>@Fmt.Day(_report.FirstDate) → @Fmt.Day(_report.LastDate) · @Fmt.Count(_report.ExcludedDays) left out (holiday sessions, missing closes) · @Fmt.Count(_report.OtherInstrumentDays) on another instrument</small></div>
+        <div class="metric"><span>All checks passed</span><strong>@Fmt.Count(_report.DeployDays)</strong><small>extreme-state days under the current gate</small></div>
+        <div class="metric"><span>Legacy-gate days</span><strong>@Fmt.Count(_report.LegacyDays)</strong><small>refuted composite gate; in the baseline and the state table only</small></div>
+    </div>
+    <section class="panel" aria-label="Forward changes by horizon">
+        <div class="panel-head"><div><div class="kicker">Extreme-state days against all days</div><h2>Forward change of @_report.ReferenceInstrument</h2></div></div>
+        <div class="table-wrap"><table class="data">
+            <thead><tr><th>Horizon</th><th>Extreme days</th><th>Median |change| · extreme</th><th>Median |change| · all days</th><th>Moved back toward median</th><th>95% interval</th><th>Mean change toward median</th><th>Share of all days up</th></tr></thead>
+            <tbody>
+            @foreach (var row in _report.Horizons)
+            {
+                <tr>
+                    <td>@row.TradingDays trading day@(row.TradingDays == 1 ? "" : "s")</td>
+                    <td class="num">@Fmt.Count(row.DeployCount) of @Fmt.Count(row.AllCount)</td>
+                    <td class="num">@Fmt.Number(row.DeployMedianAbsChange)</td>
+                    <td class="num">@Fmt.Number(row.AllMedianAbsChange)</td>
+                    <td class="num">@Fmt.Percent(row.DeployRevertShare)</td>
+                    <td class="num">@(row.DeployRevertShareLow is { } low && row.DeployRevertShareHigh is { } high ? $"{Fmt.Percent(low)} to {Fmt.Percent(high)}" : "too few days")</td>
+                    <td class="num">@Fmt.Signed(row.DeployMeanChangeTowardMedian, 2)</td>
+                    <td class="num">@Fmt.Percent(row.AllUpShare)</td>
+                </tr>
+            }
+            </tbody>
+        </table></div>
+        <p class="panel-note">Each change runs from the close on the decision date to the close exactly that many NYSE trading days later. Intervals come from a circular block bootstrap with blocks of max(21, 2 × horizon) extreme days, because runs of extreme days overlap: a run is one episode, not many independent trials.</p>
+    </section>
+    <section class="panel" aria-label="Forward changes by state">
+        <div class="panel-head"><div><div class="kicker">Per recorded state</div><h2>What followed each state</h2></div></div>
+        <div class="table-wrap"><table class="data">
+            <thead><tr><th>State</th><th>Days</th><th>Median change · 5 days</th><th>Median |change| · 5 days</th><th>Up · 5 days</th><th>Median change · 21 days</th><th>Median |change| · 21 days</th><th>Up · 21 days</th></tr></thead>
+            <tbody>
+            @foreach (var row in _report.States)
+            {
+                <tr>
+                    <td>@DecisionCopy.Scenario(row.State)<div class="panel-note mono">@row.State</div></td>
+                    <td class="num">@Fmt.Count(row.Count)</td>
+                    <td class="num">@Fmt.Signed(row.MedianChange5, 2)</td>
+                    <td class="num">@Fmt.Number(row.MedianAbsChange5)</td>
+                    <td class="num">@Fmt.Percent(row.UpShare5)</td>
+                    <td class="num">@Fmt.Signed(row.MedianChange21, 2)</td>
+                    <td class="num">@Fmt.Number(row.MedianAbsChange21)</td>
+                    <td class="num">@Fmt.Percent(row.UpShare21)</td>
+                </tr>
+            }
+            </tbody>
+        </table></div>
+        <p class="panel-note">Legacy labels (<span class="mono">vol-expansion</span>, <span class="mono">vol-compression</span>) belong to decisions recorded before ADR-0008. Computed @Fmt.Utc(_report.ComputedAt).</p>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<ContextSettings> _contexts = [];
+    private ForwardOutcomesReport? _report;
+    private string _context = "equity";
+    private string? _error;
+    [SupplyParameterFromQuery(Name = "context")] public string? ContextQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "replay")] public Guid? ReplayQuery { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _contexts = (await SettingsQuery.HandleAsync(new GetActiveSettings(), CancellationToken.None)).Settings.Contexts;
+            if (_contexts.Any(context => context.Name == ContextQuery)) { _context = ContextQuery!; }
+            else if (_contexts.Count > 0 && _contexts.All(context => context.Name != _context)) { _context = _contexts[0].Name; }
+        }
+        catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        { _error = exception.Message; return; }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        _report = null;
+        try
+        { _report = await OutcomesQuery.HandleAsync(new GetForwardOutcomes(_context, ReplayId: ReplayQuery), CancellationToken.None); }
+        catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        { _error = exception.Message; }
+    }
+}

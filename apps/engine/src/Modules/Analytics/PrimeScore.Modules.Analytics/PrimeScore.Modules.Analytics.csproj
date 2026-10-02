@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Point-in-time replay and validation-set evaluation (SRS ANA-001).
+  <!-- Point-in-time replay, validation-set evaluation (SRS ANA-001), outcomes and catalyst ratios.
        Only the registration entry point is public (brief §5 rules 1 and 4). -->
   <PropertyGroup>
     <RootNamespace>PrimeScore.Modules.Analytics</RootNamespace>
@@ -8,6 +8,7 @@
     <ProjectReference Include="..\PrimeScore.Modules.Analytics.Contracts\PrimeScore.Modules.Analytics.Contracts.csproj" />
     <ProjectReference Include="..\..\..\SharedKernel\PrimeScore.SharedKernel\PrimeScore.SharedKernel.csproj" />
     <ProjectReference Include="..\..\..\Ledger\PrimeScore.Ledger\PrimeScore.Ledger.csproj" />
+    <ProjectReference Include="..\..\Catalysts\PrimeScore.Modules.Catalysts.Contracts\PrimeScore.Modules.Catalysts.Contracts.csproj" />
     <ProjectReference Include="..\..\Configuration\PrimeScore.Modules.Configuration.Contracts\PrimeScore.Modules.Configuration.Contracts.csproj" />
     <ProjectReference Include="..\..\Decision\PrimeScore.Modules.Decision.Contracts\PrimeScore.Modules.Decision.Contracts.csproj" />
     <ProjectReference Include="..\..\Ingestion\PrimeScore.Modules.Ingestion.Contracts\PrimeScore.Modules.Ingestion.Contracts.csproj" />
