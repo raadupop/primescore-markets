@@ -24,7 +24,9 @@ Start the engine, classifier and Markets presentation website from one terminal:
 ```
 
 The [launcher](../scripts/start-markets.ps1) checks dependencies and ports, builds the engine,
-and starts the classifier and Markets website with the existing virtual environment.
+and starts the classifier and Markets website with the existing virtual environment. The engine
+runs from a copy of its build output in `apps/engine/var/local-run/engine/`, so a running
+dashboard does not block the next build or the gate.
 Ctrl+C stops all three services. Logs go to `apps/engine/var/local-run/`. Use `-CheckOnly` to check prerequisites
 without starting services. Configure the operator password above before signing in.
 

@@ -22,6 +22,9 @@ $previousBootstrap = $env:BOOTSTRAP_MODE
 $previousRegistry = $env:PRIMESCORE_REGISTRY_PATH
 $sourceSections = @('Cboe', 'FedCalendar', 'BlsCalendar', 'BeaCalendar', 'EiaCalendar', 'ClaimsCalendar', 'OpecCalendar')
 $engineVariables = @{}
+$launchProfile = (Get-Content -Raw -LiteralPath (Join-Path $hostProject 'Properties/launchSettings.json') | ConvertFrom-Json).profiles.engine
+$engineVariables['ASPNETCORE_URLS'] = $launchProfile.applicationUrl
+foreach ($variable in $launchProfile.environmentVariables.PSObject.Properties) { $engineVariables[$variable.Name] = $variable.Value }
 if ($PullSources -and -not $Database) {
     throw '-PullSources needs -Database: sources stay off on the live ledger until TODO-016 is settled.'
 }
@@ -90,6 +93,10 @@ try {
 
     $logDirectory = Join-Path $repoRoot 'apps/engine/var/local-run'
     $null = New-Item -ItemType Directory -Path $logDirectory -Force
+    # The engine runs from a copy, so a running dashboard does not lock the files the next build replaces.
+    $engineDirectory = Join-Path $logDirectory 'engine'
+    if (Test-Path -LiteralPath $engineDirectory) { Remove-Item -LiteralPath $engineDirectory -Recurse -Force }
+    Copy-Item -LiteralPath (Join-Path $hostProject 'bin/Debug/net10.0') -Destination $engineDirectory -Recurse
     $websiteErrorPath = Join-Path $logDirectory 'websites.stderr.log'
     $websites = Start-Process -FilePath $pythonPath -WorkingDirectory $repoRoot -WindowStyle Hidden -PassThru `
         -ArgumentList @('scripts/websites.py') `
@@ -109,7 +116,10 @@ try {
     Write-Host "Service logs: $logDirectory"
     if ($Database) { Write-Host "Database: $databasePath" }
     foreach ($name in $engineVariables.Keys) { [Environment]::SetEnvironmentVariable($name, $engineVariables[$name]) }
-    & $dotnetPath run --project $hostProject --no-build --launch-profile engine
+    # From the project folder, as dotnet run starts it: the content root and relative paths stay the same.
+    Push-Location $hostProject
+    try { & $dotnetPath (Join-Path $engineDirectory 'PrimeScore.Engine.Host.dll') }
+    finally { Pop-Location }
     if ($LASTEXITCODE -ne 0) { throw "Engine exited with code $LASTEXITCODE." }
 } finally {
     foreach ($service in @($classifier, $websites)) {

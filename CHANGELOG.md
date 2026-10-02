@@ -10,6 +10,7 @@
 - SRS v2.4.0: CLS-006 descriptive; DEC-005, ANA-003, SIG-006, CLS-010 and CAT-001 to CAT-003 added; ANA-001 and §11 verified on Volmageddon; §9 events kept as a regression record because the state gate fires on or after a shock, never before.
 - `scripts/build-demo-ledger.ps1` copies the live ledger and records a state-gate replay; `start-markets.ps1 -Database <path> [-PullSources]` serves a copy and refuses sources on the live ledger.
 - Fixes found on the demo copy: a relative `--database` created an empty database (now refused); the replay page rendered every record of a ten-year run (54 MB, now the first 300); Cboe's CDN refused 1 to 3 of 10 files per run with HTTP 403 (now retried, with a User-Agent); dates printed as 1/4/2016 on two pages; "83.1th percentile"; journal tiles that did not add up; escaped "+" in formatted ledger JSON.
+- `start-markets.ps1` runs the engine from a copy of its build output: a running dashboard locked the files the gate rebuilds, so every build failed while a click-through was open.
 - Test harness: two intermittent gate failures fixed. Test classes cleared every SQLite pool in the process while parallel classes were opening connections (now each clears only its own database), and the acceptance harness closed a child process's log before its last output lines arrived.
 
 ## 2026-09-29
