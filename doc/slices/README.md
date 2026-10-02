@@ -11,7 +11,7 @@ signals to volatility dislocations, options strategies and position risk".
 | 2 | Events ahead | What is scheduled, and how is the short end priced before it? | Event-driven; macro and OPEC dates; pre-event term-structure dislocation | [02](02-events-ahead.md) |
 | 3 | Event record | What did options price before each event, and what happened? | Dislocation of priced against actual move; strategy outcomes estimated from indices | [03](03-event-record.md) |
 | 4 | Your trade | What do the events before my expiry mean for my position? | Position risk (SRS EXT-004 inputs measured by slice 3) | [04](04-your-trade.md) |
-| 5 | Daily brief | What matters today? | Market intelligence, delivered | to write |
+| 5 | Daily brief | What matters today? | Market intelligence; dashboard only until Cboe consents (ADR-0015) | [05](05-daily-brief.md) |
 | 6 | Proof | Which claims are under forward test? | Credibility of every slice | to write |
 | 7 | Macro and world context | Was the number a surprise, and what else is going on? | Macro surprise; geopolitical shock days as events | to write |
 | 8 | Options lab | How did real option structures do around events? | Options strategies on licensed option prices | to write |

@@ -433,3 +433,45 @@ todos:
       Design §5.4 adds catalyst_id to DecisionRecord; contract 1.3.0 so far
       adds only the catalyst endpoints. Needs the event-window definition
       that design step 3 (GetCatalystOutcomes) fixes.
+
+  - id: TODO-024
+    title: Get Cboe's written consent, or a licensed source, before any customer-facing use of market figures
+    status: open
+    priority: high
+    owner: radu
+    source:
+      kind: external
+      ref: https://www.cboe.com/terms
+      section: "2"
+    related_adr: [ADR-0015, ADR-0009]
+    created: 2026-10-02
+    updated: 2026-10-02
+    blocked_by: []
+    notes: >
+      Cboe's terms allow personal non-commercial use only; storage, derived
+      figures, publication and verifying other data need written consent
+      (doc/research/data-licence-cboe-2026-10-02.md). Options: a Request to
+      Use Cboe Content (licence agreement, fees unverified; SPX also needs S&P
+      DJI), a vendor licence covering index values and derived output, or
+      measures computed from licensed option prices (TODO-013). Blocks any
+      customer test, pilot or public brief.
+
+  - id: TODO-025
+    title: Decide whether holiday-session VIX prints belong in the decision's level window
+    status: open
+    priority: low
+    owner: radu
+    source:
+      kind: bug
+      ref: ADR-0008
+    related_adr: [ADR-0008, ADR-0016]
+    created: 2026-10-02
+    updated: 2026-10-02
+    blocked_by: []
+    notes: >
+      Cboe's VIX file carries 33 prints dated on NYSE holidays since 2022
+      (extended sessions). The decision's 1,260-close level window counts
+      them; the outcomes record, the 9-day/30-day ratio and the brief's grid
+      skip them. VIX on 2026-10-01: 36.6th percentile in the decision, 36.3rd
+      in a trading-days-only rank. Changing the rule changes future decisions
+      only; recorded ones stay.

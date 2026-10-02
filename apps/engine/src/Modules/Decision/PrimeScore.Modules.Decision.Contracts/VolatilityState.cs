@@ -1,12 +1,13 @@
-namespace PrimeScore.Modules.Decision.Evaluation;
+namespace PrimeScore.Modules.Decision.Contracts;
 
 /// <summary>
 /// Where the reference level sits in its own history, in words (ADR-0008). Derived from the
 /// dislocation's percentile, its history length and the configured tail condition; a description
 /// of the state, never a forecast of the next move. Stored in the decision's <c>scenario</c> field,
 /// which held a directional label (<c>vol-expansion</c>, <c>vol-compression</c>) before ADR-0008.
+/// Published so other modules label a level with the same rule (the daily brief's cross-asset grid).
 /// </summary>
-internal static class VolatilityState
+public static class VolatilityState
 {
     public const string ExtremeLow = "extreme_low";
     public const string Low = "low";

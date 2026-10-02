@@ -109,10 +109,11 @@ enabled state and next run belong to the running engine and appear only on the p
 filters by `--instrument`, `--source-prefix` and `--provider` (default `--take 100`) and prints
 provenance, including the file SHA-256 and the reconstructed marker.
 
-Cboe and SPX series are licensed for internal use only. Raw levels reach the signed-in operator
-and READ or ADMIN API tokens (`market_observed_iv` on dislocations and replays, index-point
-changes in the outcomes record) and the `signals` output; issue READ tokens for internal use
-only. No public surface serves raw series.
+Cboe's terms allow personal non-commercial use only; storing, deriving and publishing need Cboe's
+written consent ([ADR-0015](../doc/adr/0015-cboe-data-personal-research-use-until-consent.md),
+[licence note](../doc/research/data-licence-cboe-2026-10-02.md)). Until then the engine is the
+operator's research tool: issue READ and ADMIN tokens to the operator only, keep the FRED
+cross-check off, and publish nothing derived from Cboe files. No public surface serves raw series.
 
 No key is needed to inspect existing data or to ingest through the API.
 Macro consensus CSVs require sourced entries in [data/consensus](../apps/engine/data/consensus/README.md).
@@ -178,6 +179,10 @@ need the BLS contact above. Figures are estimates from indices, not option price
 type in (up to four legs, one expiry) and replays every past release before its expiry on it
 ([ADR-0014](../doc/adr/0014-position-event-scenarios.md)). It also needs the VIX3M and VIX6M files.
 Nothing is saved; the address bar holds the position, for example `?u=SPX&exp=2026-10-30&legs=1C7675,1P7675`.
+
+**Daily brief** (`/brief?market=equity`) puts the state, the cross-asset grid, the next 10 trading days of releases,
+their record, what just passed and new calendar entries on one page ([ADR-0016](../doc/adr/0016-daily-brief-composition.md)).
+It has no API and sends nothing: Cboe-derived figures are for your own research (ADR-0015).
 
 ## API access
 

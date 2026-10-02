@@ -1,6 +1,7 @@
 # ADR-0009: Cboe index history as source of record; FRED demoted to a read-only cross-check
 
 **Status:** Accepted
+Licence statement superseded by [ADR-0015](0015-cboe-data-personal-research-use-until-consent.md).
 
 **Date:** 2026-09-29
 **Deciders:** Radu Pop (operator); v3 coding agent

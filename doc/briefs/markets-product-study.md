@@ -6,6 +6,9 @@ be sold, the tests in order, the pass and kill criteria, and the prototype that 
 those tests. Pricing is not decided here; it is the last thing tested. Engineering work derived
 from this study is in `doc/briefs/markets-v2-build-brief.md`.
 
+**Blocker, 2 October 2026:** no market figure may be shown to a customer or prospect until Cboe
+consents or another licensed source is in place ([ADR-0015](../adr/0015-cboe-data-personal-research-use-until-consent.md), TODO-024); every customer test below waits on it.
+
 ---
 
 ## 1. What we have, in one paragraph

@@ -1,0 +1,185 @@
+@page "/brief"
+@using System.Text
+@using PrimeScore.Modules.Analytics.Contracts
+@using PrimeScore.Modules.Configuration.Contracts
+@using PrimeScore.SharedKernel
+@using PrimeScore.SharedKernel.Cqrs
+@inject IQueryHandler<GetDailyBrief, DailyBrief> BriefQuery
+@inject IQueryHandler<GetActiveSettings, SettingsVersion> SettingsQuery
+
+<PageTitle>Daily brief · PrimeScore Markets</PageTitle>
+<div class="page-head">
+    <div><div class="eyebrow">Research · Today</div><h1>Daily brief</h1>
+        <p>What matters today for one market, on one page: where volatility stands, what is scheduled, what such releases did before, and what just happened. Composed from the ledger on each read.</p></div>
+</div>
+<div class="degraded"><strong>For your own research only.</strong> These figures derive from Cboe index files, which Cboe licenses for personal non-commercial use; do not publish, share or sell them until Cboe consents (ADR-0015, TODO-024).</div>
+<div class="filters" role="group" aria-label="Brief filters">
+    <label>Market
+        <select @bind="_context" @bind:after="LoadAsync">
+            @foreach (var context in _contexts)
+            { <option value="@context.Name">@Fmt.Context(context.Name) · @context.ReferenceInstrument</option> }
+        </select>
+    </label>
+</div>
+@if (_brief is null)
+{ <div class="loading">Composing the brief…</div> }
+else if (_brief.Error is { } error)
+{ <EmptyState Title="No brief yet">@error</EmptyState> }
+else
+{
+    var state = _brief.State!;
+    <section class="panel" aria-label="State">
+        <div class="panel-head"><div><div class="kicker">@Fmt.Context(_brief.Context) · close of @Fmt.Day(_brief.BriefDate)</div><h2>1 · Where volatility stands</h2></div></div>
+        <p class="brief-line">@state.ReferenceInstrument <strong>@Fmt.Number(state.Level, 2)</strong>, @Percentile(state.Percentile): <strong>@DecisionCopy.Scenario(state.State)</strong>, @Days(state.DaysInState) in this state@(Before(state.PreviousState)). <a href="decisions/@state.DecisionId">Analysis →</a></p>
+        <div class="table-wrap"><table class="data">
+            <thead><tr><th>Index</th><th>Close</th><th>Date</th><th>Place in its history</th><th>State</th></tr></thead>
+            <tbody>@foreach (var row in _brief.Grid)
+            {
+                <tr><td>@row.Instrument</td><td class="num">@Fmt.Number(row.Close, 2)</td><td class="mono">@Fmt.Day(row.Date)</td>
+                    <td class="num">@(row.Percentile is { } p ? Fmt.Ordinal(p * 100) : "—")<div class="panel-note">of @Fmt.Count(row.PriorCloses) prior closes</div></td>
+                    <td>@DecisionCopy.Scenario(row.State)</td></tr>
+            }</tbody>
+        </table></div>
+        <p class="panel-note">Cross-asset grid: Cboe closes ranked among up to 1,260 prior closes; stretched above the 70th percentile, compressed below the 30th, extreme within 5% of either end. Fewer than 252 prior closes: unknown.</p>
+    </section>
+    <section class="panel" aria-label="Releases ahead">
+        <div class="panel-head"><div><div class="kicker">Next 10 trading days</div><h2>2 · Scheduled releases</h2></div></div>
+        @if (_brief.Ahead.Count == 0)
+        { <p>No scheduled release in the next 10 trading days.</p> }
+        else
+        {
+            <div class="table-wrap"><table class="data">
+                <thead><tr><th>Release</th><th>Scheduled (New York)</th><th>9-day/30-day ratio</th><th>Percentile</th></tr></thead>
+                <tbody>@foreach (var item in _brief.Ahead)
+                {
+                    <tr><td class="mono"><a href="ledger/@item.LedgerSequence">@item.CatalystId</a><div class="panel-note">@item.Title</div></td>
+                        <td class="mono">@When(item)</td>
+                        <td class="num">@Fmt.Signed(item.Ratio, 3)</td>
+                        <td class="num">@(item.RatioPercentile is { } rank ? Fmt.Percent(rank) : "—")</td></tr>
+                }</tbody>
+            </table></div>
+        }
+    </section>
+    @if (_brief.Records.Count > 0)
+    {
+        <section class="panel" aria-label="Record of these releases">
+            <div class="panel-head"><div><div class="kicker">Latest 12 of each kind</div><h2>3 · What such releases did before</h2></div></div>
+            <ul class="brief-list">@foreach (var record in _brief.Records)
+            {
+                <li>@RecordLine(record) <a href="event-record?family=@record.Family">Record →</a></li>
+            }</ul>
+        </section>
+    }
+    <section class="panel" aria-label="Just passed">
+        <div class="panel-head"><div><div class="kicker">Event close on @Fmt.Day(_brief.BriefDate)</div><h2>4 · Just passed</h2></div></div>
+        @if (_brief.Passed.Count == 0)
+        { <p>No scheduled release closed on this date.</p> }
+        else
+        {
+            <ul class="brief-list">@foreach (var item in _brief.Passed)
+            {
+                <li>@PassedLine(item) <a href="event-record?family=@item.Family">Record →</a></li>
+            }</ul>
+        }
+    </section>
+    <section class="panel" aria-label="New on the calendar">
+        <div class="panel-head"><div><div class="kicker">First recorded since the previous close</div><h2>5 · New on the calendar</h2></div></div>
+        @if (_brief.NewOnCalendarTotal == 0)
+        { <p>Nothing new.</p> }
+        else
+        {
+            <ul class="brief-list">@foreach (var item in _brief.NewOnCalendar)
+            {
+                <li><a class="mono" href="ledger/@item.LedgerSequence">@item.CatalystId</a> · @item.Title · @When(item)</li>
+            }</ul>
+            @if (_brief.NewOnCalendarTotal > _brief.NewOnCalendar.Count)
+            { <p class="panel-note">Showing @_brief.NewOnCalendar.Count of @Fmt.Count(_brief.NewOnCalendarTotal); the <a href="catalysts">Catalyst calendar</a> lists all.</p> }
+        }
+    </section>
+    <section class="panel" aria-label="Text version">
+        <div class="panel-head"><div><div class="kicker">For your notes; not for publication</div><h2>Text version</h2></div></div>
+        <pre class="code">@Text()</pre>
+        <p class="panel-note">Computed @Fmt.Utc(_brief.ComputedAt).</p>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<ContextSettings> _contexts = [];
+    private DailyBrief? _brief;
+    private string _context = "equity";
+    [SupplyParameterFromQuery(Name = "market")] public string? MarketQuery { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _contexts = (await SettingsQuery.HandleAsync(new GetActiveSettings(), CancellationToken.None)).Settings.Contexts;
+        _context = _contexts.Any(context => context.Name == MarketQuery) ? MarketQuery! : _contexts.FirstOrDefault()?.Name ?? "equity";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _brief = null;
+        _brief = await BriefQuery.HandleAsync(new GetDailyBrief(_context), CancellationToken.None);
+    }
+
+    private static string Percentile(double? percentile) => percentile is { } p ? $"{Fmt.Ordinal(p * 100)} percentile of its prior closes" : "no level history";
+
+    private static string Days(int days) => days == 1 ? "1 day" : $"{Fmt.Count(days)} days";
+
+    private static string Before(string? previous) => previous switch
+    {
+        null => "",
+        _ when DecisionCopy.IsLegacy(previous) => " (before: records from the retired gate)",
+        _ => $" (before: {DecisionCopy.Scenario(previous)})",
+    };
+
+    private static string When(BriefCatalyst item)
+    {
+        var local = TimeZoneInfo.ConvertTime(item.ScheduledAt, MarketTime.NewYork);
+        return local.ToString(item.TimeAnnounced ? "ddd yyyy-MM-dd HH:mm" : "ddd yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
+
+    private static string Pct(double? value) => value is { } number ? (number * 100).ToString("0.00", CultureInfo.InvariantCulture) + "%" : "—";
+
+    private static string SignedPct(double? value) => value is { } number ? Fmt.Signed(number * 100, 2) + "%" : "—";
+
+    private static string RecordLine(BriefRecord record)
+    {
+        var s = record.Latest12;
+        return record.Oil
+            ? $"{record.Family}: OVX fell after {s.VolatilityFell} of the latest {s.Count}, median change {Fmt.Signed(s.MedianVolatilityChange, 2)} points."
+            : $"{record.Family}: the S&P 500 stayed inside the priced 9-day range {s.InsidePricedRange} of the latest {s.Count} times (median priced ±{Pct(s.MedianPricedMove)}, actual {Pct(s.MedianAbsActualMove)}); VIX9D fell afterwards {s.VolatilityFell} of {s.Count}.";
+    }
+
+    private static string PassedLine(BriefPassed item)
+    {
+        var row = item.Outcome;
+        return row.PricedMove is null
+            ? $"{row.CatalystId}: OVX {Fmt.Signed(row.VolatilityChange, 2)} points across the release."
+            : $"{row.CatalystId}: priced ±{Pct(row.PricedMove)} over 9 days; S&P 500 {SignedPct(row.EventDayMove)} by the close; VIX9D {Fmt.Signed(row.VolatilityChange, 2)} points.";
+    }
+
+    private string Text()
+    {
+        var brief = _brief!;
+        var state = brief.State!;
+        var text = new StringBuilder();
+        text.AppendLine(CultureInfo.InvariantCulture, $"Daily brief · {Fmt.Context(brief.Context)} · close of {Fmt.Day(brief.BriefDate)}");
+        text.AppendLine(CultureInfo.InvariantCulture, $"{state.ReferenceInstrument} {Fmt.Number(state.Level, 2)}, {Percentile(state.Percentile)}: {DecisionCopy.Scenario(state.State)}, {Days(state.DaysInState)} in this state.");
+        foreach (var row in brief.Grid.Where(row => row.Percentile is not null))
+        {
+            text.AppendLine(CultureInfo.InvariantCulture, $"  {row.Instrument} {Fmt.Number(row.Close, 2)} · {Fmt.Ordinal(row.Percentile!.Value * 100)} percentile · {DecisionCopy.Scenario(row.State)}");
+        }
+
+        text.AppendLine(brief.Ahead.Count == 0 ? "No scheduled release in the next 10 trading days." : "Scheduled:");
+        foreach (var item in brief.Ahead)
+        {
+            text.AppendLine(CultureInfo.InvariantCulture, $"  {item.CatalystId} {When(item)} · ratio {Fmt.Signed(item.Ratio, 3)}");
+        }
+
+        foreach (var record in brief.Records) { text.AppendLine("  " + RecordLine(record)); }
+        foreach (var item in brief.Passed) { text.AppendLine("Just passed: " + PassedLine(item)); }
+        text.Append("Personal research only; derived from Cboe data (ADR-0015).");
+        return text.ToString();
+    }
+}

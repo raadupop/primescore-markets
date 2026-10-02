@@ -23,6 +23,9 @@ Limits that hold even when every check passes. Architecture and ledger limits ar
 
 ## Data coverage (Cboe)
 
+- **Licence** (ADR-0015): Cboe's terms allow personal non-commercial use; storing the closes, deriving figures from them,
+  publishing and using them to verify other data need Cboe's written consent. Every market figure in the engine rests on
+  these files, so nothing may be sold or published until consent or another licensed source is recorded (TODO-024).
 - **Files (first row as fetched 2026-09-28):** VIX 1990-01-02, SPX 1975-01-02, VVIX 2006-03-06, VIX6M 2008-01-02, VXN 2009-09-14, RVX 2009-09-16, VIX3M, OVX and GVZ 2009-09-18, VIX9D 2011-01-04. EVZ has no file (TODO-015).
 - **Publication lag**, measured 2026-09-28: VIX3M 18:01 ET the same day, VIX9D 21:51 ET, VIX about 57 hours later. The adapter polls from 18:00 to 08:00 New York; a file updated after 08:00 is read the next evening or with **Run now**. A close not yet published is a gap, never an estimate.
 - **Reconstructed marker** (ADR-0009), from live starts checked 2026-09-29: VIX9D before 2013-10-01 and VIX6M before 2013-11-27 are `true`; VIX before 2003 is `true`, 2003 is unmarked and 2004 onward `false` (Cboe states only the year); every VVIX row is unmarked (no dated launch found); the other files start after launch (`false`). **Do not enable `Sources:Cboe` on the live ledger until TODO-016 settles the dates**: a recorded marker cannot be corrected.
@@ -109,6 +112,10 @@ Limits that hold even when every check passes. Architecture and ledger limits ar
 - With the uncalibrated default conditions, the day's last decision is IDLE on 30.7% of trading days for equity and 49.2% for oil (2018-01-02 to 2026-09-22, FRED data as of 2026-09-25). SRS DEC-002 verifies at least 70%. Market data alone clears `|composite| ≥ 0.5` and a 1.5-point dislocation on most days. Calibrating the conditions is an operator decision; values tuned on the validation set must carry the "in-sample" label (brief §9.8).
 
 ## State gate and outcomes record (ADR-0008)
+
+- The decision's level window counts Cboe's holiday-session prints as closes (33 VIX rows since 2022); the outcomes
+  record, the ratio and the brief's grid skip them, so a trading-days-only rank can differ by a fraction of a point
+  (VIX on 2026-10-01: 36.6th against 36.3rd; TODO-025).
 
 - The state is a rank of the reference level among its prior closes. It describes where the level sits,
   not where it goes. Pre-registered tests found no tradable rule in it on 2019 onward: spot reversion

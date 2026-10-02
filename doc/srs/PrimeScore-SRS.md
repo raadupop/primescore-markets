@@ -1,7 +1,7 @@
 # PrimeScore AI — Software Requirements Specification
 
 These requirements describe the intended event classification, aggregation and position-management behavior. See [implemented scope](../../README.md) for what can be run today.
-| Version: | 2.6.0 |
+| Version: | 2.7.0 |
 | --- | --- |
 | Standard: | Structure informed by ISO/IEC/IEEE 29148:2018 |
 | Date: | October 2, 2026 |
@@ -30,6 +30,8 @@ These requirements describe the intended event classification, aggregation and p
 **v2.5.0** adds CAT-004 (event record: the priced 9-day S&P 500 move against the actual move per catalyst family, from Cboe indices; ADR-0013) and adds CAT-004 to the §11 hand-calculation criterion.
 
 **v2.6.0** adds RSK-004 (event scenarios for an operator-entered option position: past events of each scheduled family before expiry replayed on the position, split into the move and the volatility change, the measured terms of EXT-004; ADR-0014).
+
+**v2.7.0** adds ANA-004 (daily brief per market: state and days in state, cross-asset grid, releases ahead, their record, releases just passed, new calendar entries; dashboard only while Cboe data stays in personal research use; ADR-0015, ADR-0016).
 # Table of Contents
 
 # 1. Purpose
@@ -499,6 +501,14 @@ For each market context, and for the live journal or any stored replay, the syst
 **Rationale:** A descriptive state is only useful with its record; publishing it unconditionally is the protocol that replaces the refuted validation (ADR-0008).
 
 **Verification:** Through the API, verify the record counts the same extreme days as the decision journal and leaves the last close unmeasured at every horizon. On the dashboard, verify the Outcomes record shows the same counts.
+
+### ANA-004 [Must]
+
+For each market context the system shall show a daily brief for the date of its latest decision: the reference level, percentile and state with the number of consecutive trading days in that state and the state before; the percentile and state of the other indices among VIX, VXN, RVX, VVIX, OVX and GVZ; the scheduled releases of the next 10 trading days with their 9-day/30-day ratio; the latest-12 event record of each of their families; the releases whose event close is the brief date with their record row; and the catalysts newly recorded since the previous close. Each line shall link to its source. While Cboe-derived figures are restricted to personal research use, the brief shall be shown on the dashboard only and sent nowhere.
+
+**Rationale:** One page per market replaces reading five, with every figure traceable (ADR-0016); ADR-0015 keeps it internal.
+
+**Verification:** On the Volmageddon history, verify the equity brief dated 2018-02-05 shows VIX 37.32, the extremely stretched state, one day in it, previously stretched, and no release ahead; with stub data, verify the grid, releases ahead, record, just-passed and new-calendar parts in unit tests.
 
 ## 5.8 Observability
 
@@ -1062,4 +1072,4 @@ Controlled requirement implementations. Each has a type, governing which measure
 
 ---
 
-END OF SRS v2.6.0
+END OF SRS v2.7.0

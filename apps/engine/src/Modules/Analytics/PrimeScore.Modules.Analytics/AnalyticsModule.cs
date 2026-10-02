@@ -27,6 +27,7 @@ public static class AnalyticsModule
         services.AddScoped<IQueryHandler<GetCatalystRatios, CatalystRatioList>, GetCatalystRatiosHandler>();
         services.AddScoped<IQueryHandler<GetCatalystOutcomes, CatalystOutcomeReport>, GetCatalystOutcomesHandler>();
         services.AddScoped<IQueryHandler<GetPositionScenarios, PositionScenarioReport>, GetPositionScenariosHandler>();
+        services.AddScoped<IQueryHandler<GetDailyBrief, DailyBrief>, GetDailyBriefHandler>();
         return services;
     }
 }
