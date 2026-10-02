@@ -327,13 +327,15 @@ todos:
       section: Decision (existing FRED rows)
     related_adr: [ADR-0009, ADR-0010]
     created: 2026-09-29
-    updated: 2026-09-29
+    updated: 2026-10-02
     blocked_by: []
     notes: >
       Before the first public brief (v3 step 4): either published derived
       figures come only from cboe:-sourced windows, or an ADR records a FRED
       exemption. Add a test that no public or published path serves raw Cboe
       or SPX levels (design §9).
+      The event record (ADR-0013) adds one more case: its priced move is
+      VIX9D ÷ 100 × √(9/365), so publishing it republishes the VIX9D level.
 
   - id: TODO-019
     title: Back-fill GDP, PCE, WPSR, CLAIMS and OPEC calendar history, and the original dates of moved releases

@@ -1,7 +1,7 @@
 # PrimeScore AI — Software Requirements Specification
 
 These requirements describe the intended event classification, aggregation and position-management behavior. See [implemented scope](../../README.md) for what can be run today.
-| Version: | 2.4.0 |
+| Version: | 2.5.0 |
 | --- | --- |
 | Standard: | Structure informed by ISO/IEC/IEEE 29148:2018 |
 | Date: | October 2, 2026 |
@@ -26,6 +26,8 @@ These requirements describe the intended event classification, aggregation and p
 
 **v2.4.0** brings the requirements in line with ADR-0008 to ADR-0012. CLS-006 becomes descriptive: the dislocation is recorded and gates nothing. DEC-001 asserts no direction. Adds DEC-005 (volatility state and the tail gate), ANA-003 (outcomes record), SIG-006 (scheduled source adapters with provenance and licence limits), CLS-010 (adapter-recorded series not assessed), and §5.12 Catalysts: CAT-001 (calendar and canonical ids), CAT-002 (schedule vintages), CAT-003 (pre-event 9-day/30-day ratio against weekday-matched placebo days). ANA-001 verification and §11 move from Iran February 2026 to the hand-calculated Volmageddon replay. §9 events become a regression record: the state gate fires on or after a shock, never before it, so their "deploy by" targets are not requirements. Rationale: the directional reading was refuted (signalled direction right 34 to 41 percent of the time; ADR-0008). Slice specs citing these IDs live in `doc/slices/`.
 
+
+**v2.5.0** adds CAT-004 (event record: the priced 9-day S&P 500 move against the actual move per catalyst family, from Cboe indices; ADR-0013) and adds CAT-004 to the §11 hand-calculation criterion.
 # Table of Contents
 
 # 1. Purpose
@@ -610,6 +612,14 @@ For each upcoming event the system shall show VIX9D ÷ VIX − 1 on the latest N
 
 **Verification:** From stub files, verify for `FOMC-2026-10-28` the as-of date 2026-09-24, value −0.055, n = 10, three missing closes and percentile 0.5, as hand-derived in the acceptance test.
 
+### CAT-004 [Must]
+
+For each catalyst family the system shall publish a record of its past events: for each event, the move of the S&P 500 priced by VIX9D on the trading day before it over VIX9D's 9 calendar days, the actual move over that window, whether the actual move stayed inside the priced range, whether it was smaller than the at-the-money straddle cost estimated from VIX9D, the event-day move and the change in VIX9D across the event (for WPSR and OPEC, the change in OVX only); and, for all events and for the latest 12, the medians and counts with n. Events before VIX9D's live start or missing a close shall be counted, never filled; windows not yet complete shall be marked open; each row shall state the other scheduled events in its window and whether the research programme already examined it. No row shall be labelled a hit or a miss.
+
+**Rationale:** "Did options overprice this kind of event?" is the question the record answers from free data, with every figure recomputable from Cboe's files and the release calendar (ADR-0013).
+
+**Verification:** From stub Cboe files (VIX, VIX9D, SPX) and the 2026 FOMC calendar, verify the six past FOMC events against a hand calculation: priced moves 4.71% and 3.77%, four of six inside the priced range, three of six below the straddle estimate, through the API and the Event record page.
+
 # 6. Non-Functional Requirements
 
 | ID | Pri | Requirement | Verification |
@@ -1038,8 +1048,8 @@ Controlled requirement implementations. Each has a type, governing which measure
 - Insight 1 taxonomy table includes both first-pass and post-retry columns.
 - At least 5 dual-condition prompt experiments (ACX-003) recorded per iteration where attempted.
 - The automated CI/CD pipeline successfully captures and records the Operational & Economic Viability telemetry (mutation score, SAST findings, maintainability index) without manual intervention (OEV-001).
-- For CLS-001, CLS-002, CLS-006, DEC-005, CAT-003 and EXT-004, API acceptance tests shall include hand-calculated expected outputs verified against the formulas defined in this specification.
+- For CLS-001, CLS-002, CLS-006, DEC-005, CAT-003, CAT-004 and EXT-004, API acceptance tests shall include hand-calculated expected outputs verified against the formulas defined in this specification.
 
 ---
 
-END OF SRS v2.4.0
+END OF SRS v2.5.0

@@ -9,7 +9,7 @@ signals to volatility dislocations, options strategies and position risk".
 | --- | --- | --- | --- | --- |
 | 1 | Volatility state | Where does volatility stand, and what followed past extremes? | Market signals; dislocation of the level against its own history | [01](01-volatility-state.md) |
 | 2 | Events ahead | What is scheduled, and how is the short end priced before it? | Event-driven; macro and OPEC dates; pre-event term-structure dislocation | [02](02-events-ahead.md) |
-| 3 | Event record | What did options price before each event, and what happened? | Dislocation of priced against actual move; strategy outcomes estimated from indices | to write |
+| 3 | Event record | What did options price before each event, and what happened? | Dislocation of priced against actual move; strategy outcomes estimated from indices | [03](03-event-record.md) |
 | 4 | Your trade | What do the events before my expiry mean for my position? | Position risk (SRS EXT-004 inputs measured by slice 3) | to write |
 | 5 | Daily brief | What matters today? | Market intelligence, delivered | to write |
 | 6 | Proof | Which claims are under forward test? | Credibility of every slice | to write |

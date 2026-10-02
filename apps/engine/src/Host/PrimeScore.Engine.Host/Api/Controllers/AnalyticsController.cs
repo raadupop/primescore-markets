@@ -10,13 +10,24 @@ namespace PrimeScore.Engine.Host.Api.Controllers;
 
 /// <summary>
 /// The outcomes record (ADR-0008): what the reference index did after each recorded decision,
-/// computed from the ledger on read. 404 for an unknown context.
+/// computed from the ledger on read, 404 for an unknown context; and the event record of a catalyst
+/// family (ADR-0013).
 /// </summary>
 [Authorize(Policy = ApiPolicies.Read)]
 public sealed class AnalyticsController(
     IQueryHandler<GetForwardOutcomes, ForwardOutcomesReport?> outcomes,
-    IQueryHandler<GetActiveSettings, SettingsVersion> settings) : Dto.AnalyticsControllerBase
+    IQueryHandler<GetActiveSettings, SettingsVersion> settings,
+    IQueryHandler<GetCatalystOutcomes, CatalystOutcomeReport> eventRecord) : Dto.AnalyticsControllerBase
 {
+    public override async Task<ActionResult<Dto.CatalystOutcomeReport>> GetCatalystOutcomes(
+        Dto.CatalystFamily family,
+        CancellationToken cancellationToken = default)
+    {
+        // The contract's member names are the wire names (FOMC, CPI, ...), as the Analytics query expects.
+        var report = await eventRecord.HandleAsync(new GetCatalystOutcomes(family.ToString()), cancellationToken).ConfigureAwait(false);
+        return OutcomeDtos.From(report, family);
+    }
+
     public override async Task<ActionResult<Dto.ForwardOutcomesReport>> GetForwardOutcomes(
         DateTimeOffset? from,
         DateTimeOffset? to,

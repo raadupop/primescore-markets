@@ -18,7 +18,7 @@
         <select @bind="_family" @bind:after="LoadAsync">
             <option value="">All families</option>
             @foreach (var family in Enum.GetValues<CatalystFamily>())
-            { <option value="@Wire(family)">@Wire(family) · @FamilyName(family)</option> }
+            { <option value="@CatalystCopy.Wire(family)">@CatalystCopy.Wire(family) · @CatalystCopy.FamilyName(family)</option> }
         </select>
     </label>
 </div>
@@ -49,7 +49,7 @@ else
                         @if (row.ReferencePeriod is { } period) { <div class="panel-note">@row.Title · @period</div> }
                         else { <div class="panel-note">@row.Title</div> }
                     </td>
-                    <td>@FamilyName(row.Family)</td>
+                    <td>@CatalystCopy.FamilyName(row.Family)<div class="panel-note"><a href="event-record?family=@CatalystCopy.Wire(row.Family)">Past events →</a></div></td>
                     <td class="mono">@Scheduled(row)</td>
                     <td class="num">@MarketTime.TradingDaysBetween(_from, row.ScheduledDate)</td>
                     <td class="num">
@@ -102,7 +102,7 @@ else
         _from = DateOnly.TryParseExact(FromQuery, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var from)
             ? from
             : MarketTime.NewYorkDate(Clock.UtcNow);
-        _family = Enum.GetValues<CatalystFamily>().Select(Wire).FirstOrDefault(name => name == FamilyQuery) ?? "";
+        _family = Enum.GetValues<CatalystFamily>().Select(CatalystCopy.Wire).FirstOrDefault(name => name == FamilyQuery) ?? "";
         await LoadAsync();
     }
 
@@ -112,7 +112,7 @@ else
         _list = null;
         try
         {
-            CatalystFamily? family = Enum.GetValues<CatalystFamily>().Where(candidate => Wire(candidate) == _family).Select(candidate => (CatalystFamily?)candidate).FirstOrDefault();
+            CatalystFamily? family = Enum.GetValues<CatalystFamily>().Where(candidate => CatalystCopy.Wire(candidate) == _family).Select(candidate => (CatalystFamily?)candidate).FirstOrDefault();
             var list = await CatalystsQuery.HandleAsync(new GetCatalysts(
                 MarketTime.AtNewYork(_from, TimeOnly.MinValue), MarketTime.AtNewYork(_from.AddDays(Days), TimeOnly.MaxValue), family), CancellationToken.None);
             var ids = list.Catalysts.Select(row => row.CatalystId).ToArray();
@@ -124,22 +124,6 @@ else
         catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
         { _error = exception.Message; }
     }
-
-    /// <summary>The wire name, the prefix of every canonical id (the contract's rule: upper-case member name).</summary>
-    private static string Wire(CatalystFamily family) => family.ToString().ToUpperInvariant();
-
-    private static string FamilyName(CatalystFamily family) => family switch
-    {
-        CatalystFamily.Fomc => "FOMC decision",
-        CatalystFamily.Cpi => "Consumer prices",
-        CatalystFamily.Nfp => "Employment Situation",
-        CatalystFamily.Claims => "Initial claims",
-        CatalystFamily.Gdp => "GDP estimate",
-        CatalystFamily.Pce => "Personal income and outlays",
-        CatalystFamily.Wpsr => "Weekly petroleum status",
-        CatalystFamily.Opec => "OPEC meeting",
-        _ => Fmt.Humanize(family.ToString()),
-    };
 
     private static string Scheduled(CatalystView row)
     {

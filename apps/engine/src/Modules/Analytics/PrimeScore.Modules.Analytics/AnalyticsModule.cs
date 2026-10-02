@@ -25,6 +25,7 @@ public static class AnalyticsModule
         services.AddScoped<IQueryHandler<GetValidationReport, IReadOnlyList<ValidationEventResult>>, GetValidationReportHandler>();
         services.AddScoped<IQueryHandler<GetForwardOutcomes, ForwardOutcomesReport?>, GetForwardOutcomesHandler>();
         services.AddScoped<IQueryHandler<GetCatalystRatios, CatalystRatioList>, GetCatalystRatiosHandler>();
+        services.AddScoped<IQueryHandler<GetCatalystOutcomes, CatalystOutcomeReport>, GetCatalystOutcomesHandler>();
         return services;
     }
 }

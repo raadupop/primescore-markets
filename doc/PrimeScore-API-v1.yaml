@@ -13,7 +13,7 @@ info:
     - Contract-first: this spec exists before implementation.
     - Black-box: no reference to internal types, layers, or persistence.
     - Iteration-stable: identical across all six architecture iterations.
-  version: "1.3.0"
+  version: "1.4.0"
   contact:
     name: PrimeScore AI Project
 
@@ -709,6 +709,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /analytics/catalyst-outcomes:
+    get:
+      operationId: getCatalystOutcomes
+      tags: [Analytics]
+      summary: Event record of one catalyst family
+      description: |
+        For each past event of the family: the S&P 500 move VIX9D priced on the
+        trading day before it over VIX9D's 9 calendar days, the actual move over
+        that window, whether it stayed inside the priced range, whether it was
+        smaller than the at-the-money straddle cost estimated from VIX9D (an upper
+        bound on buyer losses, because VIX9D includes skew), the event-day move and
+        the VIX9D change across the event; for WPSR and OPEC the OVX change only.
+        Summaries for all complete events and the latest 12. Cboe closes only,
+        computed from the ledger on read (ADR-0013). Added in 1.4.0.
+      parameters:
+        - name: family
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/CatalystFamily"
+      responses:
+        "200":
+          description: The family's event record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalystOutcomeReport"
+        "400":
+          description: "`family` is missing or not a catalyst family."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   # ────────────────────────────────────────────────────────────────────
   # CATALYSTS
@@ -1789,6 +1825,140 @@ components:
           nullable: true
 
     # ── Catalysts (added in 1.3.0) ────────────────────────────────
+    CatalystOutcomeReport:
+      type: object
+      description: |
+        Moves are fractions of the index (0.0471 = 4.71%); volatility changes are
+        index points. Absent members mean not measured, never zero.
+      required: [family, reference_instruments, events, window_open, before_live_start, missing_closes, all, latest_12, computed_at]
+      properties:
+        family:
+          $ref: "#/components/schemas/CatalystFamily"
+        reference_instruments:
+          type: array
+          items:
+            type: string
+          description: The Cboe series read, for example VIX9D, VIX and SPX, or OVX.
+        events:
+          type: array
+          description: Past events, newest first, including rows whose window is still open.
+          items:
+            $ref: "#/components/schemas/CatalystOutcome"
+        window_open:
+          type: integer
+          description: Rows whose 9-day window ends after the latest close; not in the summaries.
+        before_live_start:
+          type: integer
+          description: Events read before VIX9D's live start (2013-10-01); not rows.
+        missing_closes:
+          type: integer
+          description: Events missing a needed close; not rows, never filled.
+        all:
+          $ref: "#/components/schemas/CatalystOutcomeSummary"
+        latest_12:
+          $ref: "#/components/schemas/CatalystOutcomeSummary"
+        computed_at:
+          type: string
+          format: date-time
+
+    CatalystOutcome:
+      type: object
+      required: [catalyst_id, scheduled_at, time_announced, read_date, event_close_date, window_end_date, window_open, volatility_change, other_events_in_window, previously_examined]
+      properties:
+        catalyst_id:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        time_announced:
+          type: boolean
+        read_date:
+          type: string
+          format: date
+          description: The NYSE trading day immediately before the event's New York date.
+        event_close_date:
+          type: string
+          format: date
+          description: The first NYSE trading day whose 16:00 New York close is after the event.
+        window_end_date:
+          type: string
+          format: date
+          description: The latest NYSE trading day on or before read_date + 9 calendar days.
+        window_open:
+          type: boolean
+        ratio_before:
+          type: number
+          format: double
+          nullable: true
+          description: VIX9D ÷ VIX − 1 on read_date.
+        priced_move:
+          type: number
+          format: double
+          nullable: true
+          description: VIX9D(read) ÷ 100 × √(9/365), one standard deviation over the window.
+        actual_move:
+          type: number
+          format: double
+          nullable: true
+          description: SPX(window end) ÷ SPX(read) − 1, signed.
+        inside_priced_range:
+          type: boolean
+          nullable: true
+        below_straddle_estimate:
+          type: boolean
+          nullable: true
+          description: "|actual_move| < √(2/π) × priced_move."
+        event_day_move:
+          type: number
+          format: double
+          nullable: true
+          description: SPX(event close) ÷ SPX(read) − 1.
+        volatility_change:
+          type: number
+          format: double
+          description: VIX9D (OVX for WPSR and OPEC) at the event close minus read_date, index points.
+        other_events_in_window:
+          type: integer
+          description: Scheduled FOMC, CPI, NFP, GDP, PCE or OPEC events other than this one in (read_date, read_date + 9 days].
+        previously_examined:
+          type: boolean
+          description: FOMC or CPI dated on or before 2026-09-27, already used by the research programme.
+        never_rescheduled:
+          type: boolean
+          nullable: true
+
+    CatalystOutcomeSummary:
+      type: object
+      required: [count, volatility_fell]
+      properties:
+        count:
+          type: integer
+          description: Complete events summarised (n).
+        median_priced_move:
+          type: number
+          format: double
+          nullable: true
+        median_abs_actual_move:
+          type: number
+          format: double
+          nullable: true
+        inside_priced_range:
+          type: integer
+          nullable: true
+        below_straddle_estimate:
+          type: integer
+          nullable: true
+        median_abs_event_day_move:
+          type: number
+          format: double
+          nullable: true
+        median_volatility_change:
+          type: number
+          format: double
+          nullable: true
+        volatility_fell:
+          type: integer
+
     CatalystFamily:
       type: string
       enum: [FOMC, CPI, NFP, CLAIMS, GDP, PCE, WPSR, OPEC]

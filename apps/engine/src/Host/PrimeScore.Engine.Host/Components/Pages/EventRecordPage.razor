@@ -1,0 +1,143 @@
+@page "/event-record"
+@using PrimeScore.Modules.Analytics.Contracts
+@using PrimeScore.Modules.Catalysts.Contracts
+@using PrimeScore.SharedKernel.Cqrs
+@inject IQueryHandler<GetCatalystOutcomes, CatalystOutcomeReport> RecordQuery
+
+<PageTitle>Event record · PrimeScore Markets</PageTitle>
+<div class="page-head">
+    <div><div class="eyebrow">Research · Past catalysts</div><h1>Event record</h1>
+        <p>What options priced before each past event, and what happened next. Computed from Cboe's index files and the release calendar on each read, like <span class="mono">GET /api/analytics/catalyst-outcomes</span>.</p></div>
+</div>
+<div class="filters" role="group" aria-label="Event record filters">
+    <label>Family
+        <select @bind="_family" @bind:after="LoadAsync">
+            @foreach (var family in Enum.GetValues<CatalystFamily>())
+            { <option value="@CatalystCopy.Wire(family)">@CatalystCopy.Wire(family) · @CatalystCopy.FamilyName(family)</option> }
+        </select>
+    </label>
+</div>
+@if (Oil)
+{
+    <div class="callout"><strong>Oil volatility only.</strong> No short-dated oil volatility index or free crude price exists, so oil events show the change in OVX (30-day oil volatility) from the close before the event to the first close after it. A record, not a forecast (ADR-0013).</div>
+}
+else
+{
+    <div class="callout"><strong>Estimated from volatility indices, not option prices.</strong> The priced range is one standard deviation of the S&amp;P 500 over the 9 calendar days after the trading day before the event, read from VIX9D. The straddle estimate is what a 9-day at-the-money straddle would cost if options were priced at VIX9D; real straddles cost less because VIX9D includes skew, so "smaller than the straddle cost" overstates buyer losses. A fairly priced straddle still loses more often than it wins (about 58% of the time for normally distributed moves, because a few large moves pay for many small ones), so the count is not an edge on its own. A 9-day window can hold other events, counted on each row. Rows marked "previously examined" were already used by the research and are not fresh evidence. A record, not a forecast (ADR-0013).</div>
+}
+@if (_error is not null)
+{ <div class="degraded"><strong>The record could not be read.</strong> @_error</div> }
+else if (_report is null)
+{ <div class="loading">Measuring past events…</div> }
+else if (_report.Events.Count == 0)
+{ <EmptyState Title="No past event measured for this family">Enable the calendar sources and the Cboe files in <a href="sources">Data and health</a>.@Counts(_report)</EmptyState> }
+else
+{
+    <section class="panel" aria-label="Summary">
+        <div class="panel-head"><div><div class="kicker">@CatalystCopy.FamilyName(Family) · @string.Join(", ", _report.ReferenceInstruments)</div><h2>@Fmt.Count(_report.All.Count) complete event@(_report.All.Count == 1 ? "" : "s")</h2></div></div>
+        <p class="panel-note">@Counts(_report)</p>
+        @foreach (var (label, summary) in new[] { ("All events", _report.All), ("Latest 12", _report.Latest12) })
+        {
+            <h3>@label</h3>
+            <div class="metric-grid" aria-label="@label">
+                @if (!Oil)
+                {
+                    <div class="metric"><span>Priced 9-day range</span><strong>±@Pct(summary.MedianPricedMove)</strong><small>median, from VIX9D</small></div>
+                    <div class="metric"><span>Actual 9-day move</span><strong>@Pct(summary.MedianAbsActualMove)</strong><small>median size, up or down</small></div>
+                    <div class="metric"><span>Stayed inside the priced range</span><strong>@Share(summary.InsidePricedRange, summary.Count)</strong><small>about 68% if the index moved as priced</small></div>
+                    <div class="metric"><span>Smaller than the straddle cost estimate</span><strong>@Share(summary.BelowStraddleEstimate, summary.Count)</strong><small>about 58% even for a fairly priced straddle; an upper bound on buyer losses</small></div>
+                    <div class="metric"><span>Event-day S&amp;P 500 move</span><strong>@Pct(summary.MedianAbsEventDayMove)</strong><small>median size</small></div>
+                }
+                <div class="metric"><span>@VolName fell after the event</span><strong>@Share(summary.VolatilityFell, summary.Count)</strong><small>median change @Fmt.Signed(summary.MedianVolatilityChange, 2) points</small></div>
+            </div>
+        }
+    </section>
+    <section class="panel" aria-label="Events">
+        <div class="panel-head"><div><div class="kicker">Newest first</div><h2>Each event</h2></div></div>
+        <div class="table-wrap"><table class="data">
+            @if (Oil)
+            {
+                <thead><tr><th>Event</th><th>Scheduled (New York)</th><th>OVX change</th><th>Notes</th></tr></thead>
+                <tbody>@foreach (var row in _report.Events)
+                {
+                    <tr><td class="mono">@row.CatalystId</td><td class="mono">@Scheduled(row)</td>
+                        <td class="num">@Fmt.Signed(row.VolatilityChange, 2)<div class="panel-note">@Fmt.Day(row.ReadDate) → @Fmt.Day(row.EventCloseDate)</div></td>
+                        <td>@Notes(row)</td></tr>
+                }</tbody>
+            }
+            else
+            {
+                <thead><tr><th>Event</th><th>Scheduled (New York)</th><th>Ratio before</th><th>Priced range</th><th>Actual 9-day move</th><th>Inside range</th><th>Below straddle estimate</th><th>Event day</th><th>VIX9D change</th><th>Notes</th></tr></thead>
+                <tbody>@foreach (var row in _report.Events)
+                {
+                    <tr><td class="mono">@row.CatalystId</td><td class="mono">@Scheduled(row)</td>
+                        <td class="num">@Fmt.Signed(row.RatioBefore, 3)</td>
+                        <td class="num">±@Pct(row.PricedMove)<div class="panel-note">read @Fmt.Day(row.ReadDate)</div></td>
+                        <td class="num">@(row.WindowOpen ? "window open" : SignedPct(row.ActualMove))<div class="panel-note">to @Fmt.Day(row.WindowEndDate)</div></td>
+                        <td>@YesNo(row.InsidePricedRange)</td>
+                        <td>@YesNo(row.BelowStraddleEstimate)</td>
+                        <td class="num">@SignedPct(row.EventDayMove)<div class="panel-note">close @Fmt.Day(row.EventCloseDate)</div></td>
+                        <td class="num">@Fmt.Signed(row.VolatilityChange, 2)</td>
+                        <td>@Notes(row)</td></tr>
+                }</tbody>
+            }
+        </table></div>
+        <p class="panel-note">Priced range: VIX9D ÷ 100 × √(9/365). Actual move: S&amp;P 500 close at the window end ÷ close on the read date − 1. Straddle estimate: √(2/π) × priced range. Event day: the first close after the event against the read date. Cboe series are for internal use. Computed @Fmt.Utc(_report.ComputedAt).</p>
+    </section>
+}
+
+@code {
+    private CatalystOutcomeReport? _report;
+    private string _family = "FOMC";
+    private string? _error;
+    [SupplyParameterFromQuery(Name = "family")] public string? FamilyQuery { get; set; }
+
+    private CatalystFamily Family => Enum.GetValues<CatalystFamily>().FirstOrDefault(candidate => CatalystCopy.Wire(candidate) == _family);
+
+    private bool Oil => CatalystCopy.IsOil(Family);
+
+    private string VolName => Oil ? "OVX" : "VIX9D";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _family = Enum.GetValues<CatalystFamily>().Select(CatalystCopy.Wire).FirstOrDefault(name => name == FamilyQuery) ?? "FOMC";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        _report = null;
+        try
+        { _report = await RecordQuery.HandleAsync(new GetCatalystOutcomes(_family), CancellationToken.None); }
+        catch (Exception exception) when (exception is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        { _error = exception.Message; }
+    }
+
+    private static string Counts(CatalystOutcomeReport report) => string.Create(CultureInfo.InvariantCulture,
+        $" {report.WindowOpen} with the 9-day window still open · {report.BeforeLiveStart} before VIX9D's live start (2013-10-01) · {report.MissingCloses} missing a close; none filled.");
+
+    private static string Pct(double? value) => value is { } number ? (number * 100).ToString("0.00", CultureInfo.InvariantCulture) + "%" : "—";
+
+    private static string SignedPct(double? value) => value is { } number ? Fmt.Signed(number * 100, 2) + "%" : "—";
+
+    private static string Share(int? count, int total) => count is { } k && total > 0 ? $"{Fmt.Count(k)} of {Fmt.Count(total)} ({Fmt.Percent(k / (double)total)})" : "—";
+
+    private static string YesNo(bool? value) => value switch { true => "yes", false => "no", null => "—" };
+
+    private static string Scheduled(CatalystOutcome row)
+    {
+        var local = TimeZoneInfo.ConvertTime(row.ScheduledAt, PrimeScore.SharedKernel.MarketTime.NewYork);
+        return row.TimeAnnounced ? local.ToString("ddd yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : local.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
+
+    private static string Notes(CatalystOutcome row)
+    {
+        var notes = new List<string>();
+        if (row.PreviouslyExamined) { notes.Add("previously examined"); }
+        if (row.OtherEventsInWindow > 0) { notes.Add($"+{row.OtherEventsInWindow} other event{(row.OtherEventsInWindow == 1 ? "" : "s")} in window"); }
+        if (row.NeverRescheduled == false) { notes.Add("rescheduled"); }
+        if (row.NeverRescheduled is null) { notes.Add("schedule history unknown (back-filled)"); }
+        return string.Join(" · ", notes);
+    }
+}

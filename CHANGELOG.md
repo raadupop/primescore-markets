@@ -2,6 +2,7 @@
 
 ## 2026-10-02
 
+- Slice 3, event record ([spec](doc/slices/03-event-record.md), [ADR-0013](doc/adr/0013-event-record-priced-against-actual-move.md), SRS CAT-004): for each past FOMC, CPI, NFP, GDP, PCE and claims release, the 9-day S&P 500 move VIX9D priced against the move that happened, a straddle cost estimate, the event-day move and the VIX9D change; OVX change for WPSR and OPEC. Engine API contract 1.4.0 (additive): `GET /api/analytics/catalyst-outcomes?family=`. On real data CPI stayed inside its priced range on 121 of 155 releases since 2013-10; an independent recomputation from Cboe's files matched all 413 FOMC, CPI and NFP rows.
 - Slice specs ([doc/slices/](doc/slices/README.md)): eight slices in build order, each with SRS IDs, design links, UI tests and a click-through on a demo copy of the ledger. Slices 1 (volatility state) and 2 (events ahead) were run on real data: VIX 16.34 on 2026-09-30 at the 35.5th percentile and the 9-day/30-day ratio −0.131 both match Cboe's files.
 - SRS v2.4.0: CLS-006 descriptive; DEC-005, ANA-003, SIG-006, CLS-010 and CAT-001 to CAT-003 added; ANA-001 and §11 verified on Volmageddon; §9 events kept as a regression record because the state gate fires on or after a shock, never before.
 - `scripts/build-demo-ledger.ps1` copies the live ledger and records a state-gate replay; `start-markets.ps1 -Database <path> [-PullSources]` serves a copy and refuses sources on the live ledger.

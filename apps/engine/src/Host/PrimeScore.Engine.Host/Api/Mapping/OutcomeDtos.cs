@@ -6,6 +6,50 @@ namespace PrimeScore.Engine.Host.Api;
 /// <summary>The outcomes record between the Analytics module view and the contract (brief §5 rule 4).</summary>
 internal static class OutcomeDtos
 {
+    public static CatalystOutcomeReport From(Module.CatalystOutcomeReport report, CatalystFamily family) => new()
+    {
+        Family = family,
+        Reference_instruments = report.ReferenceInstruments.ToList(),
+        Events = report.Events.Select(row => new CatalystOutcome
+        {
+            Catalyst_id = row.CatalystId,
+            Scheduled_at = row.ScheduledAt,
+            Time_announced = row.TimeAnnounced,
+            Read_date = row.ReadDate,
+            Event_close_date = row.EventCloseDate,
+            Window_end_date = row.WindowEndDate,
+            Window_open = row.WindowOpen,
+            Ratio_before = row.RatioBefore,
+            Priced_move = row.PricedMove,
+            Actual_move = row.ActualMove,
+            Inside_priced_range = row.InsidePricedRange,
+            Below_straddle_estimate = row.BelowStraddleEstimate,
+            Event_day_move = row.EventDayMove,
+            Volatility_change = row.VolatilityChange,
+            Other_events_in_window = row.OtherEventsInWindow,
+            Previously_examined = row.PreviouslyExamined,
+            Never_rescheduled = row.NeverRescheduled,
+        }).ToList(),
+        Window_open = report.WindowOpen,
+        Before_live_start = report.BeforeLiveStart,
+        Missing_closes = report.MissingCloses,
+        All = From(report.All),
+        Latest_12 = From(report.Latest12),
+        Computed_at = report.ComputedAt,
+    };
+
+    private static CatalystOutcomeSummary From(Module.CatalystOutcomeSummary summary) => new()
+    {
+        Count = summary.Count,
+        Median_priced_move = summary.MedianPricedMove,
+        Median_abs_actual_move = summary.MedianAbsActualMove,
+        Inside_priced_range = summary.InsidePricedRange,
+        Below_straddle_estimate = summary.BelowStraddleEstimate,
+        Median_abs_event_day_move = summary.MedianAbsEventDayMove,
+        Median_volatility_change = summary.MedianVolatilityChange,
+        Volatility_fell = summary.VolatilityFell,
+    };
+
     public static ForwardOutcomesReport From(Module.ForwardOutcomesReport report) => new()
     {
         Context = report.Context,

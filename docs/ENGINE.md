@@ -166,6 +166,14 @@ Operator steps: set the BLS contact `UserAgent`; enable `FedCalendar`, `BlsCalen
 `BeaCalendar`, `EiaCalendar` and `ClaimsCalendar`; curate `opec.csv`, then enable `OpecCalendar`;
 import earlier history as needed (TODO-019). [Limits](../apps/engine/LIMITATIONS.md#catalyst-calendars).
 
+### Event record
+
+**Event record** (`/event-record?family=CPI`, `GET /api/analytics/catalyst-outcomes`) measures each past
+event: the S&P 500 move VIX9D priced for the next 9 days against the move that happened, the
+event-day move and the VIX9D change (OVX for WPSR and OPEC) ([ADR-0013](../doc/adr/0013-event-record-priced-against-actual-move.md)).
+It needs the Cboe files for VIX9D, VIX and SPX (OVX for oil) and the family's calendar; CPI and NFP
+need the BLS contact above. Figures are estimates from indices, not option prices.
+
 ## API access
 
 ```powershell
