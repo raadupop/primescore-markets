@@ -13,7 +13,7 @@ info:
     - Contract-first: this spec exists before implementation.
     - Black-box: no reference to internal types, layers, or persistence.
     - Iteration-stable: identical across all six architecture iterations.
-  version: "1.4.0"
+  version: "1.5.0"
   contact:
     name: PrimeScore AI Project
 
@@ -739,6 +739,42 @@ paths:
                 $ref: "#/components/schemas/CatalystOutcomeReport"
         "400":
           description: "`family` is missing or not a catalyst family."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /analytics/position-scenarios:
+    post:
+      operationId: getPositionScenarios
+      tags: [Analytics]
+      summary: Event scenarios for an entered S&P 500 option position
+      description: |
+        Values the position (Black-Scholes-Merton, one VIX-family implied
+        volatility for its expiry and every strike), reports its Greeks and
+        maximum loss at expiry, and replays every past release of each scheduled
+        FOMC, CPI, NFP, GDP or PCE event before expiry on it: the past event-day
+        move and VIX9D change, carried to the option by the square root of time.
+        Nothing is recorded and no order exists; figures are estimates, never
+        instructions (ADR-0014). A position that cannot be valued returns 200 with
+        `error` set. Added in 1.5.0.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PositionScenarioRequest"
+      responses:
+        "200":
+          description: The position's value, Greeks, maximum loss and event scenarios.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionScenarioReport"
+        "400":
+          description: The body could not be read.
           content:
             application/json:
               schema:
@@ -1958,6 +1994,177 @@ components:
           nullable: true
         volatility_fell:
           type: integer
+
+    PositionScenarioRequest:
+      type: object
+      required: [underlying, expiry, legs]
+      properties:
+        underlying:
+          type: string
+          enum: [SPX, SPY]
+          description: SPY is valued at SPX ÷ 10.
+        expiry:
+          type: string
+          format: date
+          description: Every leg expires at 16:00 New York on this date.
+        legs:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/PositionLegInput"
+        entry_cost:
+          type: number
+          format: double
+          nullable: true
+          description: Dollars paid for the whole position, negative when received; absent uses today's model value.
+        rate:
+          type: number
+          format: double
+          nullable: true
+          description: Continuously compounded risk-free rate (0.04 = 4%); absent means 0.04.
+        dividend_yield:
+          type: number
+          format: double
+          nullable: true
+          description: Continuous dividend yield of the index; absent means 0.013.
+
+    PositionLegInput:
+      type: object
+      required: [right, strike, quantity]
+      properties:
+        right:
+          type: string
+          enum: [C, P]
+        strike:
+          type: number
+          format: double
+        quantity:
+          type: integer
+          description: Contracts, positive long and negative short; each is 100 units of the underlying.
+
+    PositionScenarioReport:
+      type: object
+      description: Dollar figures are for the whole position. Absent members mean not available, never zero.
+      required: [unlimited_loss, events, computed_at]
+      properties:
+        error:
+          type: string
+          nullable: true
+          description: Why the position could not be valued.
+        as_of:
+          type: string
+          format: date
+          nullable: true
+          description: The latest NYSE trading day with Cboe SPX and VIX closes.
+        underlying_level:
+          type: number
+          format: double
+          nullable: true
+        implied_volatility:
+          type: number
+          format: double
+          nullable: true
+          description: VIX-family volatility interpolated to the expiry, a fraction.
+        days_to_expiry:
+          type: integer
+          nullable: true
+        value:
+          type: number
+          format: double
+          nullable: true
+        delta:
+          type: number
+          format: double
+          nullable: true
+          description: Dollars per 1-point rise of the underlying.
+        gamma:
+          type: number
+          format: double
+          nullable: true
+          description: Change of delta per 1-point rise.
+        vega:
+          type: number
+          format: double
+          nullable: true
+          description: Dollars per volatility point.
+        theta:
+          type: number
+          format: double
+          nullable: true
+          description: Dollars per calendar day, level and volatility unchanged.
+        entry_cost:
+          type: number
+          format: double
+          nullable: true
+        max_loss_at_expiry:
+          type: number
+          format: double
+          nullable: true
+          description: Largest loss at expiry against the entry cost; absent when unlimited.
+        unlimited_loss:
+          type: boolean
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/PositionEventScenarios"
+        computed_at:
+          type: string
+          format: date-time
+
+    PositionEventScenarios:
+      type: object
+      required: [catalyst_id, family, scheduled_at, event_close_date, days_from_as_of, decay_to_event, scenarios]
+      properties:
+        catalyst_id:
+          type: string
+        family:
+          $ref: "#/components/schemas/CatalystFamily"
+        scheduled_at:
+          type: string
+          format: date-time
+        event_close_date:
+          type: string
+          format: date
+        days_from_as_of:
+          type: integer
+        decay_to_event:
+          type: number
+          format: double
+          description: Value change until just before the event, level and volatility unchanged.
+        scenarios:
+          type: integer
+          description: Past releases of the family replayed (n).
+        mean_move_part:
+          type: number
+          format: double
+          nullable: true
+          description: Mean value change from the past event-day move alone (volatility fixed).
+        mean_volatility_part:
+          type: number
+          format: double
+          nullable: true
+          description: Mean value change from the past volatility change alone (level fixed).
+        mean_total:
+          type: number
+          format: double
+          nullable: true
+        median_total:
+          type: number
+          format: double
+          nullable: true
+        loss_share:
+          type: number
+          format: double
+          nullable: true
+        worst:
+          type: number
+          format: double
+          nullable: true
+        best:
+          type: number
+          format: double
+          nullable: true
 
     CatalystFamily:
       type: string

@@ -174,6 +174,11 @@ event-day move and the VIX9D change (OVX for WPSR and OPEC) ([ADR-0013](../doc/a
 It needs the Cboe files for VIX9D, VIX and SPX (OVX for oil) and the family's calendar; CPI and NFP
 need the BLS contact above. Figures are estimates from indices, not option prices.
 
+**Your trade** (`/your-trade`, `POST /api/analytics/position-scenarios`) values an S&P 500 option position you
+type in (up to four legs, one expiry) and replays every past release before its expiry on it
+([ADR-0014](../doc/adr/0014-position-event-scenarios.md)). It also needs the VIX3M and VIX6M files.
+Nothing is saved; the address bar holds the position, for example `?u=SPX&exp=2026-10-30&legs=1C7675,1P7675`.
+
 ## API access
 
 ```powershell

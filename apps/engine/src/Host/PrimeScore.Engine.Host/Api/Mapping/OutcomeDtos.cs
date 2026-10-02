@@ -6,6 +6,50 @@ namespace PrimeScore.Engine.Host.Api;
 /// <summary>The outcomes record between the Analytics module view and the contract (brief §5 rule 4).</summary>
 internal static class OutcomeDtos
 {
+    public static Module.PositionInput ToModule(PositionScenarioRequest request) => new(
+        request.Underlying.ToString(),
+        request.Expiry,
+        request.Legs.Select(leg => new Module.PositionLeg(leg.Right.ToString(), leg.Strike, leg.Quantity)).ToArray(),
+        request.Entry_cost,
+        request.Rate ?? 0.04,
+        request.Dividend_yield ?? 0.013);
+
+    public static PositionScenarioReport From(Module.PositionScenarioReport report) => new()
+    {
+        Error = report.Error,
+        As_of = report.AsOf,
+        Underlying_level = report.UnderlyingLevel,
+        Implied_volatility = report.ImpliedVolatility,
+        Days_to_expiry = report.DaysToExpiry,
+        Value = report.Value,
+        Delta = report.Delta,
+        Gamma = report.Gamma,
+        Vega = report.Vega,
+        Theta = report.Theta,
+        Entry_cost = report.EntryCost,
+        Max_loss_at_expiry = report.MaxLossAtExpiry,
+        Unlimited_loss = report.UnlimitedLoss,
+        Events = report.Events.Select(item => new PositionEventScenarios
+        {
+            Catalyst_id = item.CatalystId,
+            // The family's wire name is the contract's member name (FOMC, CPI, ...).
+            Family = Enum.Parse<CatalystFamily>(item.Family),
+            Scheduled_at = item.ScheduledAt,
+            Event_close_date = item.EventCloseDate,
+            Days_from_as_of = item.DaysFromAsOf,
+            Decay_to_event = item.DecayToEvent,
+            Scenarios = item.Scenarios,
+            Mean_move_part = item.MeanMovePart,
+            Mean_volatility_part = item.MeanVolatilityPart,
+            Mean_total = item.MeanTotal,
+            Median_total = item.MedianTotal,
+            Loss_share = item.LossShare,
+            Worst = item.Worst,
+            Best = item.Best,
+        }).ToList(),
+        Computed_at = report.ComputedAt,
+    };
+
     public static CatalystOutcomeReport From(Module.CatalystOutcomeReport report, CatalystFamily family) => new()
     {
         Family = family,

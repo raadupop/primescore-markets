@@ -12,6 +12,8 @@
 - `SPX_History.csv`: the real layout of Cboe's SPX file (`DATE,SPX`) with **invented values** on the same dates:
   5000 except on the six past 2026 FOMC decision days and their window ends (read date + 9 calendar days), whose
   values `EventRecordTests` derives by hand.
+- `VIX3M_History.csv`, `VIX6M_History.csv`: the same layout and dates with **invented** constant closes, 22 and 23,
+  for the volatility term structure of `PositionScenarioTests`.
 - `fomccalendars.htm`: excerpt of <https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm> fetched
   2026-09-29 (public domain; Federal Reserve Board), the 2026 panel only, markup as served.
 - `import-2014.csv`: one curated CPI row in the `import-catalysts` format (the 16 January 2014 release as the BLS

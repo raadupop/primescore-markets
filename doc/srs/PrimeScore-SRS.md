@@ -1,7 +1,7 @@
 # PrimeScore AI — Software Requirements Specification
 
 These requirements describe the intended event classification, aggregation and position-management behavior. See [implemented scope](../../README.md) for what can be run today.
-| Version: | 2.5.0 |
+| Version: | 2.6.0 |
 | --- | --- |
 | Standard: | Structure informed by ISO/IEC/IEEE 29148:2018 |
 | Date: | October 2, 2026 |
@@ -28,6 +28,8 @@ These requirements describe the intended event classification, aggregation and p
 
 
 **v2.5.0** adds CAT-004 (event record: the priced 9-day S&P 500 move against the actual move per catalyst family, from Cboe indices; ADR-0013) and adds CAT-004 to the §11 hand-calculation criterion.
+
+**v2.6.0** adds RSK-004 (event scenarios for an operator-entered option position: past events of each scheduled family before expiry replayed on the position, split into the move and the volatility change, the measured terms of EXT-004; ADR-0014).
 # Table of Contents
 
 # 1. Purpose
@@ -463,6 +465,14 @@ The system shall maintain a configurable minimum cash reserve. No deployment sha
 **Rationale:** Liquidity for future deployments.
 
 **Verification:** Attempt deployment near reserve floor. Verify rejection.
+
+### RSK-004 [Must]
+
+For an S&P 500 option position entered by the operator (up to four legs, one expiry, optional entry cost), the system shall show its estimated value, delta, gamma, vega and theta from the VIX-family implied volatility for its expiry, its maximum loss at expiry (or that the loss is unlimited), and, for each scheduled FOMC, CPI, NFP, GDP or PCE release before expiry, the change in its value under every past release of that family in the event record (CAT-004): the mean move part, the mean volatility part, the mean and median total, the share of losses, the worst and the best. The position shall not be recorded, no order shall be sent, and no figure shall be worded as an instruction to hold or exit.
+
+**Rationale:** EXT-004 compares the expected gain from the move with the expected loss from the volatility change; the event record measures both per family, so the operator can see them for a position before an execution path exists (ADR-0014).
+
+**Verification:** With stub Cboe files and the 2026 FOMC calendar, verify for a long SPX straddle the as-of date, level, interpolated volatility and Black-Scholes value against a hand calculation, one event (FOMC-2026-10-28) with six scenarios, and a maximum loss equal to the entry cost; verify a short call reports an unlimited loss; through the API and the Your trade page.
 
 ## 5.7 Analytics
 
@@ -1052,4 +1062,4 @@ Controlled requirement implementations. Each has a type, governing which measure
 
 ---
 
-END OF SRS v2.5.0
+END OF SRS v2.6.0

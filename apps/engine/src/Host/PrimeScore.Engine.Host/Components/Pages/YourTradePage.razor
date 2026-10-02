@@ -1,0 +1,219 @@
+@page "/your-trade"
+@using System.Text.RegularExpressions
+@using PrimeScore.Modules.Analytics.Contracts
+@using PrimeScore.SharedKernel
+@using PrimeScore.SharedKernel.Cqrs
+@inject IQueryHandler<GetPositionScenarios, PositionScenarioReport> ScenarioQuery
+@inject NavigationManager Navigation
+
+<PageTitle>Your trade · PrimeScore Markets</PageTitle>
+<div class="page-head">
+    <div><div class="eyebrow">Research · Position risk</div><h1>Your trade</h1>
+        <p>Enter an S&amp;P 500 option position to see its estimated value, its worst loss at expiry, and what each scheduled release before expiry did to positions like it in the past. Nothing is saved and no order is sent.</p></div>
+</div>
+<div class="callout"><strong>Estimates from volatility indices, not your broker's prices.</strong> One implied volatility for the expiry, read from VIX9D, VIX, VIX3M and VIX6M, values every strike, so positions far from the money are priced less accurately. Each past release replays its S&amp;P 500 event-day move and its VIX9D change on your position at today's level. These are measured figures, not advice to hold, close or open anything (ADR-0014).</div>
+
+<section class="panel" aria-label="Position">
+    <div class="panel-head"><div><div class="kicker">Up to four legs, one expiry</div><h2>Position</h2></div></div>
+    <div class="filters" role="group" aria-label="Position inputs">
+        <label>Underlying
+            <select @bind="_underlying"><option value="SPX">SPX (S&amp;P 500 index)</option><option value="SPY">SPY (valued at SPX ÷ 10)</option></select>
+        </label>
+        <label>Expiry (New York)<input type="date" @bind="_expiry" /></label>
+        <label>Entry cost, $ (paid +, received −)<input type="number" step="any" @bind="_cost" placeholder="optional" /></label>
+        <label>Rate, %<input type="number" step="any" @bind="_rate" /></label>
+        <label>Dividend yield, %<input type="number" step="any" @bind="_dividend" /></label>
+    </div>
+    <div class="table-wrap"><table class="data">
+        <thead><tr><th>Leg</th><th>Side</th><th>Contracts</th><th>Type</th><th>Strike</th></tr></thead>
+        <tbody>@for (var index = 0; index < _rows.Length; index++)
+        {
+            var row = _rows[index];
+            <tr><td>@(index + 1)</td>
+                <td><select @bind="row.Side" aria-label="Side of leg @(index + 1)"><option value="Long">Long</option><option value="Short">Short</option></select></td>
+                <td><input type="number" min="1" @bind="row.Contracts" aria-label="Contracts of leg @(index + 1)" /></td>
+                <td><select @bind="row.Right" aria-label="Type of leg @(index + 1)"><option value="C">Call</option><option value="P">Put</option></select></td>
+                <td><input type="number" step="any" @bind="row.Strike" placeholder="empty = unused" aria-label="Strike of leg @(index + 1)" /></td></tr>
+        }</tbody>
+    </table></div>
+    <button class="button" @onclick="Show">Show scenarios</button>
+    @if (_example) { <p class="panel-note">Example position: one long at-the-money straddle (a call and a put at the same strike). Change the legs and press Show scenarios.</p> }
+</section>
+
+@if (_report is null)
+{ <div class="loading">Valuing the position…</div> }
+else if (_report.Error is { } error)
+{ <div class="degraded"><strong>The position could not be valued.</strong> @error</div> }
+else
+{
+    <section class="panel" aria-label="Value and risk">
+        <div class="panel-head"><div><div class="kicker">As of the close on @Fmt.Day(_report.AsOf) · @_shownUnderlying @Fmt.Number(_report.UnderlyingLevel, 2)</div><h2>Value and risk today</h2></div></div>
+        <div class="metric-grid">
+            <div class="metric"><span>Estimated value</span><strong>@Money(_report.Value)</strong><small>@_report.DaysToExpiry days to expiry · implied volatility @Fmt.Number(_report.ImpliedVolatility * 100, 1)%</small></div>
+            <div class="metric"><span>Worst loss at expiry</span><strong>@(_report.UnlimitedLoss ? "Unlimited" : Money(_report.MaxLossAtExpiry))</strong><small>@(_report.UnlimitedLoss ? "short calls lose without limit as the index rises" : $"against an entry cost of {Money(_report.EntryCost)}")</small></div>
+            <div class="metric"><span>Delta</span><strong>@SignedMoney(_report.Delta)</strong><small>per 1-point rise of @_shownUnderlying</small></div>
+            <div class="metric"><span>Gamma</span><strong>@Fmt.Signed(_report.Gamma, 2)</strong><small>change of delta per 1-point rise</small></div>
+            <div class="metric"><span>Vega</span><strong>@SignedMoney(_report.Vega)</strong><small>per volatility point</small></div>
+            <div class="metric"><span>Theta</span><strong>@SignedMoney(_report.Theta)</strong><small>per day, nothing else changing</small></div>
+        </div>
+    </section>
+    <section class="panel" aria-label="Scheduled releases before expiry">
+        <div class="panel-head"><div><div class="kicker">FOMC, CPI, jobs, GDP and PCE releases before expiry</div><h2>What past releases did to this position</h2></div></div>
+        @if (_report.Events.Count == 0)
+        { <EmptyState Title="No scheduled release before this expiry">Only time decay and unscheduled news move this position before it expires.</EmptyState> }
+        else
+        {
+            <div class="table-wrap"><table class="data">
+                <thead><tr><th>Release</th><th>Scheduled (New York)</th><th>Time decay until then</th><th>Past releases replayed</th><th>From the move</th><th>From the volatility change</th><th>Average total</th><th>Median total</th><th>Lost money</th><th>Worst</th><th>Best</th></tr></thead>
+                <tbody>@foreach (var item in _report.Events)
+                {
+                    <tr><td class="mono">@item.CatalystId</td>
+                        <td class="mono">@TimeZoneInfo.ConvertTime(item.ScheduledAt, MarketTime.NewYork).ToString("ddd yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)<div class="panel-note">in @item.DaysFromAsOf day@(item.DaysFromAsOf == 1 ? "" : "s")</div></td>
+                        <td class="num">@SignedMoney(item.DecayToEvent)</td>
+                        <td class="num">@Fmt.Count(item.Scenarios)<div class="panel-note"><a href="event-record?family=@item.Family">record →</a></div></td>
+                        <td class="num">@SignedMoney(item.MeanMovePart)</td>
+                        <td class="num">@SignedMoney(item.MeanVolatilityPart)</td>
+                        <td class="num">@SignedMoney(item.MeanTotal)</td>
+                        <td class="num">@SignedMoney(item.MedianTotal)</td>
+                        <td class="num">@(item.LossShare is { } share ? $"{Fmt.Count((int)Math.Round(share * item.Scenarios))} of {Fmt.Count(item.Scenarios)} ({Fmt.Percent(share)})" : "—")</td>
+                        <td class="num">@SignedMoney(item.Worst)</td>
+                        <td class="num">@SignedMoney(item.Best)</td></tr>
+                }</tbody>
+            </table></div>
+            <p class="panel-note">Each past release of the same kind is replayed on the position at the moment of the release: the S&amp;P 500 moves by that release's event-day move, and implied volatility changes by that release's VIX9D change, in full with 9 days or fewer left and scaled by √(9 ÷ days left) beyond. "From the move" keeps volatility fixed; "From the volatility change" keeps the index fixed. Releases on the same day are replayed separately. Time decay until the release is shown on its own.</p>
+        }
+        <p class="panel-note">Dollar figures use 100 units per contract. Black-Scholes-Merton with a @Fmt.Number(_rateUsed * 100, 1)% rate and a @Fmt.Number(_dividendUsed * 100, 1)% dividend yield. Computed @Fmt.Utc(_report.ComputedAt).</p>
+    </section>
+}
+
+@code {
+    private static readonly Regex LegPattern = new(@"^([+-]?\d{1,5})([CP])(\d+(?:\.\d+)?)$", RegexOptions.CultureInvariant);
+
+    private readonly LegRow[] _rows = [new(), new(), new(), new()];
+    private PositionScenarioReport? _report;
+    private string _underlying = "SPX";
+    private string _shownUnderlying = "SPX";
+    private DateOnly _expiry;
+    private double? _cost;
+    private double _rate = 4.0;
+    private double _dividend = 1.3;
+    private double _rateUsed;
+    private double _dividendUsed;
+    private bool _example;
+
+    [SupplyParameterFromQuery(Name = "u")] public string? UnderlyingQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "exp")] public string? ExpiryQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "legs")] public string? LegsQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "cost")] public string? CostQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "r")] public string? RateQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "q")] public string? DividendQuery { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _report = null;
+        _underlying = UnderlyingQuery == "SPY" ? "SPY" : "SPX";
+        _rate = Number(RateQuery) ?? 4.0;
+        _dividend = Number(DividendQuery) ?? 1.3;
+        _cost = Number(CostQuery);
+        var legs = ParseLegs(LegsQuery);
+        _example = legs is null;
+        DateOnly.TryParseExact(ExpiryQuery, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _expiry);
+        if (legs is null)
+        {
+            // No position given: an at-the-money straddle on the third Friday about a month out.
+            var probe = await Value([]);
+            if (probe.AsOf is not { } asOf || probe.UnderlyingLevel is not { } level)
+            {
+                _report = probe;
+                return;
+            }
+
+            var step = _underlying == "SPY" ? 1.0 : 25.0;
+            var strike = Math.Round(level / step) * step;
+            legs = [new("C", strike, 1), new("P", strike, 1)];
+            _expiry = ThirdFriday(asOf.AddDays(30));
+        }
+
+        for (var index = 0; index < _rows.Length; index++)
+        {
+            _rows[index] = index < legs.Count
+                ? new LegRow { Side = legs[index].Quantity < 0 ? "Short" : "Long", Contracts = Math.Abs(legs[index].Quantity), Right = legs[index].Right, Strike = legs[index].Strike }
+                : new LegRow();
+        }
+
+        _report = await Value(legs);
+    }
+
+    private async Task<PositionScenarioReport> Value(IReadOnlyList<PositionLeg> legs)
+    {
+        _shownUnderlying = _underlying;
+        _rateUsed = _rate / 100;
+        _dividendUsed = _dividend / 100;
+        return await ScenarioQuery.HandleAsync(new GetPositionScenarios(new PositionInput(_underlying, _expiry, legs, _cost, _rateUsed, _dividendUsed)), CancellationToken.None);
+    }
+
+    private void Show()
+    {
+        var legs = string.Join(",", _rows.Where(row => row.Strike is > 0 && row.Contracts > 0)
+            .Select(row => string.Create(CultureInfo.InvariantCulture, $"{(row.Side == "Short" ? "-" : "")}{row.Contracts}{row.Right}{row.Strike}")));
+        var query = new Dictionary<string, object?>
+        {
+            ["u"] = _underlying,
+            ["exp"] = _expiry.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ["legs"] = legs,
+            ["cost"] = _cost?.ToString(CultureInfo.InvariantCulture),
+            ["r"] = _rate.ToString(CultureInfo.InvariantCulture),
+            ["q"] = _dividend.ToString(CultureInfo.InvariantCulture),
+        };
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters("your-trade", query));
+    }
+
+    /// <summary>Legs as <c>1C5000,-2P4800</c>: signed contracts, C or P, strike. Null when absent; unreadable legs become an empty list (reported as an error).</summary>
+    private static IReadOnlyList<PositionLeg>? ParseLegs(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var legs = new List<PositionLeg>();
+        foreach (var token in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var match = LegPattern.Match(token);
+            if (!match.Success)
+            {
+                return [];
+            }
+
+            legs.Add(new PositionLeg(match.Groups[2].Value, double.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture), int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture)));
+        }
+
+        return legs;
+    }
+
+    private static double? Number(string? text) =>
+        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value) ? value : null;
+
+    private static DateOnly ThirdFriday(DateOnly near)
+    {
+        var first = new DateOnly(near.Year, near.Month, 1);
+        var friday = first.AddDays(((int)DayOfWeek.Friday - (int)first.DayOfWeek + 7) % 7).AddDays(14);
+        return friday < near.AddDays(-14) ? ThirdFriday(first.AddMonths(1)) : friday;
+    }
+
+    private static string Money(double? value) => value is { } number
+        ? (number < 0 ? "-$" : "$") + Math.Abs(number).ToString("N0", CultureInfo.InvariantCulture)
+        : "—";
+
+    private static string SignedMoney(double? value) => value is { } number
+        ? (number < 0 ? "-$" : "+$") + Math.Abs(number).ToString("N0", CultureInfo.InvariantCulture)
+        : "—";
+
+    private sealed class LegRow
+    {
+        public string Side { get; set; } = "Long";
+        public int Contracts { get; set; } = 1;
+        public string Right { get; set; } = "C";
+        public double? Strike { get; set; }
+    }
+}

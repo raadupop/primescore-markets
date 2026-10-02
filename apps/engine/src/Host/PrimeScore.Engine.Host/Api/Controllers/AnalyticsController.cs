@@ -10,15 +10,25 @@ namespace PrimeScore.Engine.Host.Api.Controllers;
 
 /// <summary>
 /// The outcomes record (ADR-0008): what the reference index did after each recorded decision,
-/// computed from the ledger on read, 404 for an unknown context; and the event record of a catalyst
-/// family (ADR-0013).
+/// computed from the ledger on read, 404 for an unknown context; the event record of a catalyst
+/// family (ADR-0013); and event scenarios for an entered option position, which is not stored (ADR-0014).
 /// </summary>
 [Authorize(Policy = ApiPolicies.Read)]
 public sealed class AnalyticsController(
     IQueryHandler<GetForwardOutcomes, ForwardOutcomesReport?> outcomes,
     IQueryHandler<GetActiveSettings, SettingsVersion> settings,
-    IQueryHandler<GetCatalystOutcomes, CatalystOutcomeReport> eventRecord) : Dto.AnalyticsControllerBase
+    IQueryHandler<GetCatalystOutcomes, CatalystOutcomeReport> eventRecord,
+    IQueryHandler<GetPositionScenarios, PositionScenarioReport> positionScenarios) : Dto.AnalyticsControllerBase
 {
+    public override async Task<ActionResult<Dto.PositionScenarioReport>> GetPositionScenarios(
+        Dto.PositionScenarioRequest body,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        var report = await positionScenarios.HandleAsync(new GetPositionScenarios(OutcomeDtos.ToModule(body)), cancellationToken).ConfigureAwait(false);
+        return OutcomeDtos.From(report);
+    }
+
     public override async Task<ActionResult<Dto.CatalystOutcomeReport>> GetCatalystOutcomes(
         Dto.CatalystFamily family,
         CancellationToken cancellationToken = default)
